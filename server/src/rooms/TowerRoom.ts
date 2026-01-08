@@ -41,6 +41,11 @@ export class PlayerState extends Schema {
   @type('boolean') isFinished: boolean = false
   @type('number') finishOrder: number = 0 // 0 = not finished, 1 = first, 2 = second, etc.
   @type('number') lastUpdate: number = 0
+  // Position synchronization
+  @type('number') x: number = 0
+  @type('number') y: number = 0
+  @type('number') z: number = 0
+  @type('number') rotationY: number = 0
 }
 
 /**
@@ -116,6 +121,7 @@ export class TowerRoom extends Room<TowerRoomState> {
     
     // Register message handlers
     this.onMessage('playerHeight', (client, data) => this.handlePlayerHeight(client, data))
+    this.onMessage('playerPosition', (client, data) => this.handlePlayerPosition(client, data))
     this.onMessage('playerFinished', (client, data) => this.handlePlayerFinished(client, data))
     this.onMessage('playerDied', (client, data) => this.handlePlayerDied(client, data))
     this.onMessage('playerJoined', (client, data) => this.handlePlayerJoined(client, data))
@@ -136,6 +142,10 @@ export class TowerRoom extends Room<TowerRoomState> {
     player.isFinished = false
     player.finishOrder = 0
     player.lastUpdate = Date.now()
+    player.x = 0
+    player.y = 0
+    player.z = 0
+    player.rotationY = 0
     
     // Add to players map
     this.state.players.set(client.sessionId, player)
@@ -347,6 +357,22 @@ export class TowerRoom extends Room<TowerRoomState> {
       player.maxHeight = data.height
       player.lastUpdate = Date.now()
     }
+  }
+  
+  /**
+   * Handle player position update
+   */
+  private handlePlayerPosition(client: Client, data: { x: number; y: number; z: number; rotationY?: number }) {
+    const player = this.state.players.get(client.sessionId)
+    if (!player) return
+    
+    player.x = data.x
+    player.y = data.y
+    player.z = data.z
+    if (data.rotationY !== undefined) {
+      player.rotationY = data.rotationY
+    }
+    player.lastUpdate = Date.now()
   }
   
   /**
