@@ -11,7 +11,7 @@
 import express from 'express'
 import cors from 'cors'
 import http from 'http'
-import { Server } from '@colyseus/core'
+import { Server, matchMaker } from '@colyseus/core'
 import { WebSocketTransport } from '@colyseus/ws-transport'
 import { TowerRoom } from './rooms/TowerRoom'
 
@@ -112,16 +112,16 @@ app.post('/matchmake/joinOrCreate/:roomName', async (req, res) => {
     console.log(`[Matchmaking] joinOrCreate request for "${roomName}"`)
     console.log(`[Matchmaking] Options:`, JSON.stringify(options))
     
-    // Use gameServer's matchMaker
-    const room = await gameServer.matchMaker.joinOrCreate(roomName, options)
+    // Use matchMaker directly (imported from @colyseus/core)
+    // joinOrCreate returns SeatReservation with room property
+    const reservation = await matchMaker.joinOrCreate(roomName, options)
     
-    console.log(`[Matchmaking] ✅ Room found/created: ${room.roomId}`)
+    console.log(`[Matchmaking] ✅ Room found/created: ${reservation.room.roomId}`)
     
     res.json({
       room: {
-        roomId: room.roomId,
-        sessionId: room.sessionId,
-        processId: room.processId
+        roomId: reservation.room.roomId,
+        sessionId: reservation.sessionId
       }
     })
   } catch (error: any) {
@@ -137,13 +137,12 @@ app.post('/matchmake/create/:roomName', async (req, res) => {
     
     console.log(`[Matchmaking] create request for "${roomName}"`)
     
-    const room = await gameServer.matchMaker.createRoom(roomName, options)
+    const reservation = await matchMaker.createRoom(roomName, options)
     
     res.json({
       room: {
-        roomId: room.roomId,
-        sessionId: room.sessionId,
-        processId: room.processId
+        roomId: reservation.room.roomId,
+        sessionId: reservation.sessionId
       }
     })
   } catch (error: any) {
@@ -159,13 +158,12 @@ app.post('/matchmake/join/:roomName', async (req, res) => {
     
     console.log(`[Matchmaking] join request for "${roomName}"`)
     
-    const room = await gameServer.matchMaker.join(roomName, options)
+    const reservation = await matchMaker.join(roomName, options)
     
     res.json({
       room: {
-        roomId: room.roomId,
-        sessionId: room.sessionId,
-        processId: room.processId
+        roomId: reservation.room.roomId,
+        sessionId: reservation.sessionId
       }
     })
   } catch (error: any) {
@@ -201,8 +199,8 @@ httpServer.listen(PORT, '0.0.0.0', async () => {
   setTimeout(async () => {
     try {
       console.log('🔧 Creating persistent game room...')
-      const room = await gameServer.matchMaker.createRoom('tower_room', {})
-      console.log(`🎮 Room created: ${room.roomId}`)
+      const reservation = await matchMaker.createRoom('tower_room', {})
+      console.log(`🎮 Room created: ${reservation.room.roomId}`)
       console.log('⏱️ Timer running independently of players!')
     } catch (error: any) {
       console.error('❌ Failed to create room:', error?.message || error)
