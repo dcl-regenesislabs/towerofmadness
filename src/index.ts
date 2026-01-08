@@ -3,544 +3,607 @@ import { engine, Transform, TriggerArea, triggerAreaEventsSystem, ColliderLayer,
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
-import { generateTower } from './towerGenerator'
+import { generateTower, generateTowerFromServer } from './towerGenerator'
+import {
+  initMultiplayer,
+  isServer,
+  isMultiplayerAvailable,
+  setupServer,
+  setupClient,
+  setOnServerTowerReady,
+  setOnTimerUpdate,
+  setOnLeaderboardUpdate,
+  setOnGameEnded,
+  sendHeightUpdate,
+  sendPlayerFinished,
+  sendPlayerDied,
+  sendPlayerJoined,
+  LeaderboardEntry,
+  WinnerEntry
+} from './multiplayer'
 
-// Shared state for player height
+// ============================================
+// GAME STATE - Tower of Hell Style
+// ============================================
+
+// Player tracking
 export let playerHeight = 0
+export let playerMaxHeight = 0 // Max height in current attempt
 
-// Game state
-export enum GameState {
-  NOT_STARTED = 'NOT_STARTED',
-  IN_PROGRESS = 'IN_PROGRESS',
-  ENDED = 'ENDED'
+// Player attempt state (personal, not global)
+export enum AttemptState {
+  NOT_STARTED = 'NOT_STARTED',   // Player hasn't entered TriggerStart yet
+  IN_PROGRESS = 'IN_PROGRESS',   // Player is climbing
+  FINISHED = 'FINISHED',         // Player reached TriggerEnd
+  DIED = 'DIED'                  // Player entered TriggerDeath
 }
 
-export let gameState: GameState = GameState.NOT_STARTED
-export let gameTimer: number = 0 // Time in seconds
-export let gameStartTime: number = 0 // Timestamp when game started
-export let currentGameHeight: number = 0 // Max height reached in current game
-export let bestTime: number = 0 // Best time achieved
-export let bestHeight: number = 0 // Best height achieved
-export let gameResult: 'WIN' | 'DEATH' | null = null // Result of the last game
-export let resultMessage: string = '' // Message to display
-export let resultTimestamp: number = 0 // When the result was shown (for auto-hide)
+export let attemptState: AttemptState = AttemptState.NOT_STARTED
+export let attemptStartTime: number = 0     // When player started their attempt
+export let attemptTimer: number = 0          // Player's personal attempt time (seconds)
+export let attemptFinishTime: number = 0     // Final time if finished
 
-/**
- * Helper function to get world position of an entity (accounting for parent transforms)
- * In SDK7, Transform.position for children is in local space relative to parent
- */
+// Personal best
+export let bestAttemptTime: number = 0       // Best time to complete
+export let bestAttemptHeight: number = 0     // Best max height reached
+
+// Result display
+export let attemptResult: 'WIN' | 'DEATH' | null = null
+export let resultMessage: string = ''
+export let resultTimestamp: number = 0
+
+// ============================================
+// GLOBAL ROUND STATE (Server-controlled in multiplayer)
+// ============================================
+
+export enum RoundState {
+  ACTIVE = 'ACTIVE',           // Round is active, players can climb
+  ENDING = 'ENDING',           // Round just ended, showing winners
+  BREAK = 'BREAK'              // 10-second break before next round
+}
+
+export let roundState: RoundState = RoundState.ACTIVE
+export let roundTimer: number = 420           // 7 minutes = 420 seconds (countdown)
+export let roundSpeedMultiplier: number = 1.0 // Timer speed (1x, 2x, 3x...)
+export let roundStartTime: number = Date.now()
+export let roundFinishers: number = 0         // How many players finished this round
+
+// Leaderboard & Winners
+export let leaderboard: LeaderboardEntry[] = []
+export let roundWinners: WinnerEntry[] = []
+
+// Multiplayer state
+export let isMultiplayerMode = false
+
+// Height update throttling
+let lastHeightUpdateTime = 0
+const HEIGHT_UPDATE_INTERVAL = 500
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
 function getWorldPosition(entity: Entity): Vector3 {
   if (!Transform.has(entity)) return Vector3.Zero()
   
   const transform = Transform.get(entity)
   let localPos = transform.position
   
-  // If entity has a parent, transform local position to world space
   if (transform.parent !== undefined && transform.parent !== engine.RootEntity && Transform.has(transform.parent)) {
     const parentTransform = Transform.get(transform.parent)
     const parentRot = parentTransform.rotation
     const parentScale = parentTransform.scale
-    
-    // Rotate the local position by parent rotation
     const rotatedPos = Vector3.rotate(localPos, parentRot)
-    
-    // Scale the rotated position
     const scaledPos = Vector3.create(
       rotatedPos.x * parentScale.x,
       rotatedPos.y * parentScale.y,
       rotatedPos.z * parentScale.z
     )
-    
-    // Get parent's world position and add the transformed local position
     const parentWorldPos = getWorldPosition(transform.parent)
     return Vector3.add(scaledPos, parentWorldPos)
   }
   
-  // No parent, position is already in world space
   return localPos
 }
 
-// System to track player height
+// ============================================
+// PLAYER TRACKING SYSTEM
+// ============================================
+
 function trackPlayerHeight() {
   if (!Transform.has(engine.PlayerEntity)) return
   
   const playerTransform = Transform.get(engine.PlayerEntity)
   playerHeight = playerTransform.position.y
   
-  // Track max height during active game
-  if (gameState === GameState.IN_PROGRESS) {
-    if (playerHeight > currentGameHeight) {
-      currentGameHeight = playerHeight
+  // Track max height during active attempt
+  if (attemptState === AttemptState.IN_PROGRESS) {
+    if (playerHeight > playerMaxHeight) {
+      playerMaxHeight = playerHeight
+    }
+    
+    // Update attempt timer
+    attemptTimer = (Date.now() - attemptStartTime) / 1000
+    
+    // Send height updates to server (throttled)
+    if (isMultiplayerMode) {
+      const now = Date.now()
+      if (now - lastHeightUpdateTime >= HEIGHT_UPDATE_INTERVAL) {
+        sendHeightUpdate(playerMaxHeight)
+        lastHeightUpdateTime = now
+      }
     }
   }
 }
 
-// System to update game timer
-function updateGameTimer() {
-  if (gameState === GameState.IN_PROGRESS) {
-    const currentTime = Date.now()
-    gameTimer = (currentTime - gameStartTime) / 1000 // Convert to seconds
+// ============================================
+// GLOBAL ROUND TIMER SYSTEM (Single-player only)
+// ============================================
+
+function updateRoundTimer() {
+  // Handle state transitions (works for both single and multiplayer)
+  if (roundState === RoundState.ENDING) {
+    // Show results for 3 seconds, then transition to break
+    const elapsedSinceEnd = (Date.now() - resultTimestamp) / 1000
+    if (elapsedSinceEnd >= 3) {
+      roundState = RoundState.BREAK
+      resultMessage = '⏳ Next round in 10 seconds...'
+      resultTimestamp = Date.now()
+    }
+    return
+  }
+  
+  if (roundState === RoundState.BREAK) {
+    // In multiplayer, server handles new round start
+    // In single player, we start new round after 10 seconds
+    if (!isMultiplayerMode) {
+      const breakElapsed = (Date.now() - resultTimestamp) / 1000
+      if (breakElapsed >= 10) {
+        startNewRound()
+      }
+    }
+    return
+  }
+  
+  // Active round timer (single player only - multiplayer gets timer from server)
+  if (roundState === RoundState.ACTIVE && !isMultiplayerMode) {
+    const elapsed = (Date.now() - roundStartTime) / 1000
+    const adjustedElapsed = elapsed * roundSpeedMultiplier
+    roundTimer = Math.max(0, 420 - adjustedElapsed) // 7 min countdown
+    
+    // Round ended?
+    if (roundTimer <= 0) {
+      endRound()
+    }
   }
 }
 
-// Function to start the game
-function startGame() {
-  console.log('[DEBUG] startGame() called')
-  console.log('[DEBUG] Current gameState:', gameState)
-  console.log('[DEBUG] Current playerHeight:', playerHeight)
+// ============================================
+// ROUND MANAGEMENT (Single-player)
+// ============================================
+
+function startNewRound() {
+  console.log('[Game] ═══════════════════════════════════')
+  console.log('[Game] 🎮 NEW ROUND STARTING!')
+  console.log('[Game] ═══════════════════════════════════')
   
-  // Allow restarting if game has ended, but don't restart if already in progress
-  if (gameState === GameState.IN_PROGRESS) {
-    console.log('[DEBUG] Game already in progress, ignoring start request')
-    return // Already in progress
-  }
+  roundState = RoundState.ACTIVE
+  roundTimer = 420 // 7 minutes
+  roundSpeedMultiplier = 1.0
+  roundStartTime = Date.now()
+  roundFinishers = 0
+  roundWinners = []
+  leaderboard = []
   
-  console.log('[DEBUG] Starting game...')
-  gameState = GameState.IN_PROGRESS
-  gameStartTime = Date.now()
-  gameTimer = 0
-  currentGameHeight = playerHeight
-  gameResult = null
-  resultMessage = 'Game Started!'
-  console.log('[DEBUG] Game started! State:', gameState, 'StartTime:', gameStartTime, 'Height:', currentGameHeight)
+  // Reset player attempt
+  attemptState = AttemptState.NOT_STARTED
+  attemptTimer = 0
+  playerMaxHeight = 0
+  attemptResult = null
+  resultMessage = '🎮 New round started! Go to TriggerStart to begin your attempt'
+  resultTimestamp = Date.now()
+  
+  // Generate new tower
+  generateTower()
 }
 
-// Function to end game with WIN
-function endGameWin() {
-  if (gameState !== GameState.IN_PROGRESS) return
+function endRound() {
+  console.log('[Game] ═══════════════════════════════════')
+  console.log('[Game] 🏁 ROUND ENDED!')
+  console.log('[Game] ═══════════════════════════════════')
   
-  gameState = GameState.ENDED
-  gameResult = 'WIN'
-  resultMessage = 'WIN!'
-  resultTimestamp = Date.now() // Record when result was shown
+  roundState = RoundState.ENDING
+  resultMessage = '🏁 Round Complete!'
+  resultTimestamp = Date.now()
   
-  // Update best scores
-  if (gameTimer > bestTime || bestTime === 0) {
-    bestTime = gameTimer
-  }
-  if (currentGameHeight > bestHeight || bestHeight === 0) {
-    bestHeight = currentGameHeight
-  }
-  
-  console.log(`Game won! Time: ${gameTimer.toFixed(2)}s, Height: ${currentGameHeight.toFixed(2)}m`)
+  // The updateRoundTimer system will handle transitioning to BREAK state
+  // after 3 seconds based on resultTimestamp
 }
 
-// Function to end game with DEATH
-function endGameDeath() {
-  if (gameState !== GameState.IN_PROGRESS) return
-  
-  gameState = GameState.ENDED
-  gameResult = 'DEATH'
-  resultMessage = 'DEATH - Go to TriggerStart to restart'
-  resultTimestamp = Date.now() // Record when result was shown
-  
-  // Update best scores even on death
-  if (gameTimer > bestTime || bestTime === 0) {
-    bestTime = gameTimer
-  }
-  if (currentGameHeight > bestHeight || bestHeight === 0) {
-    bestHeight = currentGameHeight
+// ============================================
+// PLAYER ATTEMPT FUNCTIONS
+// ============================================
+
+// Called when player enters TriggerStart
+function startAttempt() {
+  // Only start if round is active and player hasn't finished this round
+  if (roundState !== RoundState.ACTIVE) {
+    console.log('[Game] Cannot start attempt - round not active')
+    return
   }
   
-  console.log(`Game ended! Time: ${gameTimer.toFixed(2)}s, Height: ${currentGameHeight.toFixed(2)}m`)
+  // Allow restart if died, or if not started yet
+  if (attemptState === AttemptState.FINISHED) {
+    console.log('[Game] Already finished this round!')
+    resultMessage = '✅ You already finished! Wait for next round.'
+    resultTimestamp = Date.now()
+    return
+  }
+  
+  console.log('[Game] ========== ATTEMPT STARTED! ==========')
+  attemptState = AttemptState.IN_PROGRESS
+  attemptStartTime = Date.now()
+  attemptTimer = 0
+  playerMaxHeight = playerHeight
+  attemptResult = null
+  resultMessage = '🏃 GO! Climb to the top!'
+  resultTimestamp = Date.now()
 }
 
-export function main() {
-  console.log('[DEBUG] ========== main() called ==========')
-  console.log('[DEBUG] EntityNames:', EntityNames)
+// Called when player reaches TriggerEnd
+function finishAttempt() {
+  if (attemptState !== AttemptState.IN_PROGRESS) return
+  if (roundState !== RoundState.ACTIVE) return
   
-  // Skybox time is set in scene.json to always be midday (43200 seconds = 12 hours = noon)
-  // This ensures the sunlight is always up
+  console.log('[Game] ========== ATTEMPT FINISHED! ==========')
+  attemptState = AttemptState.FINISHED
+  attemptFinishTime = attemptTimer
+  attemptResult = 'WIN'
+  resultMessage = `🏆 FINISHED! Time: ${attemptTimer.toFixed(2)}s`
+  resultTimestamp = Date.now()
   
-  // Check player entity
-  console.log('[DEBUG] PlayerEntity exists:', Transform.has(engine.PlayerEntity))
-  if (Transform.has(engine.PlayerEntity)) {
-    const playerPos = Transform.get(engine.PlayerEntity).position
-    console.log('[DEBUG] Player position:', playerPos.x, playerPos.y, playerPos.z)
+  // Update personal best
+  if (attemptFinishTime < bestAttemptTime || bestAttemptTime === 0) {
+    bestAttemptTime = attemptFinishTime
+  }
+  if (playerMaxHeight > bestAttemptHeight) {
+    bestAttemptHeight = playerMaxHeight
   }
   
-  // Get trigger entities
-  console.log('[DEBUG] Looking for trigger entities...')
+  // Speed up the round timer!
+  roundFinishers++
+  roundSpeedMultiplier = roundFinishers + 1
+  console.log(`[Game] Timer speed now: x${roundSpeedMultiplier}`)
+  
+  // Send to server
+  if (isMultiplayerMode) {
+    sendPlayerFinished(attemptFinishTime, playerMaxHeight)
+  }
+}
+
+// Called when player enters TriggerDeath
+function dieAttempt() {
+  if (attemptState !== AttemptState.IN_PROGRESS) return
+  
+  console.log('[Game] ========== PLAYER DIED! ==========')
+  attemptState = AttemptState.DIED
+  attemptResult = 'DEATH'
+  resultMessage = `☠️ DEATH at ${playerMaxHeight.toFixed(1)}m - Go to TriggerStart to retry!`
+  resultTimestamp = Date.now()
+  
+  // Update personal best height even on death
+  if (playerMaxHeight > bestAttemptHeight) {
+    bestAttemptHeight = playerMaxHeight
+  }
+  
+  // Send to server
+  if (isMultiplayerMode) {
+    sendPlayerDied(playerMaxHeight)
+  }
+}
+
+// ============================================
+// MAIN ENTRY POINT
+// ============================================
+
+export async function main() {
+  console.log('[Game] ═══════════════════════════════════════════')
+  console.log('[Game] 🎮 TOWER OF MADNESS - Starting...')
+  console.log('[Game] ═══════════════════════════════════════════')
+  
+  // ============================================
+  // MULTIPLAYER INITIALIZATION
+  // ============================================
+  
+  console.log('[Multiplayer] Initializing...')
+  const multiplayerAvailable = await initMultiplayer()
+  
+  if (multiplayerAvailable) {
+    isMultiplayerMode = true
+    console.log('[Multiplayer] ✅ ENABLED')
+    
+    if (isServer()) {
+      console.log('[Multiplayer] Running as SERVER')
+      setupServer()
+      return // Server doesn't render scene
+    }
+    
+    console.log('[Multiplayer] Running as CLIENT')
+    setupClient()
+    
+    // Server sends tower data
+    setOnServerTowerReady((chunkIds: string[]) => {
+      console.log('[Multiplayer] Received tower from server!')
+      generateTowerFromServer(chunkIds)
+      
+      // Reset player state for new round
+      attemptState = AttemptState.NOT_STARTED
+      attemptTimer = 0
+      playerMaxHeight = 0
+      attemptResult = null
+      resultMessage = '🎮 New round! Go to TriggerStart to begin'
+      resultTimestamp = Date.now()
+    })
+    
+    // Server sends timer updates
+    setOnTimerUpdate((remaining: number, speedMult: number) => {
+      roundTimer = remaining
+      roundSpeedMultiplier = speedMult
+    })
+    
+    // Server sends leaderboard
+    setOnLeaderboardUpdate((players: LeaderboardEntry[]) => {
+      leaderboard = players
+    })
+    
+    // Server sends round end
+    setOnGameEnded((winners: WinnerEntry[]) => {
+      roundState = RoundState.ENDING
+      roundWinners = winners
+      resultMessage = '🏁 Round Complete!'
+      resultTimestamp = Date.now()
+      // State transition to BREAK handled by updateRoundTimer system
+    })
+    
+    sendPlayerJoined('Player')
+  } else {
+    isMultiplayerMode = false
+    console.log('[Multiplayer] ⚠️ Not available - SINGLE PLAYER mode')
+    
+    // Start the first round
+    roundStartTime = Date.now()
+    roundState = RoundState.ACTIVE
+  }
+  
+  // ============================================
+  // TRIGGER SETUP
+  // ============================================
+  
   const triggerStart = engine.getEntityOrNullByName(EntityNames.TriggerStart)
   const triggerEnd = engine.getEntityOrNullByName(EntityNames.TriggerEnd)
   const triggerDeath = engine.getEntityOrNullByName(EntityNames.TriggerDeath)
   
-  console.log('[DEBUG] TriggerStart entity:', triggerStart ? `Found (ID: ${triggerStart})` : 'NOT FOUND')
-  console.log('[DEBUG] TriggerEnd entity:', triggerEnd ? `Found (ID: ${triggerEnd})` : 'NOT FOUND')
-  console.log('[DEBUG] TriggerDeath entity:', triggerDeath ? `Found (ID: ${triggerDeath})` : 'NOT FOUND')
+  console.log('[Triggers] Start:', triggerStart ? '✅' : '❌')
+  console.log('[Triggers] End:', triggerEnd ? '✅' : '❌')
+  console.log('[Triggers] Death:', triggerDeath ? '✅' : '❌')
   
-  // Set up TriggerStart - ensure it has a trigger area and listen for player entry
+  // Setup TriggerStart
   if (triggerStart) {
-    console.log('[DEBUG] Setting up TriggerStart (ID:', triggerStart, ')')
-    
-    // Check if it has transform
     if (Transform.has(triggerStart)) {
-      const transform = Transform.get(triggerStart)
-      console.log('[DEBUG] TriggerStart transform - Position:', transform.position.x, transform.position.y, transform.position.z)
-      console.log('[DEBUG] TriggerStart transform - Scale:', transform.scale.x, transform.scale.y, transform.scale.z)
-      
-      const mutableTransform = Transform.getMutable(triggerStart)
-      // If scale is too small, make it bigger
-      if (transform.scale.x < 2 || transform.scale.y < 2 || transform.scale.z < 2) {
-        console.log('[DEBUG] TriggerStart scale too small, increasing...')
-        mutableTransform.scale = Vector3.create(
-          Math.max(transform.scale.x, 2),
-          Math.max(transform.scale.y, 2),
-          Math.max(transform.scale.z, 2)
-        )
-        console.log('[DEBUG] TriggerStart new scale:', mutableTransform.scale.x, mutableTransform.scale.y, mutableTransform.scale.z)
-      }
-    } else {
-      console.log('[DEBUG] TriggerStart has no transform, creating one...')
-      Transform.create(triggerStart, {
-        position: Vector3.create(0, 0, 0),
-        scale: Vector3.create(4, 4, 4)
-      })
+      const transform = Transform.getMutable(triggerStart)
+      transform.scale = Vector3.create(
+        Math.max(transform.scale.x, 2),
+        Math.max(transform.scale.y, 2),
+        Math.max(transform.scale.z, 2)
+      )
     }
-    
-    // Add or replace trigger area to ensure it works
-    console.log('[DEBUG] Adding TriggerArea to TriggerStart...')
     TriggerArea.setBox(triggerStart, ColliderLayer.CL_PLAYER)
-    console.log('[DEBUG] TriggerArea added. Has TriggerArea:', TriggerArea.has(triggerStart))
-    
-    console.log('[DEBUG] Setting up onTriggerEnter listener for TriggerStart...')
-    triggerAreaEventsSystem.onTriggerEnter(triggerStart, (e) => {
-      console.log('[DEBUG] ========== TriggerStart ENTERED! ==========')
-      console.log('[DEBUG] Event data:', JSON.stringify(e, null, 2))
-      console.log('[DEBUG] Trigger entity:', e.triggeredEntity)
-      console.log('[DEBUG] Trigger entity (from event):', e.trigger?.entity)
-      startGame()
-    })
-    console.log('[DEBUG] onTriggerEnter listener registered for TriggerStart')
-  } else {
-    console.error('[DEBUG] TriggerStart entity not found!')
   }
   
-  // Set up TriggerEnd
+  // Setup TriggerEnd
   if (triggerEnd) {
-    console.log('[DEBUG] Setting up TriggerEnd (ID:', triggerEnd, ')')
-    TriggerArea.setBox(triggerEnd, ColliderLayer.CL_PLAYER)
-    
     if (Transform.has(triggerEnd)) {
       const transform = Transform.getMutable(triggerEnd)
-      if (transform.scale.x < 2 || transform.scale.y < 2 || transform.scale.z < 2) {
-        transform.scale = Vector3.create(
-          Math.max(transform.scale.x, 2),
-          Math.max(transform.scale.y, 2),
-          Math.max(transform.scale.z, 2)
-        )
-      }
-    } else {
-      Transform.create(triggerEnd, {
-        position: Vector3.create(0, 0, 0),
-        scale: Vector3.create(4, 4, 4)
-      })
+      transform.scale = Vector3.create(
+        Math.max(transform.scale.x, 2),
+        Math.max(transform.scale.y, 2),
+        Math.max(transform.scale.z, 2)
+      )
     }
-    
-    triggerAreaEventsSystem.onTriggerEnter(triggerEnd, (e) => {
-      console.log('[DEBUG] ========== TriggerEnd ENTERED! ==========')
-      endGameWin()
-    })
-  } else {
-    console.error('[DEBUG] TriggerEnd entity not found!')
+    TriggerArea.setBox(triggerEnd, ColliderLayer.CL_PLAYER)
   }
   
-  // Set up TriggerDeath
+  // Setup TriggerDeath
   if (triggerDeath) {
-    console.log('[DEBUG] Setting up TriggerDeath (ID:', triggerDeath, ')')
-    TriggerArea.setBox(triggerDeath, ColliderLayer.CL_PLAYER)
-    
     if (Transform.has(triggerDeath)) {
       const transform = Transform.getMutable(triggerDeath)
-      if (transform.scale.x < 2 || transform.scale.y < 2 || transform.scale.z < 2) {
-        transform.scale = Vector3.create(
-          Math.max(transform.scale.x, 2),
-          Math.max(transform.scale.y, 2),
-          Math.max(transform.scale.z, 2)
-        )
-      }
-    } else {
-      Transform.create(triggerDeath, {
-        position: Vector3.create(0, 0, 0),
-        scale: Vector3.create(4, 4, 4)
-      })
+      transform.scale = Vector3.create(
+        Math.max(transform.scale.x, 2),
+        Math.max(transform.scale.y, 2),
+        Math.max(transform.scale.z, 2)
+      )
     }
-    
-    triggerAreaEventsSystem.onTriggerEnter(triggerDeath, (e) => {
-      console.log('[DEBUG] ========== TriggerDeath ENTERED! ==========')
-      endGameDeath()
-    })
-  } else {
-    console.error('[DEBUG] TriggerDeath entity not found!')
+    TriggerArea.setBox(triggerDeath, ColliderLayer.CL_PLAYER)
   }
   
-  // Manual trigger detection system (for asset-packs triggers)
-  // Since SDK7 TriggerArea events don't work with asset-packs triggers, we check manually
-  let triggerStartEntered = false
-  let triggerEndEntered = false
-  let triggerDeathEntered = false
+  // ============================================
+  // MANUAL TRIGGER DETECTION SYSTEM
+  // ============================================
+  
+  let inTriggerStart = false
+  let inTriggerEnd = false
+  let inTriggerDeath = false
   
   engine.addSystem(() => {
     if (!Transform.has(engine.PlayerEntity)) return
-    
     const playerPos = Transform.get(engine.PlayerEntity).position
     
     // Check TriggerStart
     if (triggerStart && Transform.has(triggerStart)) {
-      const triggerTransform = Transform.get(triggerStart)
-      const triggerPos = triggerTransform.position
-      const triggerScale = triggerTransform.scale
+      const t = Transform.get(triggerStart)
+      const inside = isInsideBox(playerPos, t.position, t.scale)
       
-      // Check if player is within trigger bounds (box collision)
-      const dx = Math.abs(playerPos.x - triggerPos.x)
-      const dy = Math.abs(playerPos.y - triggerPos.y)
-      const dz = Math.abs(playerPos.z - triggerPos.z)
-      
-      const halfWidth = triggerScale.x / 2
-      const halfHeight = triggerScale.y / 2
-      const halfDepth = triggerScale.z / 2
-      
-      const isInside = dx <= halfWidth && dy <= halfHeight && dz <= halfDepth
-      
-      if (isInside && !triggerStartEntered) {
-        console.log('[DEBUG] ========== MANUAL TriggerStart DETECTED! ==========')
-        console.log('[DEBUG] Player pos:', playerPos.x.toFixed(2), playerPos.y.toFixed(2), playerPos.z.toFixed(2))
-        console.log('[DEBUG] Trigger pos:', triggerPos.x.toFixed(2), triggerPos.y.toFixed(2), triggerPos.z.toFixed(2))
-        console.log('[DEBUG] Trigger scale:', triggerScale.x.toFixed(2), triggerScale.y.toFixed(2), triggerScale.z.toFixed(2))
-        console.log('[DEBUG] Distance:', dx.toFixed(2), dy.toFixed(2), dz.toFixed(2))
-        console.log('[DEBUG] Half size:', halfWidth.toFixed(2), halfHeight.toFixed(2), halfDepth.toFixed(2))
-        triggerStartEntered = true
-        startGame()
-      } else if (!isInside && triggerStartEntered) {
-        console.log('[DEBUG] Player left TriggerStart')
-        triggerStartEntered = false
+      if (inside && !inTriggerStart) {
+        inTriggerStart = true
+        startAttempt()
+      } else if (!inside && inTriggerStart) {
+        inTriggerStart = false
       }
     }
     
-    // Check TriggerEnd
-    if (triggerEnd && Transform.has(triggerEnd) && gameState === GameState.IN_PROGRESS) {
-      const triggerTransform = Transform.get(triggerEnd)
-      // Get world position (accounting for parent if TriggerEnd is a child of ChunkEnd01)
-      const triggerPos = getWorldPosition(triggerEnd)
-      const triggerScale = triggerTransform.scale
+    // Check TriggerEnd (only during attempt)
+    if (triggerEnd && Transform.has(triggerEnd)) {
+      const t = Transform.get(triggerEnd)
+      const worldPos = getWorldPosition(triggerEnd)
+      const inside = isInsideBox(playerPos, worldPos, t.scale)
       
-      const dx = Math.abs(playerPos.x - triggerPos.x)
-      const dy = Math.abs(playerPos.y - triggerPos.y)
-      const dz = Math.abs(playerPos.z - triggerPos.z)
-      
-      const halfWidth = triggerScale.x / 2
-      const halfHeight = triggerScale.y / 2
-      const halfDepth = triggerScale.z / 2
-      
-      const isInside = dx <= halfWidth && dy <= halfHeight && dz <= halfDepth
-      
-      if (isInside && !triggerEndEntered) {
-        console.log('[DEBUG] ========== MANUAL TriggerEnd DETECTED! ==========')
-        console.log('[DEBUG] Player pos:', playerPos.x.toFixed(2), playerPos.y.toFixed(2), playerPos.z.toFixed(2))
-        console.log('[DEBUG] TriggerEnd world pos:', triggerPos.x.toFixed(2), triggerPos.y.toFixed(2), triggerPos.z.toFixed(2))
-        console.log('[DEBUG] TriggerEnd local pos:', triggerTransform.position.x.toFixed(2), triggerTransform.position.y.toFixed(2), triggerTransform.position.z.toFixed(2))
-        console.log('[DEBUG] TriggerEnd scale:', triggerScale.x.toFixed(2), triggerScale.y.toFixed(2), triggerScale.z.toFixed(2))
-        console.log('[DEBUG] Distance:', dx.toFixed(2), dy.toFixed(2), dz.toFixed(2))
-        triggerEndEntered = true
-        endGameWin()
-      } else if (!isInside && triggerEndEntered) {
-        triggerEndEntered = false
+      if (inside && !inTriggerEnd) {
+        inTriggerEnd = true
+        finishAttempt()
+      } else if (!inside && inTriggerEnd) {
+        inTriggerEnd = false
       }
     }
     
-    // Check TriggerDeath
-    if (triggerDeath && Transform.has(triggerDeath) && gameState === GameState.IN_PROGRESS) {
-      const triggerTransform = Transform.get(triggerDeath)
-      const triggerPos = triggerTransform.position
-      const triggerScale = triggerTransform.scale
+    // Check TriggerDeath (only during attempt)
+    if (triggerDeath && Transform.has(triggerDeath)) {
+      const t = Transform.get(triggerDeath)
+      const inside = isInsideBox(playerPos, t.position, t.scale)
       
-      const dx = Math.abs(playerPos.x - triggerPos.x)
-      const dy = Math.abs(playerPos.y - triggerPos.y)
-      const dz = Math.abs(playerPos.z - triggerPos.z)
-      
-      const halfWidth = triggerScale.x / 2
-      const halfHeight = triggerScale.y / 2
-      const halfDepth = triggerScale.z / 2
-      
-      const isInside = dx <= halfWidth && dy <= halfHeight && dz <= halfDepth
-      
-      if (isInside && !triggerDeathEntered) {
-        console.log('[DEBUG] ========== MANUAL TriggerDeath DETECTED! ==========')
-        triggerDeathEntered = true
-        endGameDeath()
-      } else if (!isInside && triggerDeathEntered) {
-        triggerDeathEntered = false
+      if (inside && !inTriggerDeath) {
+        inTriggerDeath = true
+        dieAttempt()
+      } else if (!inside && inTriggerDeath) {
+        inTriggerDeath = false
       }
     }
   })
   
-  // Add debug system to periodically check state
+  function isInsideBox(pos: Vector3, center: Vector3, scale: Vector3): boolean {
+    const dx = Math.abs(pos.x - center.x)
+    const dy = Math.abs(pos.y - center.y)
+    const dz = Math.abs(pos.z - center.z)
+    return dx <= scale.x / 2 && dy <= scale.y / 2 && dz <= scale.z / 2
+  }
+  
+  // ============================================
+  // ADD SYSTEMS
+  // ============================================
+  
+  engine.addSystem(trackPlayerHeight)
+  engine.addSystem(updateRoundTimer)
+  
+  // Debug log every 5 seconds
   let lastDebugLog = 0
   engine.addSystem(() => {
-    // Log game state every 5 seconds
     const now = Date.now()
     if (now - lastDebugLog > 5000) {
-      console.log('[DEBUG] Game State Check - State:', gameState, 'Timer:', gameTimer.toFixed(2), 'Height:', playerHeight.toFixed(2))
+      const mins = Math.floor(roundTimer / 60)
+      const secs = Math.floor(roundTimer % 60)
+      console.log(`[Game] Round: ${roundState} | Timer: ${mins}:${secs.toString().padStart(2, '0')} x${roundSpeedMultiplier} | Attempt: ${attemptState}`)
       lastDebugLog = now
     }
   })
   
-  // Add systems
-  engine.addSystem(trackPlayerHeight)
-  engine.addSystem(updateGameTimer)
+  // ============================================
+  // INITIALIZE UI
+  // ============================================
   
-  // Initialize UI
   setupUi()
   
-  // Set up button panel for tower regeneration
+  // ============================================
+  // BUTTON PANEL (Manual tower regen - disabled in multiplayer)
+  // ============================================
+  
   const buttonPanel = engine.getEntityOrNullByName(EntityNames.Button_Panel)
-  if (buttonPanel) {
-    console.log('[DEBUG] Setting up Button Panel for tower regeneration...')
-    
-    // Add pointer events to button panel (will work alongside asset-packs if present)
-    // If pointer events already exist, onPointerDown will still register
+  if (buttonPanel && !isMultiplayerMode) {
     if (!PointerEvents.has(buttonPanel)) {
       PointerEvents.create(buttonPanel, {
-        pointerEvents: [
-          {
-            eventType: PointerEventType.PET_DOWN,
-            eventInfo: {
-              button: InputAction.IA_POINTER,
-              hoverText: 'Click to regenerate tower',
-              showFeedback: true,
-              maxDistance: 10
-            }
+        pointerEvents: [{
+          eventType: PointerEventType.PET_DOWN,
+          eventInfo: {
+            button: InputAction.IA_POINTER,
+            hoverText: 'Regenerate Tower',
+            showFeedback: true,
+            maxDistance: 10
           }
-        ]
+        }]
       })
     }
     
-    // Listen for button clicks
     pointerEventsSystem.onPointerDown(
-      {
-        entity: buttonPanel,
-        opts: {
-          button: InputAction.IA_POINTER,
-          hoverText: 'Click to regenerate tower',
-          showFeedback: true,
-          maxDistance: 10
-        }
-      },
+      { entity: buttonPanel, opts: { button: InputAction.IA_POINTER, hoverText: 'Regenerate Tower', showFeedback: true, maxDistance: 10 } },
       () => {
-        console.log('[Tower Generator] Button clicked - regenerating tower...')
+        console.log('[Game] Button clicked - regenerating tower...')
         generateTower()
       }
     )
-    
-    console.log('[DEBUG] Button Panel setup complete')
-  } else {
-    console.error('[DEBUG] Button Panel entity not found!')
   }
   
-  // Generate initial tower on scene load
-  console.log('[Tower Generator] Generating initial tower...')
-  generateTower()
+  // ============================================
+  // GENERATE INITIAL TOWER (Single-player only)
+  // ============================================
   
-  // Setup background music - plays automatically when players enter
+  if (!isMultiplayerMode) {
+    console.log('[Game] Generating initial tower...')
+    generateTower()
+  }
+  
+  // ============================================
+  // BACKGROUND MUSIC
+  // ============================================
+  
   setupBackgroundMusic('sounds/PixelSodaBar.mp3')
   
-  console.log('[DEBUG] ========== main() setup complete ==========')
-  console.log('[DEBUG] Initial gameState:', gameState)
+  console.log('[Game] ═══════════════════════════════════════════')
+  console.log('[Game] ✅ Setup complete!')
+  console.log('[Game] Mode:', isMultiplayerMode ? 'MULTIPLAYER' : 'SINGLE PLAYER')
+  console.log('[Game] ═══════════════════════════════════════════')
 }
 
-// Store music entity globally so we can control it
+// ============================================
+// BACKGROUND MUSIC
+// ============================================
+
 let backgroundMusicEntity: Entity | null = null
 let audioStarted = false
 
-/**
- * Setup background music
- * Plays automatically when players enter the scene
- * SDK7 supports MP3, OGG, and WAV formats
- * 
- * Note: Some browsers block autoplay. Audio will start after first user interaction.
- */
 function setupBackgroundMusic(audioPath: string) {
-  // Create entity for background music
   backgroundMusicEntity = engine.addEntity()
   
-  // Position audio at scene center for global sound
-  // Audio will be audible throughout the scene
   Transform.create(backgroundMusicEntity, {
-    position: Vector3.create(40, 0, 40), // Center of tower area
+    position: Vector3.create(40, 0, 40),
     scale: Vector3.One()
   })
   
-  // Create audio source with looping enabled
-  // SDK7 AudioSource supports: MP3, OGG, WAV formats
   AudioSource.create(backgroundMusicEntity, {
     audioClipUrl: audioPath,
-    playing: true,   // Try to start playing immediately
-    loop: true,      // Loop continuously
-    volume: 1.0      // Volume level (0.0 to 1.0) - adjust as needed
+    playing: true,
+    loop: true,
+    volume: 1.0
   })
   
-  console.log(`[Audio] Background music loaded: ${audioPath}`)
-  console.log(`[Audio] Attempting to start playback...`)
-  
-  // System to ensure audio keeps playing (handles autoplay restrictions)
   engine.addSystem(() => {
     if (backgroundMusicEntity && AudioSource.has(backgroundMusicEntity)) {
       const audio = AudioSource.get(backgroundMusicEntity)
-      
-      // If audio stopped (due to autoplay restrictions), try to restart it
       if (!audio.playing && !audioStarted) {
-        // Try to restart - this will work after user interaction
-        const audioMutable = AudioSource.getMutable(backgroundMusicEntity)
-        audioMutable.playing = true
+        AudioSource.getMutable(backgroundMusicEntity).playing = true
       } else if (audio.playing && !audioStarted) {
-        // Audio is playing successfully
         audioStarted = true
-        console.log(`[Audio] ✓ Background music is now playing!`)
       }
     }
   })
-  
-  // Also try to start audio on any pointer event (user interaction)
-  // This helps bypass browser autoplay restrictions
-  pointerEventsSystem.onPointerDown(
-    {
-      entity: engine.RootEntity,
-      opts: {
-        button: InputAction.IA_POINTER,
-        hoverText: '',
-        showFeedback: false,
-        maxDistance: 1000
-      }
-    },
-    () => {
-      if (backgroundMusicEntity && AudioSource.has(backgroundMusicEntity)) {
-        const audio = AudioSource.getMutable(backgroundMusicEntity)
-        if (!audio.playing) {
-          audio.playing = true
-          console.log(`[Audio] Background music started via user interaction`)
-        }
-      }
-    }
-  )
   
   return backgroundMusicEntity
 }
 
-/**
- * Play a sound effect once (non-looping)
- * Example: playSoundEffect('sounds/jump.mp3', 0.8)
- * Note: Entity cleanup should be handled by the caller or via a system
- */
 export function playSoundEffect(audioPath: string, volume: number = 1.0) {
   const soundEntity = engine.addEntity()
-  
   AudioSource.create(soundEntity, {
     audioClipUrl: audioPath,
     playing: true,
     loop: false,
     volume: volume
   })
-  
-  // Return entity so caller can manage cleanup if needed
   return soundEntity
 }

@@ -1,10 +1,34 @@
-package-lock.json
-*.js
-node_modules
+# Dependencies
+node_modules/
+server/node_modules/
+
+# Build output
 bin/
+dist/
+
+# IDE and editor files
+.cursor/
+.vscode/
+*.swp
+*.swo
 .DS_Store
-**/.DS_Store
+
+# Decentraland specific
+.dclignore
+main.crdt
+
+# Environment variables (if you add any)
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.editor
+
+# Thumbnails (auto-generated)
+thumbnails/
+
+# Lock files (optional - some prefer to keep these)
+# package-lock.json
+# server/package-lock.json

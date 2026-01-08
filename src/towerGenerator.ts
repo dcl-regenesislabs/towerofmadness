@@ -280,3 +280,121 @@ export function verifyChunkEnd(): boolean {
   return true
 }
 
+/**
+ * Generates a tower using specific chunk IDs from the server
+ * This ensures all players see the exact same tower
+ * 
+ * @param chunkIds Array of chunk names like ["Chunk01", "Chunk02", "Chunk03"]
+ * @returns The ChunkEnd entity for trigger setup
+ */
+export function generateTowerFromServer(chunkIds: string[]): Entity | null {
+  console.log('[Tower Generator] ═══════════════════════════════════')
+  console.log('[Tower Generator] Building tower from SERVER data')
+  console.log(`[Tower Generator] Chunks: ${chunkIds.join(' → ')}`)
+  console.log('[Tower Generator] ═══════════════════════════════════')
+
+  // Initialize END_CHUNK from ChunkEnd01 if not already done
+  initializeEndChunk()
+
+  // Clear existing tower (except ChunkStart)
+  clearTower()
+
+  // Use the server's chunk count
+  const middleChunkCount = chunkIds.length
+  currentMiddleChunkCount = middleChunkCount
+
+  // Track chunks used (from top to bottom, so we'll build in reverse order)
+  const chunksUsed: string[] = []
+
+  // Spawn middle chunks with alternating rotations
+  for (let i = 0; i < middleChunkCount; i++) {
+    const yPosition = CHUNK_HEIGHT * (i + 1) // First chunk at Y=10.821, second at Y=21.642, etc.
+
+    // Alternating rotation: even indices (0, 2, 4...) = 180°, odd indices (1, 3, 5...) = 0°
+    const rotationY = i % 2 === 0 ? 180 : 0
+
+    // Use the chunk ID from server
+    const chunkName = chunkIds[i]
+    const chunkPath = `assets/chunks/${chunkName}.glb`
+
+    // Track chunk (we'll reverse the array later to show top-to-bottom)
+    chunksUsed.push(chunkName)
+
+    // Create chunk entity
+    const entity = createChunk(
+      chunkPath,
+      Vector3.create(TOWER_X, yPosition, TOWER_Z),
+      rotationY
+    )
+
+    spawnedChunkEntities.push(entity)
+    console.log(`[Tower Generator] Spawned ${chunkName} at Y=${yPosition.toFixed(2)} rot=${rotationY}°`)
+  }
+
+  // Spawn ChunkEnd at the top
+  const endChunkY = CHUNK_HEIGHT * (middleChunkCount + 1)
+
+  // Determine ChunkEnd rotation to match the last middle chunk's rotation
+  const lastMiddleChunkIndex = middleChunkCount - 1
+  const endChunkRotationY = lastMiddleChunkIndex % 2 === 0 ? 180 : 0
+
+  console.log(`[Tower Generator] Placing ChunkEnd at Y=${endChunkY.toFixed(2)} rot=${endChunkRotationY}°`)
+
+  // Ensure ChunkEnd01 entity is initialized
+  if (chunkEnd01Entity === null) {
+    initializeEndChunk()
+  }
+
+  let endEntity: Entity
+
+  // If ChunkEnd01 exists in scene, move it to the tower top
+  if (chunkEnd01Entity !== null) {
+    if (Transform.has(chunkEnd01Entity)) {
+      const transform = Transform.getMutable(chunkEnd01Entity)
+      transform.position = Vector3.create(TOWER_X, endChunkY, TOWER_Z)
+      transform.rotation = Quaternion.fromEulerDegrees(0, endChunkRotationY, 0)
+    } else {
+      Transform.create(chunkEnd01Entity, {
+        position: Vector3.create(TOWER_X, endChunkY, TOWER_Z),
+        rotation: Quaternion.fromEulerDegrees(0, endChunkRotationY, 0),
+        scale: Vector3.One()
+      })
+    }
+    endEntity = chunkEnd01Entity
+  } else {
+    // Fallback: create simple chunk with GLTF
+    endEntity = createChunk(
+      'assets/chunks/ChunkEnd.glb',
+      Vector3.create(TOWER_X, endChunkY, TOWER_Z),
+      endChunkRotationY
+    )
+    spawnedChunkEntities.push(endEntity)
+  }
+
+  chunkEndEntity = endEntity
+
+  // Calculate and update tower height
+  currentTowerHeight = (middleChunkCount + 1) * CHUNK_HEIGHT
+
+  // Build the chunk list from top to bottom
+  const endChunkName = chunkEnd01Entity !== null ? 'ChunkEnd01' : 'ChunkEnd'
+  currentTowerChunks = [
+    endChunkName,
+    ...chunksUsed.reverse(),
+    'ChunkStart'
+  ]
+
+  console.log('[Tower Generator] ═══════════════════════════════════')
+  console.log(`[Tower Generator] ✅ Tower built! Height: ${currentTowerHeight.toFixed(2)}m`)
+  console.log('[Tower Generator] ═══════════════════════════════════')
+
+  return endEntity
+}
+
+/**
+ * Clear the tower (exported for multiplayer use)
+ */
+export function clearCurrentTower() {
+  clearTower()
+}
+

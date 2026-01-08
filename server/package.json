@@ -1,0 +1,23 @@
+{
+  "name": "tower-of-madness-server",
+  "version": "1.0.0",
+  "description": "Authoritative multiplayer server for Tower of Madness",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "dependencies": {
+    "@dcl/hammurabi-server": "latest"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "decentraland",
+    "multiplayer",
+    "game-server"
+  ],
+  "author": "",
+  "license": "MIT"
+}
