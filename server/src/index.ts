@@ -103,6 +103,77 @@ gameServer.define('tower_room', TowerRoom)
 
 console.log('📦 Room "tower_room" defined')
 
+// Add matchmaking routes manually (required for @colyseus/core)
+app.post('/matchmake/joinOrCreate/:roomName', async (req, res) => {
+  try {
+    const { roomName } = req.params
+    const options = req.body || {}
+    
+    console.log(`[Matchmaking] joinOrCreate request for "${roomName}"`)
+    console.log(`[Matchmaking] Options:`, JSON.stringify(options))
+    
+    // Use gameServer's matchMaker
+    const room = await gameServer.matchMaker.joinOrCreate(roomName, options)
+    
+    console.log(`[Matchmaking] ✅ Room found/created: ${room.roomId}`)
+    
+    res.json({
+      room: {
+        roomId: room.roomId,
+        sessionId: room.sessionId,
+        processId: room.processId
+      }
+    })
+  } catch (error: any) {
+    console.error('[Matchmaking] ❌ Error:', error?.message || error)
+    res.status(500).json({ error: error?.message || 'Matchmaking failed' })
+  }
+})
+
+app.post('/matchmake/create/:roomName', async (req, res) => {
+  try {
+    const { roomName } = req.params
+    const options = req.body || {}
+    
+    console.log(`[Matchmaking] create request for "${roomName}"`)
+    
+    const room = await gameServer.matchMaker.createRoom(roomName, options)
+    
+    res.json({
+      room: {
+        roomId: room.roomId,
+        sessionId: room.sessionId,
+        processId: room.processId
+      }
+    })
+  } catch (error: any) {
+    console.error('[Matchmaking] Error:', error)
+    res.status(500).json({ error: error?.message || 'Matchmaking failed' })
+  }
+})
+
+app.post('/matchmake/join/:roomName', async (req, res) => {
+  try {
+    const { roomName } = req.params
+    const options = req.body || {}
+    
+    console.log(`[Matchmaking] join request for "${roomName}"`)
+    
+    const room = await gameServer.matchMaker.join(roomName, options)
+    
+    res.json({
+      room: {
+        roomId: room.roomId,
+        sessionId: room.sessionId,
+        processId: room.processId
+      }
+    })
+  } catch (error: any) {
+    console.error('[Matchmaking] Error:', error)
+    res.status(500).json({ error: error?.message || 'Matchmaking failed' })
+  }
+})
+
 // Error handling for unhandled promises
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[ERROR] Unhandled Rejection:', reason)
@@ -113,7 +184,7 @@ process.on('uncaughtException', (error) => {
 })
 
 // Start the server
-httpServer.listen(PORT, '0.0.0.0', () => {
+httpServer.listen(PORT, '0.0.0.0', async () => {
   console.log('')
   console.log('═══════════════════════════════════════════════════════')
   console.log(`✅ Server listening on 0.0.0.0:${PORT}`)
@@ -125,6 +196,19 @@ httpServer.listen(PORT, '0.0.0.0', () => {
   console.log(`⏰ Current round: #${info.roundNumber}`)
   console.log(`📍 State: ${info.isBreak ? 'BREAK' : 'ACTIVE'} (${info.remainingTime}s remaining)`)
   console.log('')
+  
+  // Create persistent room at startup so timer runs
+  setTimeout(async () => {
+    try {
+      console.log('🔧 Creating persistent game room...')
+      const room = await gameServer.matchMaker.createRoom('tower_room', {})
+      console.log(`🎮 Room created: ${room.roomId}`)
+      console.log('⏱️ Timer running independently of players!')
+    } catch (error: any) {
+      console.error('❌ Failed to create room:', error?.message || error)
+    }
+  }, 1000)
+  
   console.log('🌍 All players worldwide sync to UTC clock!')
   console.log('🎯 Server ready! Waiting for players...')
 })

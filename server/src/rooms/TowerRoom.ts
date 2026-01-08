@@ -222,9 +222,12 @@ export class TowerRoom extends Room<TowerRoomState> {
         return
       }
       
-      // Log every 30 seconds
+      // Log every 30 seconds (or every minute if less than 2 minutes remain)
       const timeInt = Math.floor(this.effectiveTimeRemaining)
-      if (timeInt % 30 === 0 && timeInt > 0 && timeInt < ROUND_DURATION) {
+      const shouldLog = (timeInt % 30 === 0 && timeInt > 0 && timeInt < ROUND_DURATION) || 
+                        (timeInt <= 120 && timeInt % 10 === 0) // Log every 10s in last 2 minutes
+      
+      if (shouldLog) {
         const mins = Math.floor(timeInt / 60)
         const secs = timeInt % 60
         console.log(`[TowerRoom] ⏱️ ${mins}:${secs.toString().padStart(2, '0')} remaining (x${this.state.speedMultiplier})`)
