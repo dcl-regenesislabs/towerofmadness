@@ -33,7 +33,8 @@ console.log(`📁 Scene code: ${path.join(projectRoot, 'bin', 'index.js')}`);
 console.log('');
 
 // Start the hammurabi server from the project root
-const server = spawn('npx', ['@dcl/hammurabi-server@next'], {
+// Note: Using @latest instead of @next to avoid ESM compatibility issues
+const server = spawn('npx', ['@dcl/hammurabi-server@latest'], {
   stdio: 'inherit',
   shell: true,
   cwd: projectRoot,  // Run from project root so it can find bin/index.js
