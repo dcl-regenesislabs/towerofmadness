@@ -56,9 +56,12 @@ app.options('*', cors())
 
 app.use(express.json())
 
-// Request logging middleware
+// Request logging middleware (with body for POST)
 app.use((req, res, next) => {
   console.log(`[HTTP] ${req.method} ${req.url}`)
+  if (req.method === 'POST' && req.body) {
+    console.log(`[HTTP] Body:`, JSON.stringify(req.body))
+  }
   next()
 })
 
@@ -82,6 +85,20 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' })
 })
 
+// Test route to verify POST requests work
+app.post('/test', (req, res) => {
+  console.log('[TEST] POST /test received')
+  res.json({ message: 'POST works!', body: req.body })
+})
+
+// Catch-all for unmatched routes (for debugging)
+app.use((req, res, next) => {
+  if (req.url.startsWith('/matchmake')) {
+    console.log(`[DEBUG] Unmatched matchmake route: ${req.method} ${req.url}`)
+  }
+  next()
+})
+
 // Create HTTP server from Express
 const httpServer = http.createServer(app)
 
@@ -103,20 +120,35 @@ gameServer.define('tower_room', TowerRoom)
 
 console.log('📦 Room "tower_room" defined')
 
+// Ensure matchMaker is attached to gameServer
+// In @colyseus/core, matchMaker should work standalone, but let's verify
+console.log('🔧 MatchMaker initialized:', typeof matchMaker !== 'undefined')
+
 // Add matchmaking routes manually (required for @colyseus/core)
+console.log('🔧 Registering matchmaking routes...')
+// IMPORTANT: These routes must be registered BEFORE httpServer.listen()
 app.post('/matchmake/joinOrCreate/:roomName', async (req, res) => {
   try {
     const { roomName } = req.params
     const options = req.body || {}
     
+    console.log(`[Matchmaking] ═══════════════════════════════════`)
     console.log(`[Matchmaking] joinOrCreate request for "${roomName}"`)
     console.log(`[Matchmaking] Options:`, JSON.stringify(options))
+    console.log(`[Matchmaking] Headers:`, JSON.stringify(req.headers))
     
     // Use matchMaker directly (imported from @colyseus/core)
     // joinOrCreate returns SeatReservation with room property
     const reservation = await matchMaker.joinOrCreate(roomName, options)
     
-    console.log(`[Matchmaking] ✅ Room found/created: ${reservation.room.roomId}`)
+    console.log(`[Matchmaking] ✅ Reservation:`, JSON.stringify({
+      roomId: reservation.room?.roomId,
+      sessionId: reservation.sessionId
+    }))
+    
+    if (!reservation || !reservation.room) {
+      throw new Error('Invalid reservation returned from matchMaker')
+    }
     
     res.json({
       room: {
@@ -126,9 +158,12 @@ app.post('/matchmake/joinOrCreate/:roomName', async (req, res) => {
     })
   } catch (error: any) {
     console.error('[Matchmaking] ❌ Error:', error?.message || error)
+    console.error('[Matchmaking] Stack:', error?.stack)
     res.status(500).json({ error: error?.message || 'Matchmaking failed' })
   }
 })
+
+console.log('✅ Matchmaking route /matchmake/joinOrCreate/:roomName registered')
 
 app.post('/matchmake/create/:roomName', async (req, res) => {
   try {
