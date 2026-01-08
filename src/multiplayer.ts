@@ -8,6 +8,81 @@
  * - Works even without server connection (fallback)
  */
 
+// Polyfill URL class for Decentraland environment (colyseus.js needs it)
+if (typeof (globalThis as any).URL === 'undefined') {
+  (globalThis as any).URL = class URL {
+    href: string
+    protocol: string
+    host: string
+    hostname: string
+    port: string
+    pathname: string
+    search: string
+    hash: string
+    
+    constructor(url: string, base?: string) {
+      // Simple URL parser for WebSocket URLs
+      let fullUrl = url
+      if (base && !url.startsWith('ws://') && !url.startsWith('wss://') && !url.startsWith('http')) {
+        fullUrl = base + url
+      }
+      
+      this.href = fullUrl
+      
+      // Parse protocol
+      const protocolMatch = fullUrl.match(/^(wss?|https?):\/\//)
+      this.protocol = protocolMatch ? protocolMatch[1] + ':' : 'wss:'
+      
+      // Remove protocol for parsing
+      let rest = fullUrl.replace(/^(wss?|https?):\/\//, '')
+      
+      // Parse hash
+      const hashIndex = rest.indexOf('#')
+      if (hashIndex !== -1) {
+        this.hash = rest.substring(hashIndex)
+        rest = rest.substring(0, hashIndex)
+      } else {
+        this.hash = ''
+      }
+      
+      // Parse search/query
+      const searchIndex = rest.indexOf('?')
+      if (searchIndex !== -1) {
+        this.search = rest.substring(searchIndex)
+        rest = rest.substring(0, searchIndex)
+      } else {
+        this.search = ''
+      }
+      
+      // Parse pathname
+      const pathIndex = rest.indexOf('/')
+      if (pathIndex !== -1) {
+        this.pathname = rest.substring(pathIndex)
+        rest = rest.substring(0, pathIndex)
+      } else {
+        this.pathname = '/'
+      }
+      
+      // Parse host and port
+      const portIndex = rest.indexOf(':')
+      if (portIndex !== -1) {
+        this.hostname = rest.substring(0, portIndex)
+        this.port = rest.substring(portIndex + 1)
+      } else {
+        this.hostname = rest
+        this.port = ''
+      }
+      
+      this.host = this.port ? `${this.hostname}:${this.port}` : this.hostname
+    }
+    
+    toString() {
+      return this.href
+    }
+  }
+  console.log('[Multiplayer] URL polyfill installed')
+}
+
 // @ts-ignore - Colyseus import
 import * as Colyseus from 'colyseus.js'
 
