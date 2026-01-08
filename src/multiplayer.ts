@@ -71,10 +71,11 @@ function getServerUrl(): string {
   }
   
   // === PRODUCTION URL ===
-  // Uncomment and replace with your Railway URL when deploying:
-  // return 'wss://tower-of-madness-server.up.railway.app'
+  // Your Railway server
+  return 'wss://towerofmadness-production.up.railway.app'
   
-  return DEFAULT_SERVER_URL
+  // For local testing, comment above and use:
+  // return DEFAULT_SERVER_URL
 }
 
 // ============================================
