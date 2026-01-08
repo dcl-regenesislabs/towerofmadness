@@ -183,39 +183,63 @@ export class TowerRoom extends Room<TowerRoomState> {
     console.log(`[TowerRoom] Break duration: ${BREAK_DURATION}s`)
   }
   
+  // Track effective time remaining (can be reduced by speed multiplier)
+  private effectiveTimeRemaining: number = ROUND_DURATION
+  private lastSpeedUpdate: number = 0
+  
   /**
    * Sync room state with real-world clock
+   * Hybrid: Clock determines round NUMBER, but speed multiplier affects actual duration
    */
   private syncWithClock() {
     const info = getCurrentRoundInfo()
+    const now = Date.now()
     
     // Update server time for client sync
-    this.state.serverTime = Date.now()
-    this.state.remainingTime = info.remainingTime
+    this.state.serverTime = now
     
-    // Check if round changed
+    // Check if round changed (new round from clock)
     if (info.roundNumber !== this.currentRoundNumber) {
       this.currentRoundNumber = info.roundNumber
+      this.effectiveTimeRemaining = ROUND_DURATION
+      this.lastSpeedUpdate = now
       this.startNewRound(info.roundNumber)
+      return
     }
     
-    // Update round state
-    if (info.isBreak && this.state.roundState !== 'BREAK') {
-      this.endRound()
-    } else if (!info.isBreak && this.state.roundState === 'BREAK') {
-      // Round already started via roundNumber change
+    // During active round, apply speed multiplier to ACTUAL time
+    if (this.state.roundState === 'ACTIVE') {
+      const elapsed = (now - this.lastSpeedUpdate) / 1000
+      this.lastSpeedUpdate = now
+      
+      // Reduce time by elapsed * speedMultiplier
+      this.effectiveTimeRemaining -= elapsed * this.state.speedMultiplier
+      this.state.remainingTime = Math.max(0, Math.floor(this.effectiveTimeRemaining))
+      
+      // Check if round should end (effective time ran out)
+      if (this.effectiveTimeRemaining <= 0) {
+        this.endRound()
+        return
+      }
+      
+      // Log every 30 seconds
+      const timeInt = Math.floor(this.effectiveTimeRemaining)
+      if (timeInt % 30 === 0 && timeInt > 0 && timeInt < ROUND_DURATION) {
+        const mins = Math.floor(timeInt / 60)
+        const secs = timeInt % 60
+        console.log(`[TowerRoom] ⏱️ ${mins}:${secs.toString().padStart(2, '0')} remaining (x${this.state.speedMultiplier})`)
+      }
     }
     
-    // Apply speed multiplier to displayed time (visual only)
-    // The actual round end is still based on clock
-    const displayTime = Math.max(0, info.remainingTime / this.state.speedMultiplier)
-    this.state.remainingTime = Math.floor(displayTime)
-    
-    // Log every 30 seconds during active round
-    if (!info.isBreak && info.remainingTime % 30 === 0 && info.remainingTime > 0 && info.remainingTime < ROUND_DURATION) {
-      const mins = Math.floor(info.remainingTime / 60)
-      const secs = info.remainingTime % 60
-      console.log(`[TowerRoom] ⏱️ ${mins}:${secs.toString().padStart(2, '0')} remaining (x${this.state.speedMultiplier})`)
+    // During break, check if it's time for new round
+    if (this.state.roundState === 'BREAK') {
+      // If clock moved to next round, start it
+      if (!info.isBreak && info.roundNumber > this.currentRoundNumber) {
+        this.currentRoundNumber = info.roundNumber
+        this.effectiveTimeRemaining = ROUND_DURATION
+        this.lastSpeedUpdate = now
+        this.startNewRound(info.roundNumber)
+      }
     }
   }
   
@@ -232,6 +256,11 @@ export class TowerRoom extends Room<TowerRoomState> {
     this.state.speedMultiplier = 1
     this.state.finisherCount = 0
     this.state.winners.clear()
+    this.state.remainingTime = ROUND_DURATION
+    
+    // Reset effective time tracking
+    this.effectiveTimeRemaining = ROUND_DURATION
+    this.lastSpeedUpdate = Date.now()
     
     // Generate tower deterministically from round number
     const chunks = generateTowerForRound(roundNumber)

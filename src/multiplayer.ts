@@ -195,7 +195,7 @@ function startLocalClockSync() {
 
 /**
  * Call this from a Decentraland system to update clock
- * (called by initMultiplayer setup)
+ * Hybrid: Clock for round NUMBER, server for actual TIMER
  */
 function checkClockUpdate() {
   if (!localClockActive) return
@@ -206,7 +206,7 @@ function checkClockUpdate() {
   
   const info = getCurrentRoundInfo()
   
-  // Detect round change
+  // Detect round change (from clock - ensures same tower)
   if (info.roundNumber !== currentRoundNumber) {
     currentRoundNumber = info.roundNumber
     console.log(`[Multiplayer] 🎮 Round #${info.roundNumber}`)
@@ -219,10 +219,17 @@ function checkClockUpdate() {
     }
   }
   
-  // Update timer
+  // Update timer - use SERVER time if connected, otherwise use clock
   if (onTimerUpdateCallback) {
-    const multiplier = room ? (room.state as any)?.speedMultiplier || 1 : 1
-    onTimerUpdateCallback(info.remainingTime, multiplier)
+    if (room && room.state) {
+      // Connected to server - use server's timer (affected by speed multiplier)
+      const serverTime = (room.state as any).remainingTime || info.remainingTime
+      const multiplier = (room.state as any).speedMultiplier || 1
+      onTimerUpdateCallback(serverTime, multiplier)
+    } else {
+      // Offline - use clock-based timer (no speed effect)
+      onTimerUpdateCallback(info.remainingTime, 1)
+    }
   }
 }
 
