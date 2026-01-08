@@ -1,0 +1,17 @@
+# Nixpacks configuration for Railway deployment
+# See: https://nixpacks.com/docs/configuration/file
+
+[phases.setup]
+nixPkgs = ["nodejs_18"]
+
+[phases.install]
+cmds = ["npm install"]
+
+[phases.build]
+cmds = ["echo 'Build complete - using pre-built bin/index.js'"]
+
+[start]
+cmd = "node server/index.js"
+
+[variables]
+NODE_OPTIONS = "--experimental-vm-modules"
