@@ -70,7 +70,7 @@ if (process.env.NODE_ENV !== 'production') {
 const PORT = parseInt(process.env.PORT || '2567', 10)
 
 // Start the server
-httpServer.listen(PORT, async () => {
+httpServer.listen(PORT, () => {
   console.log('')
   console.log('═══════════════════════════════════════════════════════')
   console.log(`✅ Server listening on port ${PORT}`)
@@ -78,17 +78,22 @@ httpServer.listen(PORT, async () => {
   console.log('═══════════════════════════════════════════════════════')
   console.log('')
   
-  // Create the persistent game room at startup
-  // This ensures the room exists and runs even with 0 players
-  try {
-    const room = await matchMaker.createRoom('tower_room', {})
-    console.log(`🎮 Persistent room created: ${room.roomId}`)
-    console.log('⏱️  Timer running independently of players!')
-  } catch (error) {
-    console.error('❌ Failed to create room:', error)
-  }
+  // Create the persistent game room after a short delay
+  // This ensures Colyseus is fully initialized
+  setTimeout(async () => {
+    console.log('🔧 Creating persistent room...')
+    try {
+      const room = await matchMaker.createRoom('tower_room', {})
+      console.log(`🎮 Persistent room created: ${room.roomId}`)
+      console.log('⏱️  Timer running independently of players!')
+      console.log('')
+      console.log('🎯 Game server ready! Rounds run 24/7.')
+    } catch (error: any) {
+      console.error('❌ Failed to create room:', error?.message || error)
+      console.log('⚠️  Room will be created when first player joins')
+    }
+  }, 1000)
   
-  console.log('')
   console.log('Waiting for players to connect...')
 })
 
