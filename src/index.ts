@@ -1,6 +1,6 @@
 import {} from '@dcl/sdk/math'
 import { engine, Transform, TriggerArea, triggerAreaEventsSystem, ColliderLayer, PointerEvents, PointerEventType, InputAction, pointerEventsSystem } from '@dcl/sdk/ecs'
-import { Vector3 } from '@dcl/sdk/math'
+import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
 import { generateTower } from './towerGenerator'
@@ -24,6 +24,41 @@ export let bestHeight: number = 0 // Best height achieved
 export let gameResult: 'WIN' | 'DEATH' | null = null // Result of the last game
 export let resultMessage: string = '' // Message to display
 export let resultTimestamp: number = 0 // When the result was shown (for auto-hide)
+
+/**
+ * Helper function to get world position of an entity (accounting for parent transforms)
+ * In SDK7, Transform.position for children is in local space relative to parent
+ */
+function getWorldPosition(entity: Entity): Vector3 {
+  if (!Transform.has(entity)) return Vector3.Zero()
+  
+  const transform = Transform.get(entity)
+  let localPos = transform.position
+  
+  // If entity has a parent, transform local position to world space
+  if (transform.parent !== undefined && transform.parent !== engine.RootEntity && Transform.has(transform.parent)) {
+    const parentTransform = Transform.get(transform.parent)
+    const parentRot = parentTransform.rotation
+    const parentScale = parentTransform.scale
+    
+    // Rotate the local position by parent rotation
+    const rotatedPos = Vector3.rotate(localPos, parentRot)
+    
+    // Scale the rotated position
+    const scaledPos = Vector3.create(
+      rotatedPos.x * parentScale.x,
+      rotatedPos.y * parentScale.y,
+      rotatedPos.z * parentScale.z
+    )
+    
+    // Get parent's world position and add the transformed local position
+    const parentWorldPos = getWorldPosition(transform.parent)
+    return Vector3.add(scaledPos, parentWorldPos)
+  }
+  
+  // No parent, position is already in world space
+  return localPos
+}
 
 // System to track player height
 function trackPlayerHeight() {
@@ -285,7 +320,8 @@ export function main() {
     // Check TriggerEnd
     if (triggerEnd && Transform.has(triggerEnd) && gameState === GameState.IN_PROGRESS) {
       const triggerTransform = Transform.get(triggerEnd)
-      const triggerPos = triggerTransform.position
+      // Get world position (accounting for parent if TriggerEnd is a child of ChunkEnd01)
+      const triggerPos = getWorldPosition(triggerEnd)
       const triggerScale = triggerTransform.scale
       
       const dx = Math.abs(playerPos.x - triggerPos.x)
@@ -300,6 +336,11 @@ export function main() {
       
       if (isInside && !triggerEndEntered) {
         console.log('[DEBUG] ========== MANUAL TriggerEnd DETECTED! ==========')
+        console.log('[DEBUG] Player pos:', playerPos.x.toFixed(2), playerPos.y.toFixed(2), playerPos.z.toFixed(2))
+        console.log('[DEBUG] TriggerEnd world pos:', triggerPos.x.toFixed(2), triggerPos.y.toFixed(2), triggerPos.z.toFixed(2))
+        console.log('[DEBUG] TriggerEnd local pos:', triggerTransform.position.x.toFixed(2), triggerTransform.position.y.toFixed(2), triggerTransform.position.z.toFixed(2))
+        console.log('[DEBUG] TriggerEnd scale:', triggerScale.x.toFixed(2), triggerScale.y.toFixed(2), triggerScale.z.toFixed(2))
+        console.log('[DEBUG] Distance:', dx.toFixed(2), dy.toFixed(2), dz.toFixed(2))
         triggerEndEntered = true
         endGameWin()
       } else if (!isInside && triggerEndEntered) {
