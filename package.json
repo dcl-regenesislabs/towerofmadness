@@ -16,8 +16,8 @@
     "@dcl/sdk": "latest"
   },
   "engines": {
-    "node": ">=16.0.0",
-    "npm": ">=6.0.0"
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
   },
   "prettier": {
     "semi": false,

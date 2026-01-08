@@ -1,17 +1,17 @@
 # Nixpacks configuration for Railway deployment
-# See: https://nixpacks.com/docs/configuration/file
+# Deploys the Colyseus multiplayer server
 
 [phases.setup]
-nixPkgs = ["nodejs_18"]
+nixPkgs = ["nodejs_20", "npm-9_x"]
 
 [phases.install]
-cmds = ["npm install"]
+cmds = ["cd server && npm install"]
 
 [phases.build]
-cmds = ["echo 'Build complete - using pre-built bin/index.js'"]
+cmds = ["cd server && npm run build"]
 
 [start]
-cmd = "node server/index.js"
+cmd = "cd server && npm start"
 
 [variables]
-NODE_OPTIONS = "--experimental-vm-modules"
+NODE_ENV = "production"
