@@ -71,8 +71,8 @@ if (fs.existsSync(localHammurabi)) {
 } else {
   console.log('Using npx to run hammurabi-server');
   serverCommand = 'npx';
-  // Try a specific version that might work better
-  serverArgs = ['@dcl/hammurabi-server@1.0.0-20530813943.commit-a9ffd94'];
+  // Use latest version
+  serverArgs = ['@dcl/hammurabi-server@latest'];
 }
 
 // Start the hammurabi server from the project root
