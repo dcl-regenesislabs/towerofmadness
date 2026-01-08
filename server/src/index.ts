@@ -117,7 +117,18 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
 const httpServer = http.createServer(app)
 
 // Get port from environment
-const PORT = parseInt(process.env.PORT || '2567', 10)
+// Railway automatically sets PORT env var - it should match Railway's port setting (8000)
+// If Railway UI shows port 8000, Railway should set PORT=8000
+const PORT = parseInt(process.env.PORT || '8000', 10)
+
+console.log('')
+console.log('═══════════════════════════════════════════════════════')
+console.log('🔌 PORT Configuration:')
+console.log(`   Railway PORT env var: ${process.env.PORT || 'NOT SET'}`)
+console.log(`   Server listening on: ${PORT}`)
+console.log(`   Railway UI port setting: 8000 (should match PORT env var)`)
+console.log('═══════════════════════════════════════════════════════')
+console.log('')
 
 // Create Colyseus game server
 const gameServer = new Server({
