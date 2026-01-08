@@ -1,13 +1,22 @@
 /**
- * Tower of Madness - Multiplayer System
+ * Tower of Madness - Multiplayer System (Colyseus Client)
  * 
- * Handles authoritative server communication for synchronized gameplay.
- * Server controls: tower generation, round timer, leaderboard, winners
- * Clients: send player updates, receive game state
+ * Connects to Colyseus server for:
+ * - Synchronized tower generation
+ * - Shared timer with speed multiplier
+ * - Leaderboard updates
+ * - Round lifecycle management
+ * 
+ * Server URL Configuration:
+ * - Development: ws://localhost:2567
+ * - Production: wss://your-railway-url.up.railway.app
  */
 
-import { engine, Schemas } from '@dcl/sdk/ecs'
-import { isServer as checkIsServer, registerMessages } from '@dcl/sdk/network'
+// @ts-ignore - colyseus.js types may not be available at compile time
+import * as Colyseus from 'colyseus.js'
+
+// Declare global window for URL parameter parsing (may not exist in all environments)
+declare const window: { location?: { search: string } } | undefined
 
 // ============================================
 // TYPE DEFINITIONS
@@ -31,449 +40,318 @@ export type WinnerEntry = {
 }
 
 // ============================================
-// MESSAGE SCHEMAS
+// CONFIGURATION
 // ============================================
 
-const Messages = {
-  // Server → Clients
-  gameStarted: Schemas.Map({
-    roundId: Schemas.String,
-    chunkIds: Schemas.Array(Schemas.String),
-    startTime: Schemas.Int64
-  }),
+// Server URL - Change this for production!
+// Development: ws://localhost:2567
+// Production: wss://your-app.up.railway.app
+const DEFAULT_SERVER_URL = 'ws://localhost:2567'
+
+function getServerUrl(): string {
+  // In browser/Decentraland, we can check URL params or use default
+  // For production, you'll want to hardcode your Railway URL here
   
-  timerUpdate: Schemas.Map({
-    remainingTime: Schemas.Float,
-    speedMultiplier: Schemas.Float
-  }),
+  // Try to get from URL params (for testing)
+  try {
+    if (typeof window !== 'undefined' && window && window.location) {
+      // Use globalThis.URLSearchParams if available
+      const URLSearchParamsClass = (globalThis as any).URLSearchParams
+      if (URLSearchParamsClass) {
+        const params = new URLSearchParamsClass(window.location.search)
+        const serverUrl = params.get('server')
+        if (serverUrl) {
+          console.log(`[Multiplayer] Using server from URL param: ${serverUrl}`)
+          return serverUrl
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore - not in browser
+  }
   
-  leaderboardUpdate: Schemas.Map({
-    players: Schemas.Array(Schemas.Map({
-      address: Schemas.String,
-      displayName: Schemas.String,
-      maxHeight: Schemas.Float,
-      bestTime: Schemas.Float,
-      isFinished: Schemas.Boolean,
-      finishOrder: Schemas.Int
-    }))
-  }),
+  // === PRODUCTION URL ===
+  // Uncomment and replace with your Railway URL when deploying:
+  // return 'wss://tower-of-madness-server.up.railway.app'
   
-  gameEnded: Schemas.Map({
-    roundId: Schemas.String,
-    winners: Schemas.Array(Schemas.Map({
-      address: Schemas.String,
-      displayName: Schemas.String,
-      time: Schemas.Float,
-      height: Schemas.Float,
-      rank: Schemas.Int
-    }))
-  }),
-  
-  // Clients → Server
-  playerHeightUpdate: Schemas.Map({
-    height: Schemas.Float
-  }),
-  
-  playerFinished: Schemas.Map({
-    time: Schemas.Float,
-    height: Schemas.Float
-  }),
-  
-  playerDied: Schemas.Map({
-    height: Schemas.Float
-  }),
-  
-  playerJoined: Schemas.Map({
-    displayName: Schemas.String
-  })
+  return DEFAULT_SERVER_URL
 }
 
 // ============================================
 // STATE
 // ============================================
 
-let room: ReturnType<typeof registerMessages<typeof Messages>> | null = null
-let isServerInstance = false
+let client: Colyseus.Client | null = null
+let room: Colyseus.Room | null = null
 let multiplayerInitialized = false
+let connectionFailed = false
 
-// Callbacks
-let _onServerTowerReady: ((chunks: string[]) => void) | null = null
-let _onTimerUpdate: ((remaining: number, multiplier: number) => void) | null = null
-let _onLeaderboardUpdate: ((players: LeaderboardEntry[]) => void) | null = null
-let _onGameEnded: ((winners: WinnerEntry[]) => void) | null = null
+// Callbacks (set by index.ts)
+let onServerTowerReadyCallback: ((chunks: string[]) => void) | null = null
+let onTimerUpdateCallback: ((remaining: number, multiplier: number) => void) | null = null
+let onLeaderboardUpdateCallback: ((players: LeaderboardEntry[]) => void) | null = null
+let onGameEndedCallback: ((winners: WinnerEntry[]) => void) | null = null
 
 // ============================================
 // INITIALIZATION
 // ============================================
 
+/**
+ * Initialize multiplayer connection to Colyseus server
+ * Returns true if connected, false if failed
+ */
 export async function initMultiplayer(): Promise<boolean> {
   if (multiplayerInitialized) {
     return room !== null
   }
   
+  multiplayerInitialized = true
+  const serverUrl = getServerUrl()
+  
+  console.log('[Multiplayer] ═══════════════════════════════════')
+  console.log('[Multiplayer] 🔌 Connecting to Colyseus server...')
+  console.log(`[Multiplayer] URL: ${serverUrl}`)
+  console.log('[Multiplayer] ═══════════════════════════════════')
+  
   try {
-    // Register messages and get room
-    room = registerMessages(Messages)
-    isServerInstance = checkIsServer()
-    multiplayerInitialized = true
+    // Create Colyseus client
+    client = new Colyseus.Client(serverUrl)
     
-    console.log('[Multiplayer] ✅ Initialized!')
-    console.log('[Multiplayer] Is Server:', isServerInstance)
+    // Join or create the tower room
+    room = await client.joinOrCreate('tower_room', {
+      displayName: 'Player', // Will be updated later
+    })
+    
+    console.log('[Multiplayer] ✅ Connected!')
+    console.log(`[Multiplayer] Session ID: ${room.sessionId}`)
+    console.log(`[Multiplayer] Room ID: ${room.roomId}`)
+    
+    // Set up state change listeners
+    setupStateListeners()
+    
     return true
   } catch (error) {
-    console.log('[Multiplayer] ⚠️ SDK network module not available')
-    console.log('[Multiplayer] Running in SINGLE-PLAYER mode')
-    multiplayerInitialized = true
+    connectionFailed = true
+    console.error('[Multiplayer] ❌ Connection failed:', error)
+    console.log('[Multiplayer] Falling back to SINGLE-PLAYER mode')
     return false
   }
 }
 
-export function isServer(): boolean {
-  return isServerInstance
-}
-
-export function isMultiplayerAvailable(): boolean {
-  return room !== null
-}
-
-// ============================================
-// CALLBACK SETTERS
-// ============================================
-
-export function setOnServerTowerReady(callback: ((chunks: string[]) => void) | null) {
-  _onServerTowerReady = callback
-}
-
-export function setOnTimerUpdate(callback: ((remaining: number, multiplier: number) => void) | null) {
-  _onTimerUpdate = callback
-}
-
-export function setOnLeaderboardUpdate(callback: ((players: LeaderboardEntry[]) => void) | null) {
-  _onLeaderboardUpdate = callback
-}
-
-export function setOnGameEnded(callback: ((winners: WinnerEntry[]) => void) | null) {
-  _onGameEnded = callback
-}
-
-// ============================================
-// SERVER LOGIC
-// ============================================
-
-type PlayerData = {
-  address: string
-  displayName: string
-  maxHeight: number
-  bestTime: number | null
-  isFinished: boolean
-  finishOrder: number | null
-}
-
-const CHUNK_OPTIONS = ['Chunk01', 'Chunk02', 'Chunk03']
-const BASE_TIMER = 420 // 7 minutes
-const MIN_CHUNKS = 3
-const MAX_CHUNKS = 8
-const ROUND_BREAK = 10 // seconds
-
-let currentRound = {
-  id: '',
-  chunkIds: [] as string[],
-  startTime: 0,
-  speedMultiplier: 1.0,
-  finishCount: 0,
-  players: new Map<string, PlayerData>()
-}
-
-// Server timer state
-let serverTimerLastTick = 0
-let serverTimerAccumulator = 0
-const SERVER_TICK_INTERVAL = 1.0 // Tick every 1 second
-
-// Delay system for round break
-let roundBreakDelay = 0
-let isWaitingForRoundBreak = false
-
-export function setupServer() {
-  if (!room) {
-    console.error('[SERVER] Room not initialized!')
-    return
-  }
+/**
+ * Set up listeners for Colyseus state changes
+ */
+function setupStateListeners() {
+  if (!room) return
   
-  console.log('[SERVER] ═══════════════════════════════════')
-  console.log('[SERVER] 🎮 Tower of Madness Server Starting')
-  console.log('[SERVER] ═══════════════════════════════════')
+  // Track previous chunk IDs to detect tower changes
+  let previousChunkIds: string[] = []
   
-  // Handle player height updates
-  room.onMessage('playerHeightUpdate', (data: { height: number }, ctx) => {
-    const addr = ctx?.from || 'unknown'
+  // Main state change listener
+  room.onStateChange((state: any) => {
+    // Check if tower changed (new round)
+    const currentChunkIds = Array.from(state.chunkIds || []) as string[]
+    const chunksChanged = JSON.stringify(currentChunkIds) !== JSON.stringify(previousChunkIds)
     
-    if (!currentRound.players.has(addr)) {
-      currentRound.players.set(addr, {
-        address: addr,
-        displayName: `Player ${currentRound.players.size + 1}`,
-        maxHeight: data.height,
-        bestTime: null,
-        isFinished: false,
-        finishOrder: null
-      })
-    } else {
-      const p = currentRound.players.get(addr)!
-      if (data.height > p.maxHeight) {
-        p.maxHeight = data.height
+    if (chunksChanged && currentChunkIds.length > 0) {
+      previousChunkIds = currentChunkIds
+      console.log(`[Multiplayer] 🗼 New tower received: [${currentChunkIds.join(' → ')}]`)
+      
+      if (onServerTowerReadyCallback) {
+        onServerTowerReadyCallback(currentChunkIds)
       }
     }
     
-    broadcastLeaderboard()
-  })
-  
-  // Handle player finish
-  room.onMessage('playerFinished', (data: { time: number; height: number }, ctx) => {
-    const addr = ctx?.from || 'unknown'
-    const p = currentRound.players.get(addr)
+    // Update timer
+    if (onTimerUpdateCallback) {
+      onTimerUpdateCallback(state.remainingTime || 0, state.speedMultiplier || 1)
+    }
     
-    if (p && !p.isFinished) {
-      currentRound.finishCount++
-      p.isFinished = true
-      p.bestTime = data.time
-      p.finishOrder = currentRound.finishCount
-      currentRound.speedMultiplier = currentRound.finishCount + 1
+    // Update leaderboard
+    if (onLeaderboardUpdateCallback && state.players) {
+      const players: LeaderboardEntry[] = []
+      state.players.forEach((player: any) => {
+        players.push({
+          address: player.address || '',
+          displayName: player.displayName || '',
+          maxHeight: player.maxHeight || 0,
+          bestTime: player.bestTime || 0,
+          isFinished: player.isFinished || false,
+          finishOrder: player.finishOrder || 0
+        })
+      })
       
-      console.log(`[SERVER] 🏆 ${addr} finished! #${currentRound.finishCount} | Timer now x${currentRound.speedMultiplier}`)
-      broadcastLeaderboard()
-    }
-  })
-  
-  // Handle player death
-  room.onMessage('playerDied', (data: { height: number }, ctx) => {
-    console.log(`[SERVER] ☠️ ${ctx?.from} died at ${data.height.toFixed(1)}m`)
-  })
-  
-  // Handle player join
-  room.onMessage('playerJoined', (data: { displayName: string }, ctx) => {
-    const addr = ctx?.from || 'unknown'
-    
-    if (!currentRound.players.has(addr)) {
-      currentRound.players.set(addr, {
-        address: addr,
-        displayName: data.displayName || `Player ${currentRound.players.size + 1}`,
-        maxHeight: 0,
-        bestTime: null,
-        isFinished: false,
-        finishOrder: null
+      // Sort by finish order (if finished) or height
+      players.sort((a, b) => {
+        if (a.isFinished && b.isFinished) {
+          return a.finishOrder - b.finishOrder
+        }
+        if (a.isFinished) return -1
+        if (b.isFinished) return 1
+        return b.maxHeight - a.maxHeight
       })
-      console.log(`[SERVER] 👋 ${data.displayName} joined!`)
+      
+      onLeaderboardUpdateCallback(players)
     }
+  })
+  
+  // Listen for round ended message
+  room.onMessage('roundEnded', (data: { winners: WinnerEntry[] }) => {
+    console.log('[Multiplayer] 🏁 Round ended!')
+    if (onGameEndedCallback) {
+      onGameEndedCallback(data.winners)
+    }
+  })
+  
+  // Listen for new round message
+  room.onMessage('newRound', (data: { roundId: string; chunkIds: string[] }) => {
+    console.log(`[Multiplayer] 🎮 New round: ${data.roundId}`)
+    console.log(`[Multiplayer] Tower: [${data.chunkIds.join(' → ')}]`)
     
-    // Send current game state
-    if (currentRound.id) {
-      room!.send('gameStarted', {
-        roundId: currentRound.id,
-        chunkIds: currentRound.chunkIds,
-        startTime: currentRound.startTime
-      })
+    if (onServerTowerReadyCallback) {
+      onServerTowerReadyCallback(data.chunkIds)
     }
   })
   
-  // Start first round
-  startServerRound()
-  
-  // Add server timer system using engine.addSystem
-  engine.addSystem(serverTimerSystem)
-  
-  console.log('[SERVER] ✅ Server ready!')
-}
-
-// Server timer system - runs every frame
-function serverTimerSystem(dt: number) {
-  // Handle round break delay
-  if (isWaitingForRoundBreak) {
-    roundBreakDelay -= dt
-    if (roundBreakDelay <= 0) {
-      isWaitingForRoundBreak = false
-      startServerRound()
-    }
-    return
-  }
-  
-  // Accumulate time and tick every SERVER_TICK_INTERVAL
-  serverTimerAccumulator += dt
-  if (serverTimerAccumulator >= SERVER_TICK_INTERVAL) {
-    serverTimerAccumulator = 0
-    serverTimerTick()
-  }
-}
-
-function startServerRound() {
-  const count = Math.floor(Math.random() * (MAX_CHUNKS - MIN_CHUNKS + 1)) + MIN_CHUNKS
-  const chunks: string[] = []
-  for (let i = 0; i < count; i++) {
-    chunks.push(CHUNK_OPTIONS[Math.floor(Math.random() * CHUNK_OPTIONS.length)])
-  }
-  
-  currentRound = {
-    id: Date.now().toString(),
-    chunkIds: chunks,
-    startTime: Date.now(),
-    speedMultiplier: 1.0,
-    finishCount: 0,
-    players: new Map()
-  }
-  
-  console.log('[SERVER] ═══════════════════════════════════')
-  console.log(`[SERVER] 🎮 NEW ROUND: ${chunks.join(' → ')}`)
-  console.log('[SERVER] ═══════════════════════════════════')
-  
-  if (room) {
-    room.send('gameStarted', {
-      roundId: currentRound.id,
-      chunkIds: chunks,
-      startTime: currentRound.startTime
-    })
-  }
-}
-
-function serverTimerTick() {
-  if (!currentRound.id) return
-  
-  const elapsed = (Date.now() - currentRound.startTime) / 1000
-  const adjusted = elapsed * currentRound.speedMultiplier
-  const remaining = Math.max(0, BASE_TIMER - adjusted)
-  
-  if (room) {
-    room.send('timerUpdate', {
-      remainingTime: remaining,
-      speedMultiplier: currentRound.speedMultiplier
-    })
-  }
-  
-  if (remaining <= 0) {
-    endServerRound()
-  }
-}
-
-function endServerRound() {
-  console.log('[SERVER] 🏁 ROUND ENDED!')
-  
-  const sorted = Array.from(currentRound.players.values()).sort((a, b) => {
-    if (a.isFinished && !b.isFinished) return -1
-    if (!a.isFinished && b.isFinished) return 1
-    if (a.isFinished && b.isFinished) return (a.finishOrder || 0) - (b.finishOrder || 0)
-    return b.maxHeight - a.maxHeight
+  // Listen for player finished
+  room.onMessage('playerFinished', (data: any) => {
+    console.log(`[Multiplayer] 🏆 ${data.displayName} finished! (${data.finishOrder}${getOrdinalSuffix(data.finishOrder)}) - Timer x${data.speedMultiplier}`)
   })
   
-  const winners: WinnerEntry[] = sorted.slice(0, 3).map((p, i) => ({
-    address: p.address,
-    displayName: p.displayName,
-    time: p.bestTime || 0,
-    height: p.maxHeight,
-    rank: i + 1
-  }))
+  // Connection error handling
+  room.onError((code: number, message?: string) => {
+    console.error(`[Multiplayer] ❌ Room error (${code}): ${message}`)
+  })
   
-  if (room) {
-    room.send('gameEnded', {
-      roundId: currentRound.id,
-      winners
-    })
-  }
-  
-  // Schedule new round after break using delay system
-  roundBreakDelay = ROUND_BREAK
-  isWaitingForRoundBreak = true
+  room.onLeave((code: number) => {
+    console.log(`[Multiplayer] 👋 Left room (code: ${code})`)
+    room = null
+  })
 }
 
-function broadcastLeaderboard() {
-  if (!room) return
-  
-  const arr: LeaderboardEntry[] = Array.from(currentRound.players.values()).map(p => ({
-    address: p.address,
-    displayName: p.displayName,
-    maxHeight: p.maxHeight,
-    bestTime: p.bestTime || 0,
-    isFinished: p.isFinished,
-    finishOrder: p.finishOrder || 0
-  }))
-  
-  arr.sort((a, b) => b.maxHeight - a.maxHeight)
-  
-  room.send('leaderboardUpdate', { players: arr })
+function getOrdinalSuffix(n: number): string {
+  const s = ['th', 'st', 'nd', 'rd']
+  const v = n % 100
+  return s[(v - 20) % 10] || s[v] || s[0]
 }
 
 // ============================================
-// CLIENT LOGIC
+// PUBLIC API - Callbacks
 // ============================================
+
+export function setOnServerTowerReady(callback: ((chunks: string[]) => void) | null) {
+  onServerTowerReadyCallback = callback
+}
+
+export function setOnTimerUpdate(callback: ((remaining: number, multiplier: number) => void) | null) {
+  onTimerUpdateCallback = callback
+}
+
+export function setOnLeaderboardUpdate(callback: ((players: LeaderboardEntry[]) => void) | null) {
+  onLeaderboardUpdateCallback = callback
+}
+
+export function setOnGameEnded(callback: ((winners: WinnerEntry[]) => void) | null) {
+  onGameEndedCallback = callback
+}
+
+// ============================================
+// PUBLIC API - State Checks
+// ============================================
+
+export function isServer(): boolean {
+  // Colyseus uses a separate server - client is never the server
+  return false
+}
+
+export function isMultiplayerAvailable(): boolean {
+  return room !== null && !connectionFailed
+}
+
+// ============================================
+// PUBLIC API - Setup (compatibility with existing code)
+// ============================================
+
+export function setupServer() {
+  // No-op for Colyseus - server is separate process
+  console.log('[Multiplayer] setupServer() called - Colyseus server is separate process')
+}
 
 export function setupClient() {
-  if (!room) {
-    console.error('[CLIENT] Room not initialized!')
-    return
-  }
-  
-  console.log('[CLIENT] Connecting to server...')
-  
-  room.onMessage('gameStarted', (data: { roundId: string; chunkIds: string[]; startTime: number }) => {
-    console.log('[CLIENT] 🎮 New round:', data.chunkIds.join(' → '))
-    if (_onServerTowerReady) {
-      _onServerTowerReady(data.chunkIds)
-    }
-  })
-  
-  room.onMessage('timerUpdate', (data: { remainingTime: number; speedMultiplier: number }) => {
-    if (_onTimerUpdate) {
-      _onTimerUpdate(data.remainingTime, data.speedMultiplier)
-    }
-  })
-  
-  room.onMessage('leaderboardUpdate', (data: { players: LeaderboardEntry[] }) => {
-    if (_onLeaderboardUpdate) {
-      _onLeaderboardUpdate(data.players)
-    }
-  })
-  
-  room.onMessage('gameEnded', (data: { roundId: string; winners: WinnerEntry[] }) => {
-    console.log('[CLIENT] 🏁 Round ended!')
-    if (_onGameEnded) {
-      _onGameEnded(data.winners)
-    }
-  })
-  
-  console.log('[CLIENT] ✅ Connected!')
+  // State listeners already set up in initMultiplayer
+  console.log('[Multiplayer] setupClient() called - listeners already configured')
 }
 
 // ============================================
-// CLIENT API
+// PUBLIC API - Send Messages to Server
 // ============================================
 
+/**
+ * Send current height to server (throttled by caller)
+ */
 export function sendHeightUpdate(height: number) {
-  if (room) {
-    room.send('playerHeightUpdate', { height })
-  }
+  if (!room) return
+  
+  room.send('playerHeight', { height })
 }
 
+/**
+ * Send player finished event
+ */
 export function sendPlayerFinished(time: number, height: number) {
-  if (room) {
-    room.send('playerFinished', { time, height })
-    console.log(`[CLIENT] 🏆 Finished! Time: ${time.toFixed(2)}s`)
-  }
+  if (!room) return
+  
+  console.log(`[Multiplayer] 📤 Sending finish: ${time.toFixed(2)}s, ${height.toFixed(1)}m`)
+  room.send('playerFinished', { time, height })
 }
 
+/**
+ * Send player death event
+ */
 export function sendPlayerDied(height: number) {
-  if (room) {
-    room.send('playerDied', { height })
-  }
+  if (!room) return
+  
+  console.log(`[Multiplayer] 📤 Sending death at ${height.toFixed(1)}m`)
+  room.send('playerDied', { height })
 }
 
-export function sendPlayerJoined(displayName: string) {
-  if (room) {
-    room.send('playerJoined', { displayName })
-  }
+/**
+ * Send player joined with display name
+ */
+export function sendPlayerJoined(displayName: string, address?: string) {
+  if (!room) return
+  
+  console.log(`[Multiplayer] 📤 Sending player info: ${displayName}`)
+  room.send('playerJoined', { displayName, address })
 }
 
 // ============================================
 // UTILITIES
 // ============================================
 
+/**
+ * Format seconds as M:SS
+ */
 export function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+/**
+ * Disconnect from server
+ */
+export function disconnect() {
+  if (room) {
+    room.leave()
+    room = null
+  }
+  console.log('[Multiplayer] Disconnected')
+}
+
+/**
+ * Get current room session ID (for debugging)
+ */
+export function getSessionId(): string | null {
+  return room?.sessionId || null
 }

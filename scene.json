@@ -1,9 +1,6 @@
 {
   "ecs7": true,
   "runtimeVersion": "7",
-  "authoritativeMultiplayer": true,
-  "multiplayerId": "tower-of-madness-game",
-  "serverUrl": "https://towerofmadness-production.up.railway.app",
   "display": {
     "title": "Tower of Madness",
     "description": "Multiplayer Tower Climbing Challenge - Race to the top!",

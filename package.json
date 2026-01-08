@@ -9,8 +9,11 @@
     "upgrade-sdk": "npm install --save-dev @dcl/sdk@latest",
     "upgrade-sdk:next": "npm install --save-dev @dcl/sdk@next"
   },
+  "dependencies": {
+    "colyseus.js": "^0.15.0"
+  },
   "devDependencies": {
-    "@dcl/sdk": "https://sdk-team-cdn.decentraland.org/@dcl/js-sdk-toolchain/branch/feat/authorative-server/dcl-sdk-7.14.1-19638055000.commit-0226f51.tgz"
+    "@dcl/sdk": "latest"
   },
   "engines": {
     "node": ">=16.0.0",
