@@ -13,7 +13,7 @@
  * - Works even if server restarts
  */
 
-import { Room, Client } from 'colyseus'
+import { Room, Client } from '@colyseus/core'
 import { Schema, type, MapSchema, ArraySchema } from '@colyseus/schema'
 
 // ============================================

@@ -10,10 +10,9 @@
 
 import express from 'express'
 import cors from 'cors'
-import { Server, matchMaker } from 'colyseus'
-import { createServer } from 'http'
+import http from 'http'
+import { Server } from '@colyseus/core'
 import { WebSocketTransport } from '@colyseus/ws-transport'
-import { monitor } from '@colyseus/monitor'
 import { TowerRoom } from './rooms/TowerRoom'
 
 // Constants (must match TowerRoom.ts)
@@ -28,11 +27,6 @@ console.log(`Node.js version: ${process.version}`)
 console.log(`⏰ Clock-Based Synchronization: ${ROUND_DURATION/60} min rounds`)
 console.log('')
 
-// Create Express app
-const app = express()
-app.use(cors())
-app.use(express.json())
-
 // Calculate current round info
 function getCurrentRoundInfo() {
   const now = Math.floor(Date.now() / 1000)
@@ -46,7 +40,29 @@ function getCurrentRoundInfo() {
   return { roundNumber, isBreak, remainingTime }
 }
 
-// Health check endpoint
+// Create Express app with CORS enabled for ALL origins and methods
+const app = express()
+
+// CRITICAL: CORS must allow POST for matchmaking
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  credentials: false
+}))
+
+// Handle preflight requests explicitly
+app.options('*', cors())
+
+app.use(express.json())
+
+// Request logging middleware
+app.use((req, res, next) => {
+  console.log(`[HTTP] ${req.method} ${req.url}`)
+  next()
+})
+
+// Health check endpoints
 app.get('/', (req, res) => {
   const info = getCurrentRoundInfo()
   const mins = Math.floor(info.remainingTime / 60)
@@ -66,13 +82,18 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' })
 })
 
-// Create HTTP server
-const httpServer = createServer(app)
+// Create HTTP server from Express
+const httpServer = http.createServer(app)
 
-// Create Colyseus server
+// Get port from environment
+const PORT = parseInt(process.env.PORT || '2567', 10)
+
+// Create Colyseus game server
 const gameServer = new Server({
   transport: new WebSocketTransport({
-    server: httpServer
+    server: httpServer,
+    pingInterval: 3000,
+    pingMaxRetries: 3
   })
 })
 
@@ -80,41 +101,32 @@ const gameServer = new Server({
 gameServer.define('tower_room', TowerRoom)
   .enableRealtimeListing()
 
-// Colyseus Monitor (admin panel) - only in dev
-if (process.env.NODE_ENV !== 'production') {
-  app.use('/colyseus', monitor())
-  console.log('📊 Colyseus Monitor available at /colyseus')
-}
+console.log('📦 Room "tower_room" defined')
 
-// Get port from environment
-const PORT = parseInt(process.env.PORT || '2567', 10)
-const HOST = '0.0.0.0'
+// Error handling for unhandled promises
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[ERROR] Unhandled Rejection:', reason)
+})
+
+process.on('uncaughtException', (error) => {
+  console.error('[ERROR] Uncaught Exception:', error)
+})
 
 // Start the server
-httpServer.listen(PORT, HOST, async () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   console.log('')
   console.log('═══════════════════════════════════════════════════════')
-  console.log(`✅ Server listening on ${HOST}:${PORT}`)
+  console.log(`✅ Server listening on 0.0.0.0:${PORT}`)
   console.log(`📡 External URL: wss://towerofmadness-production.up.railway.app`)
   console.log('═══════════════════════════════════════════════════════')
   console.log('')
   
-  // Create the game room at startup
-  setTimeout(async () => {
-    console.log('🔧 Creating game room...')
-    try {
-      const room = await matchMaker.createRoom('tower_room', {})
-      const info = getCurrentRoundInfo()
-      console.log(`🎮 Room created: ${room.roomId}`)
-      console.log(`⏰ Current round: #${info.roundNumber}`)
-      console.log(`📍 State: ${info.isBreak ? 'BREAK' : 'ACTIVE'} (${info.remainingTime}s remaining)`)
-      console.log('')
-      console.log('🌍 All players worldwide sync to UTC clock!')
-      console.log('🎯 Server ready!')
-    } catch (error: any) {
-      console.error('❌ Failed to create room:', error?.message || error)
-    }
-  }, 1000)
+  const info = getCurrentRoundInfo()
+  console.log(`⏰ Current round: #${info.roundNumber}`)
+  console.log(`📍 State: ${info.isBreak ? 'BREAK' : 'ACTIVE'} (${info.remainingTime}s remaining)`)
+  console.log('')
+  console.log('🌍 All players worldwide sync to UTC clock!')
+  console.log('🎯 Server ready! Waiting for players...')
 })
 
 // Graceful shutdown
