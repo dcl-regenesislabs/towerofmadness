@@ -31,15 +31,6 @@ export type LeaderboardEntry = {
   finishOrder: number
 }
 
-export type PlayerPosition = {
-  sessionId: string
-  displayName: string
-  x: number
-  y: number
-  z: number
-  rotationY: number
-}
-
 export type WinnerEntry = {
   address: string
   displayName: string
@@ -101,7 +92,6 @@ let onServerTowerReadyCallback: ((chunks: string[]) => void) | null = null
 let onTimerUpdateCallback: ((remaining: number, multiplier: number) => void) | null = null
 let onLeaderboardUpdateCallback: ((players: LeaderboardEntry[]) => void) | null = null
 let onGameEndedCallback: ((winners: WinnerEntry[]) => void) | null = null
-let onPlayerPositionsUpdateCallback: ((positions: PlayerPosition[]) => void) | null = null
 
 // ============================================
 // INITIALIZATION
@@ -204,26 +194,6 @@ function setupStateListeners() {
       
       onLeaderboardUpdateCallback(players)
     }
-    
-    // Update player positions for rendering
-    if (onPlayerPositionsUpdateCallback && state.players && room && room.sessionId) {
-      const positions: PlayerPosition[] = []
-      const currentSessionId = room.sessionId
-      state.players.forEach((player: any, sessionId: string) => {
-        // Don't include our own position
-        if (sessionId !== currentSessionId) {
-          positions.push({
-            sessionId: sessionId,
-            displayName: player.displayName || '',
-            x: player.x || 0,
-            y: player.y || 0,
-            z: player.z || 0,
-            rotationY: player.rotationY || 0
-          })
-        }
-      })
-      onPlayerPositionsUpdateCallback(positions)
-    }
   })
   
   // Listen for round ended message
@@ -286,10 +256,6 @@ export function setOnGameEnded(callback: ((winners: WinnerEntry[]) => void) | nu
   onGameEndedCallback = callback
 }
 
-export function setOnPlayerPositionsUpdate(callback: ((positions: PlayerPosition[]) => void) | null) {
-  onPlayerPositionsUpdateCallback = callback
-}
-
 // ============================================
 // PUBLIC API - State Checks
 // ============================================
@@ -328,15 +294,6 @@ export function sendHeightUpdate(height: number) {
   if (!room) return
   
   room.send('playerHeight', { height })
-}
-
-/**
- * Send player position to server
- */
-export function sendPositionUpdate(x: number, y: number, z: number, rotationY: number) {
-  if (!room) return
-  
-  room.send('playerPosition', { x, y, z, rotationY })
 }
 
 /**

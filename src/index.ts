@@ -1,6 +1,6 @@
 import {} from '@dcl/sdk/math'
-import { engine, Transform, TriggerArea, triggerAreaEventsSystem, ColliderLayer, PointerEvents, PointerEventType, InputAction, pointerEventsSystem, AudioSource, Entity, MeshRenderer, Material, TextShape } from '@dcl/sdk/ecs'
-import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
+import { engine, Transform, TriggerArea, triggerAreaEventsSystem, ColliderLayer, PointerEvents, PointerEventType, InputAction, pointerEventsSystem, AudioSource, Entity } from '@dcl/sdk/ecs'
+import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
 import { generateTower, generateTowerFromServer } from './towerGenerator'
@@ -14,15 +14,12 @@ import {
   setOnTimerUpdate,
   setOnLeaderboardUpdate,
   setOnGameEnded,
-  setOnPlayerPositionsUpdate,
   sendHeightUpdate,
-  sendPositionUpdate,
   sendPlayerFinished,
   sendPlayerDied,
   sendPlayerJoined,
   LeaderboardEntry,
-  WinnerEntry,
-  PlayerPosition
+  WinnerEntry
 } from './multiplayer'
 
 // ============================================
@@ -82,9 +79,6 @@ export let isMultiplayerMode = false
 let lastHeightUpdateTime = 0
 const HEIGHT_UPDATE_INTERVAL = 500
 
-// Player rendering
-const otherPlayerEntities = new Map<string, Entity>() // sessionId -> entity
-
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
@@ -136,27 +130,8 @@ function trackPlayerHeight() {
       const now = Date.now()
       if (now - lastHeightUpdateTime >= HEIGHT_UPDATE_INTERVAL) {
         sendHeightUpdate(playerMaxHeight)
-        // Send position update (always send, not just during attempt)
-        sendPositionUpdate(
-          playerTransform.position.x,
-          playerTransform.position.y,
-          playerTransform.position.z,
-          playerTransform.rotation.y
-        )
         lastHeightUpdateTime = now
       }
-    }
-  } else if (isMultiplayerMode) {
-    // Send position updates even when not in attempt (so others can see us)
-    const now = Date.now()
-    if (now - lastHeightUpdateTime >= HEIGHT_UPDATE_INTERVAL) {
-      sendPositionUpdate(
-        playerTransform.position.x,
-        playerTransform.position.y,
-        playerTransform.position.z,
-        playerTransform.rotation.y
-      )
-      lastHeightUpdateTime = now
     }
   }
 }
@@ -328,77 +303,6 @@ function dieAttempt() {
 }
 
 // ============================================
-// PLAYER RENDERING SYSTEM
-// ============================================
-
-/**
- * Update visual representations of other players
- */
-function updateOtherPlayers(positions: PlayerPosition[]) {
-  // Get current session IDs from server
-  const currentSessionIds = new Set(positions.map(p => p.sessionId))
-  
-  // Remove players that are no longer in the room
-  for (const [sessionId, entity] of otherPlayerEntities.entries()) {
-    if (!currentSessionIds.has(sessionId)) {
-      engine.removeEntity(entity)
-      otherPlayerEntities.delete(sessionId)
-      console.log(`[Players] Removed player: ${sessionId}`)
-    }
-  }
-  
-  // Create or update player markers
-  for (const position of positions) {
-    let playerEntity = otherPlayerEntities.get(position.sessionId)
-    
-    if (!playerEntity) {
-      // Create new player marker
-      playerEntity = engine.addEntity()
-      otherPlayerEntities.set(position.sessionId, playerEntity)
-      
-      // Create a sphere to represent the player
-      Transform.create(playerEntity, {
-        position: Vector3.create(position.x, position.y, position.z),
-        scale: Vector3.create(0.5, 0.5, 0.5)
-      })
-      
-      MeshRenderer.setSphere(playerEntity)
-      
-      Material.setPbrMaterial(playerEntity, {
-        albedoColor: Color4.create(0.2, 0.6, 1.0, 0.8), // Light blue, semi-transparent
-        metallic: 0.1,
-        roughness: 0.5
-      })
-      
-      // Add a text label above the player
-      const labelEntity = engine.addEntity()
-      Transform.create(labelEntity, {
-        position: Vector3.create(0, 1.5, 0),
-        parent: playerEntity
-      })
-      
-      TextShape.create(labelEntity, {
-        text: position.displayName || 'Player',
-        fontSize: 1,
-        textColor: Color4.White(),
-        outlineWidth: 0.1,
-        outlineColor: Color4.Black()
-      })
-      
-      console.log(`[Players] Created marker for: ${position.displayName} (${position.sessionId.substring(0, 8)})`)
-    } else {
-      // Update existing player position
-      const transform = Transform.getMutable(playerEntity)
-      transform.position = Vector3.create(position.x, position.y, position.z)
-      if (position.rotationY !== undefined) {
-        // rotationY is in radians, convert to degrees for fromEulerDegrees
-        transform.rotation = Quaternion.fromEulerDegrees(0, position.rotationY * (180 / Math.PI), 0)
-      }
-    }
-  }
-}
-
-// ============================================
 // MAIN ENTRY POINT
 // ============================================
 
@@ -459,11 +363,6 @@ export async function main() {
       resultMessage = '🏁 Round Complete!'
       resultTimestamp = Date.now()
       // State transition to BREAK handled by updateRoundTimer system
-    })
-    
-    // Server sends player positions
-    setOnPlayerPositionsUpdate((positions: PlayerPosition[]) => {
-      updateOtherPlayers(positions)
     })
     
     sendPlayerJoined('Player')
