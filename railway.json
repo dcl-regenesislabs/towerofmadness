@@ -6,7 +6,7 @@
       "providers": ["node"],
       "phases": {
         "setup": {
-          "nixPkgs": ["nodejs-18_x", "npm-9_x"]
+          "nixPkgs": ["nodejs-16_x", "npm-8_x"]
         }
       }
     }

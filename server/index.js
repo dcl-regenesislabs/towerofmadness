@@ -13,13 +13,14 @@
  * which is in the project root.
  */
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const path = require('path');
+const fs = require('fs');
 
 console.log('═══════════════════════════════════════════════════════');
 console.log('🎮 TOWER OF MADNESS - Authoritative Server');
 console.log('═══════════════════════════════════════════════════════');
-console.log('Starting Decentraland Hammurabi Server...');
+console.log(`Node.js version: ${process.version}`);
 console.log('');
 
 // Get port from environment (Railway sets this) or use default
@@ -29,18 +30,61 @@ console.log(`📡 Server will listen on port: ${PORT}`);
 // Get the project root directory (parent of server/)
 const projectRoot = path.resolve(__dirname, '..');
 console.log(`📁 Project root: ${projectRoot}`);
-console.log(`📁 Scene code: ${path.join(projectRoot, 'bin', 'index.js')}`);
+
+// Check if bin/index.js exists
+const sceneCodePath = path.join(projectRoot, 'bin', 'index.js');
+if (fs.existsSync(sceneCodePath)) {
+  console.log(`✅ Scene code found: ${sceneCodePath}`);
+} else {
+  console.error(`❌ Scene code NOT found: ${sceneCodePath}`);
+  console.log('Available files in project root:');
+  try {
+    const files = fs.readdirSync(projectRoot);
+    files.forEach(f => console.log(`  - ${f}`));
+    if (fs.existsSync(path.join(projectRoot, 'bin'))) {
+      console.log('Files in bin/:');
+      fs.readdirSync(path.join(projectRoot, 'bin')).forEach(f => console.log(`    - ${f}`));
+    }
+  } catch (e) {
+    console.error('Could not list files:', e.message);
+  }
+}
+
+console.log('');
+console.log('Starting Decentraland Hammurabi Server...');
 console.log('');
 
+// Try to find hammurabi-server in node_modules first
+const localHammurabi = path.join(projectRoot, 'node_modules', '@dcl', 'hammurabi-server', 'dist', 'cli.js');
+const serverHammurabi = path.join(__dirname, 'node_modules', '@dcl', 'hammurabi-server', 'dist', 'cli.js');
+
+let serverCommand, serverArgs;
+
+if (fs.existsSync(localHammurabi)) {
+  console.log('Using locally installed hammurabi-server from project root');
+  serverCommand = 'node';
+  serverArgs = [localHammurabi];
+} else if (fs.existsSync(serverHammurabi)) {
+  console.log('Using locally installed hammurabi-server from server/');
+  serverCommand = 'node';
+  serverArgs = [serverHammurabi];
+} else {
+  console.log('Using npx to run hammurabi-server');
+  serverCommand = 'npx';
+  // Try a specific version that might work better
+  serverArgs = ['@dcl/hammurabi-server@1.0.0-20530813943.commit-a9ffd94'];
+}
+
 // Start the hammurabi server from the project root
-// Note: Using @latest instead of @next to avoid ESM compatibility issues
-const server = spawn('npx', ['@dcl/hammurabi-server@latest'], {
+const server = spawn(serverCommand, serverArgs, {
   stdio: 'inherit',
   shell: true,
   cwd: projectRoot,  // Run from project root so it can find bin/index.js
   env: {
     ...process.env,
-    PORT: PORT.toString()
+    PORT: PORT.toString(),
+    // Try to enable ESM compatibility
+    NODE_OPTIONS: '--experimental-vm-modules'
   }
 });
 
@@ -72,5 +116,5 @@ setInterval(() => {
   // Heartbeat to keep Railway from killing the process
 }, 30000);
 
-console.log('✅ Server process started');
+console.log('✅ Server process starting...');
 console.log('═══════════════════════════════════════════════════════');
