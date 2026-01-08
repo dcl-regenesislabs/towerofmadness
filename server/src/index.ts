@@ -69,12 +69,13 @@ if (process.env.NODE_ENV !== 'production') {
 // Get port from environment (Railway sets this) or use default
 const PORT = parseInt(process.env.PORT || '2567', 10)
 
-// Start the server
-httpServer.listen(PORT, () => {
+// Start the server - bind to 0.0.0.0 for external access
+const HOST = '0.0.0.0'
+httpServer.listen(PORT, HOST, () => {
   console.log('')
   console.log('═══════════════════════════════════════════════════════')
-  console.log(`✅ Server listening on port ${PORT}`)
-  console.log(`📡 WebSocket URL: ws://localhost:${PORT}`)
+  console.log(`✅ Server listening on ${HOST}:${PORT}`)
+  console.log(`📡 External URL: wss://towerofmadness-production.up.railway.app`)
   console.log('═══════════════════════════════════════════════════════')
   console.log('')
   
