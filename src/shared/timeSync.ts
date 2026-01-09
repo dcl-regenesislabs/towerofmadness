@@ -21,8 +21,8 @@ import { RealmInfo } from '@dcl/sdk/ecs'
 
 // Types
 interface TimeSyncRoom {
-  send: (type: string, data: any, options?: { to: string[] }) => void
-  onMessage: (type: string, handler: (data: any) => void) => void
+  send: (type: 'timeSync', data: { id: string }) => void
+  onMessage: (type: 'timeSyncResponse', handler: (data: { id: string; t2: number; t3: number }) => void) => void
 }
 
 // Configuration
