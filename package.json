@@ -11,7 +11,7 @@
   },
   "devDependencies": {
     "@dcl/asset-packs": "latest",
-    "@dcl/sdk": "https://sdk-team-cdn.decentraland.org/@dcl/js-sdk-toolchain/branch/feat/authorative-server/dcl-sdk-7.17.1-20855992736.commit-cad3ef8.tgz"
+    "@dcl/sdk": "https://sdk-team-cdn.decentraland.org/@dcl/js-sdk-toolchain/branch/feat/authorative-server/dcl-sdk-7.17.1-20860748346.commit-6cb10ab.tgz"
   },
   "engines": {
     "node": ">=20.0.0",
