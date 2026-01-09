@@ -20,7 +20,7 @@ import {
   isSynced,
   towerConfig
 } from "./index"
-import { RoundPhase, getTimeSyncOffset, isTimeSyncReady, getLocalPlayerHeights } from "./multiplayer"
+import { RoundPhase, getTimeSyncOffset, isTimeSyncReady, getLocalPlayerHeights, formatTime } from "./multiplayer"
 
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(GameUI)
@@ -179,13 +179,6 @@ const TowerProgressBar = () => {
 }
 
 const GameUI = () => {
-  // Format time as MM:SS
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = Math.floor(seconds % 60)
-    return `${mins}:${secs.toString().padStart(2, '0')}`
-  }
-
   // Format time with milliseconds
   const formatTimeMs = (seconds: number): string => {
     const mins = Math.floor(seconds / 60)

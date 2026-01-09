@@ -1,12 +1,4 @@
-import {
-  engine,
-  Transform,
-  TriggerArea,
-  ColliderLayer,
-  AudioSource,
-  Entity,
-  GltfContainer
-} from '@dcl/sdk/ecs'
+import { engine, Transform, TriggerArea, ColliderLayer, AudioSource, Entity } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { EntityNames } from '../assets/scene/entity-names'
@@ -20,8 +12,6 @@ import {
   getLeaderboard,
   getWinners,
   getTowerConfig,
-  formatTime,
-  isTimeSyncReady,
   RoundPhase,
   LeaderboardEntry,
   WinnerEntry,
@@ -31,6 +21,8 @@ import {
 // ============================================
 // GAME STATE
 // ============================================
+
+;(globalThis as any).DEBUG_NETWORK_MESSAGES = true
 
 // Player tracking
 export let playerHeight = 0
@@ -43,8 +35,6 @@ export enum AttemptState {
   FINISHED = 'FINISHED',
   DIED = 'DIED'
 }
-
-;(globalThis as any).DEBUG_NETWORK_MESSAGES = true
 
 export let attemptState: AttemptState = AttemptState.NOT_STARTED
 export let attemptStartTime: number = 0
@@ -274,102 +264,30 @@ export async function main() {
   // TRIGGER SETUP
   // ============================================
 
+  function setupTrigger(entity: Entity | null): void {
+    if (!entity) return
+    if (Transform.has(entity)) {
+      const transform = Transform.getMutable(entity)
+      transform.scale = Vector3.create(
+        Math.max(transform.scale.x, 2),
+        Math.max(transform.scale.y, 2),
+        Math.max(transform.scale.z, 2)
+      )
+    }
+    TriggerArea.setBox(entity, ColliderLayer.CL_PLAYER)
+  }
+
   const triggerStart = engine.getEntityOrNullByName(EntityNames.TriggerStart)
   const triggerEnd = engine.getEntityOrNullByName(EntityNames.TriggerEnd)
   const triggerDeath = engine.getEntityOrNullByName(EntityNames.TriggerDeath)
 
-
-  // Setup TriggerStart
-  if (triggerStart) {
-    if (Transform.has(triggerStart)) {
-      const transform = Transform.getMutable(triggerStart)
-      transform.scale = Vector3.create(
-        Math.max(transform.scale.x, 2),
-        Math.max(transform.scale.y, 2),
-        Math.max(transform.scale.z, 2)
-      )
-    }
-    TriggerArea.setBox(triggerStart, ColliderLayer.CL_PLAYER)
-  }
-
-  // Setup TriggerEnd
-  if (triggerEnd) {
-    if (Transform.has(triggerEnd)) {
-      const transform = Transform.getMutable(triggerEnd)
-      transform.scale = Vector3.create(
-        Math.max(transform.scale.x, 2),
-        Math.max(transform.scale.y, 2),
-        Math.max(transform.scale.z, 2)
-      )
-    }
-    TriggerArea.setBox(triggerEnd, ColliderLayer.CL_PLAYER)
-  }
-
-  // Setup TriggerDeath
-  if (triggerDeath) {
-    if (Transform.has(triggerDeath)) {
-      const transform = Transform.getMutable(triggerDeath)
-      transform.scale = Vector3.create(
-        Math.max(transform.scale.x, 2),
-        Math.max(transform.scale.y, 2),
-        Math.max(transform.scale.z, 2)
-      )
-    }
-    TriggerArea.setBox(triggerDeath, ColliderLayer.CL_PLAYER)
-  }
+  setupTrigger(triggerStart)
+  setupTrigger(triggerEnd)
+  setupTrigger(triggerDeath)
 
   // ============================================
   // TRIGGER DETECTION SYSTEM
   // ============================================
-
-  let inTriggerStart = false
-  let inTriggerEnd = false
-  let inTriggerDeath = false
-
-  engine.addSystem(() => {
-    if (!Transform.has(engine.PlayerEntity)) return
-    const playerPos = Transform.get(engine.PlayerEntity).position
-
-    // Check TriggerStart
-    if (triggerStart && Transform.has(triggerStart)) {
-      const t = Transform.get(triggerStart)
-      const inside = isInsideBox(playerPos, t.position, t.scale)
-
-      if (inside && !inTriggerStart) {
-        inTriggerStart = true
-        startAttempt()
-      } else if (!inside && inTriggerStart) {
-        inTriggerStart = false
-      }
-    }
-
-    // Check TriggerEnd
-    if (triggerEnd && Transform.has(triggerEnd)) {
-      const t = Transform.get(triggerEnd)
-      const worldPos = getWorldPosition(triggerEnd)
-      const inside = isInsideBox(playerPos, worldPos, t.scale)
-
-      if (inside && !inTriggerEnd) {
-        inTriggerEnd = true
-        finishAttempt()
-      } else if (!inside && inTriggerEnd) {
-        inTriggerEnd = false
-      }
-    }
-
-    // Check TriggerDeath
-    if (triggerDeath && Transform.has(triggerDeath)) {
-      const t = Transform.get(triggerDeath)
-      const inside = isInsideBox(playerPos, t.position, t.scale)
-
-      if (inside && !inTriggerDeath) {
-        inTriggerDeath = true
-        dieAttempt()
-      } else if (!inside && inTriggerDeath) {
-        inTriggerDeath = false
-      }
-    }
-  }, undefined, 'trigger-detection-system')
 
   function isInsideBox(pos: Vector3, center: Vector3, scale: Vector3): boolean {
     const dx = Math.abs(pos.x - center.x)
@@ -377,6 +295,32 @@ export async function main() {
     const dz = Math.abs(pos.z - center.z)
     return dx <= scale.x / 2 && dy <= scale.y / 2 && dz <= scale.z / 2
   }
+
+  const triggers = [
+    { entity: triggerStart, wasInside: false, useWorldPos: false, onEnter: startAttempt },
+    { entity: triggerEnd, wasInside: false, useWorldPos: true, onEnter: finishAttempt },
+    { entity: triggerDeath, wasInside: false, useWorldPos: false, onEnter: dieAttempt }
+  ]
+
+  engine.addSystem(() => {
+    if (!Transform.has(engine.PlayerEntity)) return
+    const playerPos = Transform.get(engine.PlayerEntity).position
+
+    for (const trigger of triggers) {
+      if (!trigger.entity || !Transform.has(trigger.entity)) continue
+
+      const t = Transform.get(trigger.entity)
+      const pos = trigger.useWorldPos ? getWorldPosition(trigger.entity) : t.position
+      const inside = isInsideBox(playerPos, pos, t.scale)
+
+      if (inside && !trigger.wasInside) {
+        trigger.wasInside = true
+        trigger.onEnter()
+      } else if (!inside && trigger.wasInside) {
+        trigger.wasInside = false
+      }
+    }
+  }, undefined, 'trigger-detection-system')
 
   // ============================================
   // ADD SYSTEMS

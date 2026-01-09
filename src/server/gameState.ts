@@ -186,10 +186,9 @@ export class GameState {
 
     // Generate random chunks
     const numChunks = Math.floor(Math.random() * (MAX_CHUNKS - MIN_CHUNKS + 1)) + MIN_CHUNKS
-    const chunkIds: string[] = []
-    for (let i = 0; i < numChunks; i++) {
-      chunkIds.push(CHUNK_OPTIONS[Math.floor(Math.random() * CHUNK_OPTIONS.length)])
-    }
+    const chunkIds = Array.from({ length: numChunks }, () =>
+      CHUNK_OPTIONS[Math.floor(Math.random() * CHUNK_OPTIONS.length)]
+    )
 
     console.log(`[Server] New round: ${roundId}, chunks: [${chunkIds.join(' -> ')}]`)
 
