@@ -1,7 +1,7 @@
 {
-  "name": "dcl-project",
+  "name": "tower-of-madness",
   "version": "1.0.0",
-  "description": "SDK7 Template scene",
+  "description": "Tower climbing multiplayer game for Decentraland",
   "scripts": {
     "start": "sdk-commands start",
     "deploy": "sdk-commands deploy",
@@ -9,12 +9,9 @@
     "upgrade-sdk": "npm install --save-dev @dcl/sdk@latest",
     "upgrade-sdk:next": "npm install --save-dev @dcl/sdk@next"
   },
-  "dependencies": {
-    "colyseus.js": "^0.15.0",
-    "@dcl/asset-packs": "^1.0.0"
-  },
   "devDependencies": {
-    "@dcl/sdk": "latest"
+    "@dcl/asset-packs": "latest",
+    "@dcl/sdk": "https://sdk-team-cdn.decentraland.org/@dcl/js-sdk-toolchain/branch/feat/authorative-server/dcl-sdk-7.17.1-20855992736.commit-cad3ef8.tgz"
   },
   "engines": {
     "node": ">=20.0.0",

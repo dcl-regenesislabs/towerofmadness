@@ -1,83 +1,78 @@
-import {} from '@dcl/sdk/math'
-import { engine, Transform, TriggerArea, triggerAreaEventsSystem, ColliderLayer, PointerEvents, PointerEventType, InputAction, pointerEventsSystem, AudioSource, Entity } from '@dcl/sdk/ecs'
-import { Vector3, Quaternion } from '@dcl/sdk/math'
+import {
+  engine,
+  Transform,
+  TriggerArea,
+  ColliderLayer,
+  AudioSource,
+  Entity,
+  GltfContainer
+} from '@dcl/sdk/ecs'
+import { Vector3 } from '@dcl/sdk/math'
+import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
-import { generateTower, generateTowerFromServer } from './towerGenerator'
+import { server } from './server/server'
 import {
-  initMultiplayer,
-  isServer,
-  isMultiplayerAvailable,
-  setupServer,
   setupClient,
-  setOnServerTowerReady,
-  setOnTimerUpdate,
-  setOnLeaderboardUpdate,
-  setOnGameEnded,
-  sendHeightUpdate,
   sendPlayerFinished,
-  sendPlayerDied,
   sendPlayerJoined,
+  getRoundState,
+  getLeaderboard,
+  getWinners,
+  getTowerConfig,
+  formatTime,
+  isTimeSyncReady,
+  RoundPhase,
   LeaderboardEntry,
-  WinnerEntry
+  WinnerEntry,
+  TowerConfig
 } from './multiplayer'
 
 // ============================================
-// GAME STATE - Tower of Hell Style
+// GAME STATE
 // ============================================
 
 // Player tracking
 export let playerHeight = 0
-export let playerMaxHeight = 0 // Max height in current attempt
+export let playerMaxHeight = 0
 
-// Player attempt state (personal, not global)
+// Player attempt state
 export enum AttemptState {
-  NOT_STARTED = 'NOT_STARTED',   // Player hasn't entered TriggerStart yet
-  IN_PROGRESS = 'IN_PROGRESS',   // Player is climbing
-  FINISHED = 'FINISHED',         // Player reached TriggerEnd
-  DIED = 'DIED'                  // Player entered TriggerDeath
+  NOT_STARTED = 'NOT_STARTED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  FINISHED = 'FINISHED',
+  DIED = 'DIED'
 }
 
+;(globalThis as any).DEBUG_NETWORK_MESSAGES = true
+
 export let attemptState: AttemptState = AttemptState.NOT_STARTED
-export let attemptStartTime: number = 0     // When player started their attempt
-export let attemptTimer: number = 0          // Player's personal attempt time (seconds)
-export let attemptFinishTime: number = 0     // Final time if finished
+export let attemptStartTime: number = 0
+export let attemptTimer: number = 0
+export let attemptFinishTime: number = 0
 
 // Personal best
-export let bestAttemptTime: number = 0       // Best time to complete
-export let bestAttemptHeight: number = 0     // Best max height reached
+export let bestAttemptTime: number = 0
+export let bestAttemptHeight: number = 0
 
 // Result display
 export let attemptResult: 'WIN' | 'DEATH' | null = null
 export let resultMessage: string = ''
 export let resultTimestamp: number = 0
 
-// ============================================
-// GLOBAL ROUND STATE (Server-controlled in multiplayer)
-// ============================================
-
-export enum RoundState {
-  ACTIVE = 'ACTIVE',           // Round is active, players can climb
-  ENDING = 'ENDING',           // Round just ended, showing winners
-  BREAK = 'BREAK'              // 10-second break before next round
+// Connection state
+export let isConnectedToServer: boolean = false
+export function isSynced(): boolean {
+  return isStateSyncronized()
 }
 
-export let roundState: RoundState = RoundState.ACTIVE
-export let roundTimer: number = 420           // 7 minutes = 420 seconds (countdown)
-export let roundSpeedMultiplier: number = 1.0 // Timer speed (1x, 2x, 3x...)
-export let roundStartTime: number = Date.now()
-export let roundFinishers: number = 0         // How many players finished this round
-
-// Leaderboard & Winners
+// Round state (synced from server)
+export let roundTimer: number = 420
+export let roundSpeedMultiplier: number = 1.0
+export let roundPhase: RoundPhase = RoundPhase.ACTIVE
 export let leaderboard: LeaderboardEntry[] = []
 export let roundWinners: WinnerEntry[] = []
-
-// Multiplayer state
-export let isMultiplayerMode = false
-
-// Height update throttling
-let lastHeightUpdateTime = 0
-const HEIGHT_UPDATE_INTERVAL = 500
+export let towerConfig: TowerConfig | null = null
 
 // ============================================
 // HELPER FUNCTIONS
@@ -85,10 +80,10 @@ const HEIGHT_UPDATE_INTERVAL = 500
 
 function getWorldPosition(entity: Entity): Vector3 {
   if (!Transform.has(entity)) return Vector3.Zero()
-  
+
   const transform = Transform.get(entity)
   let localPos = transform.position
-  
+
   if (transform.parent !== undefined && transform.parent !== engine.RootEntity && Transform.has(transform.parent)) {
     const parentTransform = Transform.get(transform.parent)
     const parentRot = parentTransform.rotation
@@ -102,7 +97,7 @@ function getWorldPosition(entity: Entity): Vector3 {
     const parentWorldPos = getWorldPosition(transform.parent)
     return Vector3.add(scaledPos, parentWorldPos)
   }
-  
+
   return localPos
 }
 
@@ -112,135 +107,96 @@ function getWorldPosition(entity: Entity): Vector3 {
 
 function trackPlayerHeight() {
   if (!Transform.has(engine.PlayerEntity)) return
-  
+
   const playerTransform = Transform.get(engine.PlayerEntity)
   playerHeight = playerTransform.position.y
-  
+
   // Track max height during active attempt
   if (attemptState === AttemptState.IN_PROGRESS) {
     if (playerHeight > playerMaxHeight) {
       playerMaxHeight = playerHeight
     }
-    
-    // Update attempt timer
     attemptTimer = (Date.now() - attemptStartTime) / 1000
-    
-    // Send height updates to server (throttled)
-    if (isMultiplayerMode) {
-      const now = Date.now()
-      if (now - lastHeightUpdateTime >= HEIGHT_UPDATE_INTERVAL) {
-        sendHeightUpdate(playerMaxHeight)
-        lastHeightUpdateTime = now
-      }
-    }
   }
 }
 
 // ============================================
-// GLOBAL ROUND TIMER SYSTEM (Single-player only)
+// SYNC ROUND STATE FROM SERVER
 // ============================================
 
-function updateRoundTimer() {
-  // Handle state transitions (works for both single and multiplayer)
-  if (roundState === RoundState.ENDING) {
-    // Show results for 3 seconds, then transition to break
-    const elapsedSinceEnd = (Date.now() - resultTimestamp) / 1000
-    if (elapsedSinceEnd >= 3) {
-      roundState = RoundState.BREAK
+let lastPhase: RoundPhase | null = null
+let hasJoinedServer: boolean = false
+
+function syncRoundState() {
+  // Wait for CRDT state to be synchronized first
+  if (!isStateSyncronized()) return
+
+  const state = getRoundState()
+  if (!state) return
+
+  // First time we receive server state - we're connected
+  if (!isConnectedToServer) {
+    isConnectedToServer = true
+    console.log('[Game] Connected to server')
+  }
+
+  // Send playerJoin once connected
+  if (!hasJoinedServer) {
+    hasJoinedServer = true
+    sendPlayerJoined('Player')
+  }
+
+  roundTimer = state.remainingTime
+  roundSpeedMultiplier = state.speedMultiplier
+
+  // Detect phase changes
+  if (state.phase !== lastPhase) {
+    lastPhase = state.phase
+    roundPhase = state.phase
+
+    if (state.phase === RoundPhase.ACTIVE && lastPhase !== null) {
+      // New round started - reset attempt
+      attemptState = AttemptState.NOT_STARTED
+      attemptTimer = 0
+      playerMaxHeight = 0
+      attemptResult = null
+      resultMessage = '🎮 New round! Go to TriggerStart to begin'
+      resultTimestamp = Date.now()
+    } else if (state.phase === RoundPhase.ENDING) {
+      roundWinners = getWinners()
+      resultMessage = '🏁 Round Complete!'
+      resultTimestamp = Date.now()
+    } else if (state.phase === RoundPhase.BREAK) {
       resultMessage = '⏳ Next round in 10 seconds...'
       resultTimestamp = Date.now()
     }
-    return
   }
-  
-  if (roundState === RoundState.BREAK) {
-    // In multiplayer, server handles new round start
-    // In single player, we start new round after 10 seconds
-    if (!isMultiplayerMode) {
-      const breakElapsed = (Date.now() - resultTimestamp) / 1000
-      if (breakElapsed >= 10) {
-        startNewRound()
-      }
-    }
-    return
-  }
-  
-  // Active round timer (single player only - multiplayer gets timer from server)
-  if (roundState === RoundState.ACTIVE && !isMultiplayerMode) {
-    const elapsed = (Date.now() - roundStartTime) / 1000
-    const adjustedElapsed = elapsed * roundSpeedMultiplier
-    roundTimer = Math.max(0, 420 - adjustedElapsed) // 7 min countdown
-    
-    // Round ended?
-    if (roundTimer <= 0) {
-      endRound()
-    }
-  }
-}
 
-// ============================================
-// ROUND MANAGEMENT (Single-player)
-// ============================================
+  // Update leaderboard
+  leaderboard = getLeaderboard()
 
-function startNewRound() {
-  console.log('[Game] ═══════════════════════════════════')
-  console.log('[Game] 🎮 NEW ROUND STARTING!')
-  console.log('[Game] ═══════════════════════════════════')
-  
-  roundState = RoundState.ACTIVE
-  roundTimer = 420 // 7 minutes
-  roundSpeedMultiplier = 1.0
-  roundStartTime = Date.now()
-  roundFinishers = 0
-  roundWinners = []
-  leaderboard = []
-  
-  // Reset player attempt
-  attemptState = AttemptState.NOT_STARTED
-  attemptTimer = 0
-  playerMaxHeight = 0
-  attemptResult = null
-  resultMessage = '🎮 New round started! Go to TriggerStart to begin your attempt'
-  resultTimestamp = Date.now()
-  
-  // Generate new tower
-  generateTower()
-}
-
-function endRound() {
-  console.log('[Game] ═══════════════════════════════════')
-  console.log('[Game] 🏁 ROUND ENDED!')
-  console.log('[Game] ═══════════════════════════════════')
-  
-  roundState = RoundState.ENDING
-  resultMessage = '🏁 Round Complete!'
-  resultTimestamp = Date.now()
-  
-  // The updateRoundTimer system will handle transitioning to BREAK state
-  // after 3 seconds based on resultTimestamp
+  // Update tower config
+  towerConfig = getTowerConfig()
 }
 
 // ============================================
 // PLAYER ATTEMPT FUNCTIONS
 // ============================================
 
-// Called when player enters TriggerStart
 function startAttempt() {
-  // Only start if round is active and player hasn't finished this round
-  if (roundState !== RoundState.ACTIVE) {
-    console.log('[Game] Cannot start attempt - round not active')
+  if (!isConnectedToServer) return
+
+  if (roundPhase !== RoundPhase.ACTIVE) {
     return
   }
-  
-  // Allow restart if died, or if not started yet
+
   if (attemptState === AttemptState.FINISHED) {
-    console.log('[Game] Already finished this round!')
     resultMessage = '✅ You already finished! Wait for next round.'
     resultTimestamp = Date.now()
     return
   }
-  
-  console.log('[Game] ========== ATTEMPT STARTED! ==========')
+
+  console.log('[Game] Attempt started')
   attemptState = AttemptState.IN_PROGRESS
   attemptStartTime = Date.now()
   attemptTimer = 0
@@ -250,18 +206,18 @@ function startAttempt() {
   resultTimestamp = Date.now()
 }
 
-// Called when player reaches TriggerEnd
 function finishAttempt() {
+  if (!isConnectedToServer) return
   if (attemptState !== AttemptState.IN_PROGRESS) return
-  if (roundState !== RoundState.ACTIVE) return
-  
-  console.log('[Game] ========== ATTEMPT FINISHED! ==========')
+  if (roundPhase !== RoundPhase.ACTIVE) return
+
+  console.log('[Game] Attempt finished')
   attemptState = AttemptState.FINISHED
   attemptFinishTime = attemptTimer
   attemptResult = 'WIN'
   resultMessage = `🏆 FINISHED! Time: ${attemptTimer.toFixed(2)}s`
   resultTimestamp = Date.now()
-  
+
   // Update personal best
   if (attemptFinishTime < bestAttemptTime || bestAttemptTime === 0) {
     bestAttemptTime = attemptFinishTime
@@ -269,36 +225,23 @@ function finishAttempt() {
   if (playerMaxHeight > bestAttemptHeight) {
     bestAttemptHeight = playerMaxHeight
   }
-  
-  // Speed up the round timer!
-  roundFinishers++
-  roundSpeedMultiplier = roundFinishers + 1
-  console.log(`[Game] Timer speed now: x${roundSpeedMultiplier}`)
-  
+
   // Send to server
-  if (isMultiplayerMode) {
-    sendPlayerFinished(attemptFinishTime, playerMaxHeight)
-  }
+  sendPlayerFinished(attemptFinishTime)
 }
 
-// Called when player enters TriggerDeath
 function dieAttempt() {
   if (attemptState !== AttemptState.IN_PROGRESS) return
-  
-  console.log('[Game] ========== PLAYER DIED! ==========')
+
+  console.log('[Game] Player died')
   attemptState = AttemptState.DIED
   attemptResult = 'DEATH'
   resultMessage = `☠️ DEATH at ${playerMaxHeight.toFixed(1)}m - Go to TriggerStart to retry!`
   resultTimestamp = Date.now()
-  
+
   // Update personal best height even on death
   if (playerMaxHeight > bestAttemptHeight) {
     bestAttemptHeight = playerMaxHeight
-  }
-  
-  // Send to server
-  if (isMultiplayerMode) {
-    sendPlayerDied(playerMaxHeight)
   }
 }
 
@@ -307,86 +250,35 @@ function dieAttempt() {
 // ============================================
 
 export async function main() {
-  console.log('[Game] ═══════════════════════════════════════════')
-  console.log('[Game] 🎮 TOWER OF MADNESS - Starting...')
-  console.log('[Game] ═══════════════════════════════════════════')
-  
+  console.log('[Game] Starting...')
+
   // ============================================
-  // MULTIPLAYER INITIALIZATION
+  // SERVER/CLIENT BRANCHING
   // ============================================
-  
-  console.log('[Multiplayer] Initializing...')
-  const multiplayerAvailable = await initMultiplayer()
-  
-  if (multiplayerAvailable) {
-    isMultiplayerMode = true
-    console.log('[Multiplayer] ✅ ENABLED')
-    
-    if (isServer()) {
-      console.log('[Multiplayer] Running as SERVER')
-      setupServer()
-      return // Server doesn't render scene
-    }
-    
-    console.log('[Multiplayer] Running as CLIENT')
-    setupClient()
-    
-    // Server sends tower data
-    setOnServerTowerReady((chunkIds: string[]) => {
-      console.log('[Multiplayer] Received tower from server!')
-      generateTowerFromServer(chunkIds)
-      
-      // Reset player state for new round
-      attemptState = AttemptState.NOT_STARTED
-      attemptTimer = 0
-      playerMaxHeight = 0
-      attemptResult = null
-      resultMessage = '🎮 New round! Go to TriggerStart to begin'
-      resultTimestamp = Date.now()
-    })
-    
-    // Server sends timer updates
-    setOnTimerUpdate((remaining: number, speedMult: number) => {
-      roundTimer = remaining
-      roundSpeedMultiplier = speedMult
-    })
-    
-    // Server sends leaderboard
-    setOnLeaderboardUpdate((players: LeaderboardEntry[]) => {
-      leaderboard = players
-    })
-    
-    // Server sends round end
-    setOnGameEnded((winners: WinnerEntry[]) => {
-      roundState = RoundState.ENDING
-      roundWinners = winners
-      resultMessage = '🏁 Round Complete!'
-      resultTimestamp = Date.now()
-      // State transition to BREAK handled by updateRoundTimer system
-    })
-    
-    sendPlayerJoined('Player')
-  } else {
-    isMultiplayerMode = false
-    console.log('[Multiplayer] ⚠️ Not available - SINGLE PLAYER mode')
-    
-    // Start the first round
-    roundStartTime = Date.now()
-    roundState = RoundState.ACTIVE
+
+  if (isServer()) {
+    console.log('[Game] Running as SERVER')
+    server()
+    return
   }
-  
+
+  console.log('[Game] Running as CLIENT')
+
+  // ============================================
+  // CLIENT SETUP
+  // ============================================
+
+  setupClient()
+
   // ============================================
   // TRIGGER SETUP
   // ============================================
-  
+
   const triggerStart = engine.getEntityOrNullByName(EntityNames.TriggerStart)
   const triggerEnd = engine.getEntityOrNullByName(EntityNames.TriggerEnd)
   const triggerDeath = engine.getEntityOrNullByName(EntityNames.TriggerDeath)
-  
-  console.log('[Triggers] Start:', triggerStart ? '✅' : '❌')
-  console.log('[Triggers] End:', triggerEnd ? '✅' : '❌')
-  console.log('[Triggers] Death:', triggerDeath ? '✅' : '❌')
-  
+
+
   // Setup TriggerStart
   if (triggerStart) {
     if (Transform.has(triggerStart)) {
@@ -399,7 +291,7 @@ export async function main() {
     }
     TriggerArea.setBox(triggerStart, ColliderLayer.CL_PLAYER)
   }
-  
+
   // Setup TriggerEnd
   if (triggerEnd) {
     if (Transform.has(triggerEnd)) {
@@ -412,7 +304,7 @@ export async function main() {
     }
     TriggerArea.setBox(triggerEnd, ColliderLayer.CL_PLAYER)
   }
-  
+
   // Setup TriggerDeath
   if (triggerDeath) {
     if (Transform.has(triggerDeath)) {
@@ -425,24 +317,24 @@ export async function main() {
     }
     TriggerArea.setBox(triggerDeath, ColliderLayer.CL_PLAYER)
   }
-  
+
   // ============================================
-  // MANUAL TRIGGER DETECTION SYSTEM
+  // TRIGGER DETECTION SYSTEM
   // ============================================
-  
+
   let inTriggerStart = false
   let inTriggerEnd = false
   let inTriggerDeath = false
-  
+
   engine.addSystem(() => {
     if (!Transform.has(engine.PlayerEntity)) return
     const playerPos = Transform.get(engine.PlayerEntity).position
-    
+
     // Check TriggerStart
     if (triggerStart && Transform.has(triggerStart)) {
       const t = Transform.get(triggerStart)
       const inside = isInsideBox(playerPos, t.position, t.scale)
-      
+
       if (inside && !inTriggerStart) {
         inTriggerStart = true
         startAttempt()
@@ -450,13 +342,13 @@ export async function main() {
         inTriggerStart = false
       }
     }
-    
-    // Check TriggerEnd (only during attempt)
+
+    // Check TriggerEnd
     if (triggerEnd && Transform.has(triggerEnd)) {
       const t = Transform.get(triggerEnd)
       const worldPos = getWorldPosition(triggerEnd)
       const inside = isInsideBox(playerPos, worldPos, t.scale)
-      
+
       if (inside && !inTriggerEnd) {
         inTriggerEnd = true
         finishAttempt()
@@ -464,12 +356,12 @@ export async function main() {
         inTriggerEnd = false
       }
     }
-    
-    // Check TriggerDeath (only during attempt)
+
+    // Check TriggerDeath
     if (triggerDeath && Transform.has(triggerDeath)) {
       const t = Transform.get(triggerDeath)
       const inside = isInsideBox(playerPos, t.position, t.scale)
-      
+
       if (inside && !inTriggerDeath) {
         inTriggerDeath = true
         dieAttempt()
@@ -477,88 +369,35 @@ export async function main() {
         inTriggerDeath = false
       }
     }
-  })
-  
+  }, undefined, 'trigger-detection-system')
+
   function isInsideBox(pos: Vector3, center: Vector3, scale: Vector3): boolean {
     const dx = Math.abs(pos.x - center.x)
     const dy = Math.abs(pos.y - center.y)
     const dz = Math.abs(pos.z - center.z)
     return dx <= scale.x / 2 && dy <= scale.y / 2 && dz <= scale.z / 2
   }
-  
+
   // ============================================
   // ADD SYSTEMS
   // ============================================
-  
-  engine.addSystem(trackPlayerHeight)
-  engine.addSystem(updateRoundTimer)
-  
-  // Debug log every 5 seconds
-  let lastDebugLog = 0
-  engine.addSystem(() => {
-    const now = Date.now()
-    if (now - lastDebugLog > 5000) {
-      const mins = Math.floor(roundTimer / 60)
-      const secs = Math.floor(roundTimer % 60)
-      console.log(`[Game] Round: ${roundState} | Timer: ${mins}:${secs.toString().padStart(2, '0')} x${roundSpeedMultiplier} | Attempt: ${attemptState}`)
-      lastDebugLog = now
-    }
-  })
-  
+
+  engine.addSystem(trackPlayerHeight, undefined, 'player-height-system')
+  engine.addSystem(syncRoundState, undefined, 'round-sync-system')
+
   // ============================================
   // INITIALIZE UI
   // ============================================
-  
+
   setupUi()
-  
-  // ============================================
-  // BUTTON PANEL (Manual tower regen - disabled in multiplayer)
-  // ============================================
-  
-  const buttonPanel = engine.getEntityOrNullByName(EntityNames.Button_Panel)
-  if (buttonPanel && !isMultiplayerMode) {
-    if (!PointerEvents.has(buttonPanel)) {
-      PointerEvents.create(buttonPanel, {
-        pointerEvents: [{
-          eventType: PointerEventType.PET_DOWN,
-          eventInfo: {
-            button: InputAction.IA_POINTER,
-            hoverText: 'Regenerate Tower',
-            showFeedback: true,
-            maxDistance: 10
-          }
-        }]
-      })
-    }
-    
-    pointerEventsSystem.onPointerDown(
-      { entity: buttonPanel, opts: { button: InputAction.IA_POINTER, hoverText: 'Regenerate Tower', showFeedback: true, maxDistance: 10 } },
-      () => {
-        console.log('[Game] Button clicked - regenerating tower...')
-        generateTower()
-      }
-    )
-  }
-  
-  // ============================================
-  // GENERATE INITIAL TOWER (Single-player only)
-  // ============================================
-  
-  if (!isMultiplayerMode) {
-    console.log('[Game] Generating initial tower...')
-    generateTower()
-  }
-  
+
   // ============================================
   // BACKGROUND MUSIC
   // ============================================
-  
+
   setupBackgroundMusic('sounds/PixelSodaBar.mp3')
-  
-  console.log('[Game] ═══════════════════════════════════════════')
-  console.log('[Game] ✅ Setup complete!')
-  console.log('[Game] Mode:', isMultiplayerMode ? 'MULTIPLAYER' : 'SINGLE PLAYER')
-  console.log('[Game] ═══════════════════════════════════════════')
+
+  console.log('[Game] Setup complete')
 }
 
 // ============================================
@@ -570,19 +409,19 @@ let audioStarted = false
 
 function setupBackgroundMusic(audioPath: string) {
   backgroundMusicEntity = engine.addEntity()
-  
+
   Transform.create(backgroundMusicEntity, {
     position: Vector3.create(40, 0, 40),
     scale: Vector3.One()
   })
-  
+
   AudioSource.create(backgroundMusicEntity, {
     audioClipUrl: audioPath,
     playing: true,
     loop: true,
     volume: 1.0
   })
-  
+
   engine.addSystem(() => {
     if (backgroundMusicEntity && AudioSource.has(backgroundMusicEntity)) {
       const audio = AudioSource.get(backgroundMusicEntity)
@@ -592,8 +431,8 @@ function setupBackgroundMusic(audioPath: string) {
         audioStarted = true
       }
     }
-  })
-  
+  }, undefined, 'background-music-system')
+
   return backgroundMusicEntity
 }
 

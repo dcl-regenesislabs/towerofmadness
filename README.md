@@ -4,26 +4,32 @@ A procedurally generated tower climbing game for Decentraland SDK7. Climb random
 
 ## 🎮 Features
 
+### Multiplayer with Authoritative Server
+- **Server-Side Game Logic**: Uses DCL's authoritative server pattern for anti-cheat
+- **Synchronized State**: All players see the same tower and timer
+- **Real-Time Leaderboard**: Track all players' heights in real-time
+- **NTP Time Synchronization**: Accurate timer display across all clients
+
 ### Procedural Tower Generation
-- **Random Tower Creation**: Each tower is procedurally generated with 3-6 random middle chunks
-- **Automatic Generation**: Tower generates automatically on scene load
-- **Regeneration**: Click the button panel to clear and regenerate a new random tower
+- **Random Tower Creation**: Each round generates a tower with 3-8 random middle chunks
+- **Server-Controlled**: Tower is generated on server and synced to all clients
 - **Smart Stacking**: Chunks are stacked with alternating 180° rotations for visual variety
-- **Chunk Tracking**: UI displays all chunks used in the current tower (from top to bottom)
+- **Chunk Tracking**: UI displays tower progress with color-coded segments
 
 ### Game Mechanics
+- **Round-Based Play**: 7-minute rounds with automatic restarts
+- **Speed Multiplier**: Timer speeds up each time a player finishes (x2, x3, etc.)
 - **Height Tracking**: Real-time player height monitoring
-- **Game Timer**: Tracks time from start to finish
-- **Best Scores**: Records your best time and highest height reached
-- **Win Condition**: Reach the top (ChunkEnd) to win
+- **Win Condition**: Reach the top (ChunkEnd) to finish
 - **Death System**: Fall detection with restart capability
 
 ### User Interface
-- **Player Height Display**: Shows current player height in the center of the screen
-- **Game Timer**: Displays elapsed time when game is active
-- **Best Scores Panel**: Top-right display of best time and best height
-- **Tower Chunks List**: Shows all chunks used in current tower (below best scores)
-- **Game Status Messages**: Visual feedback for game start, win, and death states
+- **Round Timer**: Large central timer with speed multiplier indicator
+- **Tower Progress Bar**: Vertical bar showing all players' positions on the tower
+- **Leaderboard**: Left-side panel showing top 10 players
+- **Personal Stats**: Top-right display of best time and height
+- **Winners Display**: End-of-round podium showing top 3 players
+- **NTP Sync Status**: Bottom-left indicator showing time sync offset
 
 ## 🏗️ Tower Structure
 
@@ -93,7 +99,12 @@ A procedurally generated tower climbing game for Decentraland SDK7. Climb random
 npm install
 ```
 
-### Development
+### Development (with Authoritative Server)
+```bash
+npx @dcl/hammurabi-server@next
+```
+
+### Development (Standard - no multiplayer)
 ```bash
 npm run start
 ```
@@ -113,9 +124,16 @@ npm run deploy
 ```
 Tower of Madness/
 ├── src/
-│   ├── index.ts           # Main game logic
-│   ├── towerGenerator.ts  # Tower generation system
-│   └── ui.tsx             # UI components
+│   ├── index.ts           # Main entry point (client/server branching)
+│   ├── multiplayer.ts     # Client-side multiplayer helpers
+│   ├── ui.tsx             # React ECS UI components
+│   ├── server/
+│   │   ├── server.ts      # Server initialization and systems
+│   │   └── gameState.ts   # Server state management
+│   └── shared/
+│       ├── schemas.ts     # Synced component definitions
+│       ├── messages.ts    # Message type definitions
+│       └── timeSync.ts    # NTP-style time synchronization
 ├── assets/
 │   ├── chunks/            # Tower chunk models
 │   │   ├── ChunkStart.glb
@@ -124,6 +142,7 @@ Tower of Madness/
 │   │   ├── Chunk03.glb
 │   │   └── ChunkEnd.glb
 │   └── scene/             # Scene configuration
+├── AUTHORITATIVE_SERVER_GUIDE.md  # Implementation guide
 ├── scene.json             # Scene metadata
 └── package.json           # Dependencies
 ```

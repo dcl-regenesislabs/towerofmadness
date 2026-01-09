@@ -3,8 +3,8 @@ node_modules/
 server/node_modules/
 
 # Build output
-# bin/  # Keep bin/ for Railway server deployment
 dist/
+bin/
 
 # IDE and editor files
 .cursor/
