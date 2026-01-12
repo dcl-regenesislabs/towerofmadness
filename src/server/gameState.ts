@@ -41,6 +41,7 @@ interface PlayerData {
   bestTime: number
   isFinished: boolean
   finishOrder: number
+  attemptStartTime: number // Server timestamp when player started attempt (0 = not started)
 }
 
 // All-time best scores (persisted)
@@ -291,6 +292,7 @@ export class GameState {
       player.bestTime = 0
       player.isFinished = false
       player.finishOrder = 0
+      player.attemptStartTime = 0
     })
 
     // Clear winners
@@ -374,6 +376,14 @@ export class GameState {
 
   getPhase(): RoundPhase {
     return RoundStateComponent.get(this.roundStateEntity).phase
+  }
+
+  getTowerConfig(): { totalHeight: number; chunkCount: number } {
+    const config = TowerConfigComponent.get(this.towerConfigEntity)
+    return {
+      totalHeight: config.totalHeight,
+      chunkCount: config.chunkIds.length
+    }
   }
 
   private updateLeaderboard() {

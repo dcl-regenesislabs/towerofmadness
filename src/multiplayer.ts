@@ -59,8 +59,12 @@ export function sendPlayerJoined() {
   room.send('playerJoin', {})
 }
 
-export function sendPlayerFinished(time: number) {
-  room.send('playerFinished', { time })
+export function sendPlayerStarted() {
+  room.send('playerStarted', {})
+}
+
+export function sendPlayerFinished() {
+  room.send('playerFinished', { time: 0 }) // Time is calculated server-side
 }
 
 // ============================================

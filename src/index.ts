@@ -6,6 +6,7 @@ import { setupUi } from './ui'
 import { server } from './server/server'
 import {
   setupClient,
+  sendPlayerStarted,
   sendPlayerFinished,
   sendPlayerJoined,
   getRoundState,
@@ -194,6 +195,9 @@ function startAttempt() {
   attemptResult = null
   resultMessage = '🏃 GO! Climb to the top!'
   resultTimestamp = Date.now()
+
+  // Notify server (server tracks authoritative start time)
+  sendPlayerStarted()
 }
 
 function finishAttempt() {
@@ -216,8 +220,8 @@ function finishAttempt() {
     bestAttemptHeight = playerMaxHeight
   }
 
-  // Send to server
-  sendPlayerFinished(attemptFinishTime)
+  // Send to server (server calculates authoritative time)
+  sendPlayerFinished()
 }
 
 function dieAttempt() {

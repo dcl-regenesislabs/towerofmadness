@@ -129,19 +129,72 @@ function setupMessageHandlers(gameState: GameState) {
       maxHeight: 0,
       bestTime: 0,
       isFinished: false,
-      finishOrder: 0
+      finishOrder: 0,
+      attemptStartTime: 0
     })
   })
 
-  room.onMessage('playerFinished', (data, context) => {
+  // Player started attempt (entered start trigger)
+  room.onMessage('playerStarted', (_data, context) => {
     if (!context) return
+    if (gameState.getPhase() !== RoundPhase.ACTIVE) return
+
+    const player = gameState.getPlayer(context.from)
+    if (!player) return
+
+    // Don't restart if already finished
+    if (player.isFinished) return
+
+    // Validate: player must be at start area (low height)
+    const liveKitPlayer = getPlayer({ userId: player.address })
+    const currentHeight = liveKitPlayer?.position?.y || 0
+    const maxStartHeight = 20 // Must be below 20m to start (ground level + tolerance)
+
+    if (currentHeight > maxStartHeight) {
+      console.log(`[Server] Rejected start from ${player.displayName}: height ${currentHeight.toFixed(1)}m > max ${maxStartHeight}m`)
+      return
+    }
+
+    // Record attempt start time (server-authoritative)
+    player.attemptStartTime = Date.now()
+    player.maxHeight = 0 // Reset height for new attempt
+    gameState.setPlayer(context.from, player)
+
+    console.log(`[Server] Player started attempt: ${player.displayName} at height ${currentHeight.toFixed(1)}m`)
+  })
+
+  // Player finished (entered end trigger) - server validates and calculates time
+  room.onMessage('playerFinished', (_data, context) => {
+    if (!context) return
+    if (gameState.getPhase() !== RoundPhase.ACTIVE) return
+
     const player = gameState.getPlayer(context.from)
     if (!player || player.isFinished) return
 
-    console.log(`[Server] Player finished: ${player.displayName} in ${data.time.toFixed(2)}s`)
+    // Validate: player must have started an attempt
+    if (player.attemptStartTime === 0) {
+      console.log(`[Server] Rejected finish from ${player.displayName}: no active attempt`)
+      return
+    }
+
+    // Validate: player height must be near the top of tower
+    const liveKitPlayer = getPlayer({ userId: player.address })
+    const currentHeight = liveKitPlayer?.position?.y || player.maxHeight
+    const towerConfig = gameState.getTowerConfig()
+    const minFinishHeight = towerConfig ? towerConfig.totalHeight - 15 : 50 // Allow some tolerance
+
+    if (currentHeight < minFinishHeight) {
+      console.log(`[Server] Rejected finish from ${player.displayName}: height ${currentHeight.toFixed(1)}m < required ${minFinishHeight.toFixed(1)}m`)
+      return
+    }
+
+    // Calculate time server-side (ignore client-sent time)
+    const serverTime = (Date.now() - player.attemptStartTime) / 1000
+
+    console.log(`[Server] Player finished: ${player.displayName} in ${serverTime.toFixed(2)}s (height: ${currentHeight.toFixed(1)}m)`)
 
     player.isFinished = true
-    player.bestTime = data.time
+    player.bestTime = serverTime
     player.finishOrder = gameState.incrementFinisherCount()
     gameState.setPlayer(context.from, player)
 

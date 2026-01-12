@@ -5,7 +5,10 @@ export const Messages = {
   // Client -> Server: Player joins game (name is looked up server-side from PlayerIdentityData)
   playerJoin: Schemas.Map({}),
 
-  // Client -> Server: Player finished the tower
+  // Client -> Server: Player started attempt (entered start trigger)
+  playerStarted: Schemas.Map({}),
+
+  // Client -> Server: Player finished the tower (entered end trigger)
   playerFinished: Schemas.Map({
     time: Schemas.Number
   }),
