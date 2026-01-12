@@ -7,6 +7,7 @@ import {
   LeaderboardComponent,
   WinnersComponent,
   TowerConfigComponent,
+  ChunkComponent,
   RoundPhase
 } from '../shared/schemas'
 
@@ -117,8 +118,9 @@ export class GameState {
       })
       GltfContainer.create(entity, { src: '' })
       VisibilityComponent.create(entity, { visible: false })
-      protectServerEntity(entity, [Transform, GltfContainer, VisibilityComponent])
-      syncEntity(entity, [Transform.componentId, GltfContainer.componentId, VisibilityComponent.componentId])
+      ChunkComponent.create(entity, {})
+      protectServerEntity(entity, [Transform, GltfContainer, VisibilityComponent, ChunkComponent])
+      syncEntity(entity, [Transform.componentId, GltfContainer.componentId, VisibilityComponent.componentId, ChunkComponent.componentId])
       this.towerEntityPool.push(entity)
     }
 

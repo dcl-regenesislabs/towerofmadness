@@ -77,6 +77,15 @@ TowerConfigComponent.validateBeforeChange((value) => {
 })
 
 // ============================================
+// CHUNK COMPONENT (Empty tag for tower chunk entities)
+// ChunkId is derived from GltfContainer.src
+// ============================================
+export const ChunkComponent = engine.defineComponent('tower:Chunk', {})
+ChunkComponent.validateBeforeChange((value) => {
+  return value.senderAddress === AUTH_SERVER_PEER_ID
+})
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 export type LeaderboardEntry = {

@@ -6,13 +6,14 @@
  * Messages are sent via registerMessages() (messages.ts).
  */
 
-import { engine, Transform, PlayerIdentityData, AvatarBase } from '@dcl/sdk/ecs'
+import { engine, Transform, PlayerIdentityData, AvatarBase, VisibilityComponent, GltfContainer } from '@dcl/sdk/ecs'
 import { room } from './shared/messages'
 import {
   RoundStateComponent,
   LeaderboardComponent,
   WinnersComponent,
   TowerConfigComponent,
+  ChunkComponent,
   RoundPhase,
   LeaderboardEntry,
   WinnerEntry,
@@ -135,11 +136,41 @@ export function getWinners(): WinnerEntry[] {
   return []
 }
 
+// Get tower chunks directly from synced entities (sorted by Y position)
+// ChunkComponent is an empty tag - chunkId is derived from GltfContainer.src
+export function getTowerChunksFromEntities(): string[] {
+  const chunks: { chunkId: string; y: number }[] = []
+
+  // Find all visible entities with ChunkComponent tag
+  for (const [entity] of engine.getEntitiesWith(ChunkComponent, Transform, VisibilityComponent, GltfContainer)) {
+    const visibility = VisibilityComponent.get(entity)
+    if (!visibility.visible) continue
+
+    // Derive chunkId from GltfContainer.src (e.g., "assets/chunks/Chunk01.glb" -> "Chunk01")
+    const gltf = GltfContainer.get(entity)
+    const match = gltf.src.match(/assets\/chunks\/(\w+)\.glb/)
+    if (!match) continue
+
+    const transform = Transform.get(entity)
+    chunks.push({ chunkId: match[1], y: transform.position.y })
+  }
+
+  // Sort by Y position (lowest first) and return chunk IDs
+  chunks.sort((a, b) => a.y - b.y)
+
+  // Add ChunkStart at the beginning (it's a static entity, not in the pool)
+  return ['ChunkStart', ...chunks.map((c) => c.chunkId)]
+}
+
 export function getTowerConfig(): TowerConfig | null {
   for (const [entity] of engine.getEntitiesWith(TowerConfigComponent)) {
     const config = TowerConfigComponent.get(entity)
+
+    // Get chunkIds from actual entities for accuracy
+    const chunkIds = getTowerChunksFromEntities()
+
     return {
-      chunkIds: config.chunkIds as string[],
+      chunkIds: chunkIds.length > 1 ? chunkIds : config.chunkIds as string[],
       chunkHeight: config.chunkHeight,
       totalHeight: config.totalHeight
     }

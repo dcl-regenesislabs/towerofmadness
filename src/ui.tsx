@@ -29,7 +29,7 @@ import {
   isSynced,
   towerConfig
 } from "./index"
-import { RoundPhase, getTimeSyncOffset, isTimeSyncReady, getLocalPlayerHeights, formatTime } from "./multiplayer"
+import { RoundPhase, getTimeSyncOffset, isTimeSyncReady, getLocalPlayerHeights, formatTime, getTowerChunksFromEntities } from "./multiplayer"
 
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(GameUI)
@@ -48,7 +48,11 @@ const CHUNK_COLORS: Record<string, Color4> = {
 const TowerProgressBar = () => {
   const s = getScaleUIFactor()
 
-  if (!towerConfig || towerConfig.chunkIds.length === 0) {
+  // Get chunks directly from synced entities for accurate colors
+  const chunkIds = getTowerChunksFromEntities()
+
+  if (chunkIds.length <= 1) {
+    // Only ChunkStart or empty - no tower visible yet
     return null
   }
 
@@ -56,8 +60,8 @@ const TowerProgressBar = () => {
   const BAR_WIDTH = 20 * s
   const PLAYER_BAR_WIDTH = 80 * s
 
-  const chunkIds = towerConfig.chunkIds
-  const totalHeight = towerConfig.totalHeight
+  // Use towerConfig for total height, fall back to calculation
+  const totalHeight = towerConfig?.totalHeight || (chunkIds.length * 10.821)
 
   // Calculate segment height for each chunk
   const segmentHeight = BAR_HEIGHT / chunkIds.length
