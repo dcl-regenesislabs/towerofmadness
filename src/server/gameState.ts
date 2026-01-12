@@ -33,7 +33,7 @@ const CHUNK_HEIGHT = 10.821
 const TOWER_X = 40
 const TOWER_Z = 40
 
-// Player tracking (server-side only)
+// Player tracking (server-side only, current round)
 interface PlayerData {
   address: string
   displayName: string
@@ -42,6 +42,17 @@ interface PlayerData {
   isFinished: boolean
   finishOrder: number
 }
+
+// All-time best scores (persisted)
+interface AllTimeBest {
+  address: string
+  displayName: string
+  bestTime: number
+  bestHeight: number
+  finishCount: number
+  lastPlayed: number
+}
+
 
 export class GameState {
   private static instance: GameState
@@ -60,6 +71,9 @@ export class GameState {
   private players = new Map<string, PlayerData>()
   private roundStartTime: number = 0
   private finisherCount: number = 0
+
+  // All-time best scores (persisted)
+  private allTimeBests = new Map<string, AllTimeBest>()
 
   public static getInstance(): GameState {
     if (!GameState.instance) {
@@ -127,14 +141,56 @@ export class GameState {
     console.log('[Server] Game state initialized')
   }
 
-  // Player management
+  // Player management (normalize address to lowercase for consistency)
   getPlayer(address: string): PlayerData | undefined {
-    return this.players.get(address)
+    return this.players.get(address.toLowerCase())
   }
 
   setPlayer(address: string, data: PlayerData) {
-    this.players.set(address, data)
+    const normalizedAddress = address.toLowerCase()
+    data.address = normalizedAddress
+    this.players.set(normalizedAddress, data)
+
+    // Update all-time bests in real-time
+    this.updateAllTimeBest(normalizedAddress, data.displayName, data.bestTime, data.maxHeight, data.isFinished)
+
     this.updateLeaderboard()
+  }
+
+  // All-time best management
+  updateAllTimeBest(address: string, displayName: string, time: number, height: number, finished: boolean) {
+    const normalizedAddress = address.toLowerCase()
+    const existing = this.allTimeBests.get(normalizedAddress)
+
+    if (existing) {
+      if (finished && (time < existing.bestTime || existing.bestTime === 0)) {
+        existing.bestTime = time
+        existing.finishCount++
+      }
+      if (height > existing.bestHeight) {
+        existing.bestHeight = height
+      }
+      existing.displayName = displayName
+      existing.lastPlayed = Date.now()
+    } else {
+      this.allTimeBests.set(normalizedAddress, {
+        address: normalizedAddress,
+        displayName: displayName,
+        bestTime: finished ? time : 0,
+        bestHeight: height,
+        finishCount: finished ? 1 : 0,
+        lastPlayed: Date.now()
+      })
+    }
+  }
+
+  getAllTimeBests(): AllTimeBest[] {
+    return Array.from(this.allTimeBests.values()).sort((a, b) => {
+      if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
+      if (a.finishCount > 0) return -1
+      if (b.finishCount > 0) return 1
+      return b.bestHeight - a.bestHeight
+    })
   }
 
   // Tower management
@@ -330,13 +386,19 @@ export class GameState {
     })
 
     const leaderboard = LeaderboardComponent.getMutable(this.leaderboardEntity)
-    leaderboard.players = playerArray.slice(0, 10).map((p) => ({
-      address: p.address,
-      displayName: p.displayName,
-      maxHeight: p.maxHeight,
-      bestTime: p.bestTime,
-      isFinished: p.isFinished,
-      finishOrder: p.finishOrder
-    }))
+    leaderboard.players = playerArray.slice(0, 10).map((p) => {
+      const allTime = this.allTimeBests.get(p.address.toLowerCase())
+      return {
+        address: p.address,
+        displayName: p.displayName,
+        maxHeight: p.maxHeight,
+        bestTime: p.bestTime,
+        isFinished: p.isFinished,
+        finishOrder: p.finishOrder,
+        allTimeBestTime: allTime?.bestTime || 0,
+        allTimeBestHeight: allTime?.bestHeight || 0,
+        allTimeFinishCount: allTime?.finishCount || 0
+      }
+    })
   }
 }

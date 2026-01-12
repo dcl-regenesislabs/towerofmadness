@@ -542,6 +542,14 @@ const GameUI = () => {
               : player.displayName
             const status = player.isFinished ? '*' : ''
 
+            // Show current round height, plus all-time best if different
+            const currentHeight = player.maxHeight.toFixed(0)
+            const allTimeBest = player.allTimeBestHeight || 0
+            const hasAllTimeBest = allTimeBest > 0 && allTimeBest > player.maxHeight
+            const heightDisplay = hasAllTimeBest
+              ? `${currentHeight}m (best: ${allTimeBest.toFixed(0)}m)`
+              : `${currentHeight}m`
+
             return (
               <UiEntity
                 key={`lb-${index}`}
@@ -553,7 +561,7 @@ const GameUI = () => {
                   margin: { left: 8 * s }
                 }}
                 uiText={{
-                  value: `${medal} ${name} ${status} ${player.maxHeight.toFixed(0)}m`,
+                  value: `${medal} ${name} ${status} ${heightDisplay}`,
                   fontSize: 13 * s,
                   color: player.isFinished ? Color4.Green() : Color4.White(),
                   textAlign: 'middle-left'

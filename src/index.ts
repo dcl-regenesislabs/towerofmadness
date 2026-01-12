@@ -130,10 +130,10 @@ function syncRoundState() {
     console.log('[Game] Connected to server')
   }
 
-  // Send playerJoin once connected
+  // Send playerJoin once connected (server gets name from PlayerIdentityData)
   if (!hasJoinedServer) {
     hasJoinedServer = true
-    sendPlayerJoined('Player')
+    sendPlayerJoined()
   }
 
   roundTimer = state.remainingTime

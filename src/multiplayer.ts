@@ -55,8 +55,8 @@ export function setupClient() {
 // SEND MESSAGES TO SERVER
 // ============================================
 
-export function sendPlayerJoined(displayName: string) {
-  room.send('playerJoin', { displayName })
+export function sendPlayerJoined() {
+  room.send('playerJoin', {})
 }
 
 export function sendPlayerFinished(time: number) {

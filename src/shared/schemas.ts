@@ -38,7 +38,10 @@ export const LeaderboardComponent = engine.defineComponent('tower:Leaderboard', 
       maxHeight: Schemas.Number,
       bestTime: Schemas.Number,
       isFinished: Schemas.Boolean,
-      finishOrder: Schemas.Number
+      finishOrder: Schemas.Number,
+      allTimeBestTime: Schemas.Number,
+      allTimeBestHeight: Schemas.Number,
+      allTimeFinishCount: Schemas.Number
     })
   )
 })
@@ -95,6 +98,9 @@ export type LeaderboardEntry = {
   bestTime: number
   isFinished: boolean
   finishOrder: number
+  allTimeBestTime: number
+  allTimeBestHeight: number
+  allTimeFinishCount: number
 }
 
 export type WinnerEntry = {

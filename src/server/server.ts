@@ -1,11 +1,11 @@
-import { engine, Transform, PlayerIdentityData, AvatarBase } from '@dcl/sdk/ecs'
+import { engine, PlayerIdentityData, AvatarBase } from '@dcl/sdk/ecs'
+import { getPlayer } from '@dcl/sdk/players'
 import { GameState } from './gameState'
 import { room } from '../shared/messages'
 import { RoundPhase } from '../shared/schemas'
 
 const ROUND_END_DISPLAY_TIME = 3 // seconds
 const NEW_ROUND_DELAY = 10 // seconds
-const HEIGHT_UPDATE_INTERVAL = 0.5 // seconds
 
 export function server() {
   console.log('[Server] Tower of Madness starting...')
@@ -34,39 +34,64 @@ export function server() {
         roundEndTime = Date.now()
       }
     } else if (phase === RoundPhase.ENDING) {
-      if ((Date.now() - roundEndTime) / 1000 >= ROUND_END_DISPLAY_TIME) {
+      const endingElapsed = (Date.now() - roundEndTime) / 1000
+      if (endingElapsed >= ROUND_END_DISPLAY_TIME) {
+        console.log(`[Server] ENDING phase done after ${endingElapsed.toFixed(1)}s, starting BREAK`)
         gameState.setPhase(RoundPhase.BREAK)
         breakStartTime = Date.now()
       }
     } else if (phase === RoundPhase.BREAK) {
-      if ((Date.now() - breakStartTime) / 1000 >= NEW_ROUND_DELAY) {
+      const breakElapsed = (Date.now() - breakStartTime) / 1000
+      if (breakElapsed >= NEW_ROUND_DELAY) {
+        console.log(`[Server] BREAK phase done after ${breakElapsed.toFixed(1)}s, starting new round`)
         gameState.startNewRound()
       }
     }
   }, undefined, 'tower-timer-system')
 
-  // Height tracking from avatar positions
-  let heightUpdateTimer = 0
+  // Player name update system (checks for name changes from AvatarBase)
+  let nameUpdateTimer = 0
   engine.addSystem((dt: number) => {
-    heightUpdateTimer += dt
-    if (heightUpdateTimer < HEIGHT_UPDATE_INTERVAL) return
-    heightUpdateTimer = 0
-
-    if (gameState.getPhase() !== RoundPhase.ACTIVE) return
+    nameUpdateTimer += dt
+    if (nameUpdateTimer < 2) return // Check every 2 seconds
+    nameUpdateTimer = 0
 
     for (const [avatarEntity, identityData] of engine.getEntitiesWith(PlayerIdentityData)) {
       const player = gameState.getPlayer(identityData.address)
       if (!player) continue
 
-      const transform = Transform.getOrNull(avatarEntity)
-      if (!transform) continue
-
-      if (transform.position.y > player.maxHeight) {
-        player.maxHeight = transform.position.y
+      // Update name if AvatarBase is now available
+      const avatarBase = AvatarBase.getOrNull(avatarEntity)
+      if (avatarBase?.name && player.displayName !== avatarBase.name) {
+        player.displayName = avatarBase.name
         gameState.setPlayer(identityData.address, player)
       }
     }
-  }, undefined, 'tower-height-system')
+  }, undefined, 'player-name-system')
+
+  // Height tracking system - reads player positions from LiveKit
+  let heightUpdateTimer = 0
+  engine.addSystem((dt: number) => {
+    heightUpdateTimer += dt
+    if (heightUpdateTimer < 0.5) return // Check every 0.5 seconds
+    heightUpdateTimer = 0
+
+    if (gameState.getPhase() !== RoundPhase.ACTIVE) return
+
+    for (const [_, identityData] of engine.getEntitiesWith(PlayerIdentityData)) {
+      const playerData = gameState.getPlayer(identityData.address)
+      if (!playerData) continue
+
+      const player = getPlayer({ userId: identityData.address })
+      if (!player?.position) continue
+
+      const height = player.position.y
+      if (height > playerData.maxHeight) {
+        playerData.maxHeight = height
+        gameState.setPlayer(identityData.address, playerData)
+      }
+    }
+  }, undefined, 'player-height-system')
 
   console.log('[Server] Ready')
 }
@@ -81,12 +106,23 @@ function getPlayerName(playerAddress: string): string {
 }
 
 function setupMessageHandlers(gameState: GameState) {
-  room.onMessage('playerJoin', (data, context) => {
+  room.onMessage('playerJoin', (_data, context) => {
     if (!context) return
 
-    const displayName = data.displayName || getPlayerName(context.from)
-    console.log(`[Server] Player joined: ${displayName}`)
+    // Always get name from PlayerIdentityData/AvatarBase (server-authoritative)
+    const displayName = getPlayerName(context.from)
 
+    // Check if player already exists in current round - don't reset their progress
+    const existingPlayer = gameState.getPlayer(context.from)
+    if (existingPlayer) {
+      console.log(`[Server] Player rejoined: ${displayName}`)
+      // Just update their display name in case it changed
+      existingPlayer.displayName = displayName
+      gameState.setPlayer(context.from, existingPlayer)
+      return
+    }
+
+    console.log(`[Server] Player joined: ${displayName}`)
     gameState.setPlayer(context.from, {
       address: context.from,
       displayName: displayName,

@@ -2,10 +2,8 @@ import { Schemas } from '@dcl/sdk/ecs'
 import { registerMessages } from '@dcl/sdk/network'
 
 export const Messages = {
-  // Client -> Server: Player joins game
-  playerJoin: Schemas.Map({
-    displayName: Schemas.String
-  }),
+  // Client -> Server: Player joins game (name is looked up server-side from PlayerIdentityData)
+  playerJoin: Schemas.Map({}),
 
   // Client -> Server: Player finished the tower
   playerFinished: Schemas.Map({
