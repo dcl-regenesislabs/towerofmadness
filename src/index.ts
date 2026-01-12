@@ -316,6 +316,24 @@ export async function main() {
   setupTrigger(triggerEnd)
   setupTrigger(triggerDeath)
 
+  // Update TriggerEnd position when tower config changes
+  let lastTowerHeight = 0
+  function updateTriggerEndPosition() {
+    if (!triggerEnd || !towerConfig) return
+    if (towerConfig.totalHeight === lastTowerHeight) return
+
+    lastTowerHeight = towerConfig.totalHeight
+    const transform = Transform.getMutable(triggerEnd)
+    // Position at top of tower (totalHeight includes ChunkEnd)
+    transform.position = Vector3.create(40, towerConfig.totalHeight - 5, 40) // Tower is at X=40, Z=40
+    console.log(`[Game] Updated TriggerEnd position to height ${transform.position.y.toFixed(1)}m`)
+  }
+
+  // Check for tower config changes periodically
+  engine.addSystem(() => {
+    updateTriggerEndPosition()
+  }, undefined, 'trigger-end-update-system')
+
   // ============================================
   // TRIGGER DETECTION SYSTEM
   // ============================================

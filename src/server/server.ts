@@ -181,7 +181,9 @@ function setupMessageHandlers(gameState: GameState) {
     const liveKitPlayer = getPlayer({ userId: player.address })
     const currentHeight = liveKitPlayer?.position?.y || player.maxHeight
     const towerConfig = gameState.getTowerConfig()
-    const minFinishHeight = towerConfig ? towerConfig.totalHeight - 15 : 50 // Allow some tolerance
+    const minFinishHeight = towerConfig ? towerConfig.totalHeight - 5 : 80 // Must be near the top (within 5m)
+
+    console.log(`[Server] Finish attempt: height=${currentHeight.toFixed(1)}m, towerHeight=${towerConfig?.totalHeight.toFixed(1)}m, minRequired=${minFinishHeight.toFixed(1)}m`)
 
     if (currentHeight < minFinishHeight) {
       console.log(`[Server] Rejected finish from ${player.displayName}: height ${currentHeight.toFixed(1)}m < required ${minFinishHeight.toFixed(1)}m`)
