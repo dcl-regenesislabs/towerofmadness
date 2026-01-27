@@ -18,3 +18,9 @@ README.md
 *.zip
 *.rar
 src
+*.mp3
+assets/blender
+assets/asset-packs
+*.md
+*.config
+cursorignore

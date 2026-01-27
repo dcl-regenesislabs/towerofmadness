@@ -1,209 +1,229 @@
-# Tower of Madness 🏗️
+# Tower of Madness
 
-A procedurally generated tower climbing game for Decentraland SDK7. Climb randomly generated towers, track your progress, and compete for the best time and height! Features multiplayer support for collaborative climbing experiences.
+A procedurally generated tower climbing game for Decentraland SDK7. Climb randomly generated towers, track your progress, and compete for the best time and height! Features multiplayer support with server-authoritative anti-cheat.
 
-## 🎮 Features
+## Features
+
+### Multiplayer with Authoritative Server
+
+- **Server-Side Game Logic**: Uses DCL's authoritative server pattern where same codebase runs on server and client
+- **Anti-Cheat System**: Server validates player positions and calculates times - clients cannot cheat
+- **Synchronized State**: All players see the same tower and timer via synced ECS components
+- **All-Time Leaderboard**: Persistent leaderboard tracking best times and heights across all rounds
+- **NTP Time Synchronization**: Accurate timer display across all clients
+
+### Anti-Cheat System
+
+The server implements multiple layers of anti-cheat protection:
+
+- **Server-Side Height Tracking**: Server reads player positions directly from LiveKit via `getPlayer()`, not from client messages
+- **Server-Authoritative Timing**: Server tracks when players start and finish - client-sent times are ignored
+- **Start Validation**: Players must be below 20m height to start an attempt (prevents false starts)
+- **Finish Validation**: Players must be at tower top (within 5m of total height) to finish (prevents early finish exploits)
 
 ### Procedural Tower Generation
-- **Random Tower Creation**: Each tower is procedurally generated with 3-6 random middle chunks
-- **Automatic Generation**: Tower generates automatically on scene load
-- **Regeneration**: Click the button panel to clear and regenerate a new random tower
-- **Smart Stacking**: Chunks are stacked with alternating 180° rotations for visual variety
-- **Chunk Tracking**: UI displays all chunks used in the current tower (from top to bottom)
+
+- **Random Tower Creation**: Each round generates a tower with 3-8 random middle chunks
+- **Server-Controlled**: Tower is generated on server and synced to all clients via entity pooling
+- **Entity Pooling**: Tower chunks use a pool of reusable entities for efficient memory usage
+- **Smart Stacking**: Chunks are stacked with alternating 180 degree rotations for visual variety
 
 ### Game Mechanics
-- **Height Tracking**: Real-time player height monitoring
-- **Game Timer**: Tracks time from start to finish
-- **Best Scores**: Records your best time and highest height reached
-- **Win Condition**: Reach the top (ChunkEnd) to win
+
+- **Round-Based Play**: 7-minute rounds with automatic restarts
+- **Speed Multiplier**: Timer speeds up each time a player finishes (x2, x3, etc.)
+- **Height Tracking**: Real-time player height monitoring via server-side LiveKit integration
+- **Win Condition**: Reach the top (ChunkEnd) to finish - validated server-side
 - **Death System**: Fall detection with restart capability
+- **Dynamic TriggerEnd**: Finish trigger position updates automatically with tower height
 
 ### User Interface
-- **Player Height Display**: Shows current player height in the center of the screen
-- **Game Timer**: Displays elapsed time when game is active
-- **Best Scores Panel**: Top-right display of best time and best height
-- **Tower Chunks List**: Shows all chunks used in current tower (below best scores)
-- **Game Status Messages**: Visual feedback for game start, win, and death states
 
-## 🏗️ Tower Structure
+- **Round Timer**: Large central timer with speed multiplier indicator
+- **Tower Progress Bar**: Vertical bar showing all players' positions on the tower
+- **All-Time Leaderboard**: Left-side panel showing top 10 players with best times/heights
+- **Personal Stats**: Top-right display of best time and height
+- **Winners Display**: End-of-round podium showing top 3 players
+- **NTP Sync Status**: Bottom-left indicator showing time sync offset
+
+## Architecture
+
+### Server/Client Branching
+
+The same codebase runs on both server and client, branched by `isServer()`:
+
+```typescript
+if (isServer()) {
+  server()  // Server-only logic
+  return
+}
+// Client-only code
+```
+
+### Directory Structure
+
+```
+src/
+├── index.ts              # Entry point - branches server/client via isServer()
+├── multiplayer.ts        # Client-side state sync helpers and message sending
+├── ui.tsx                # React ECS UI components
+├── server/
+│   ├── server.ts         # Server main logic, timer system, message handlers
+│   └── gameState.ts      # Server state management, tower entity creation, leaderboard
+└── shared/
+    ├── schemas.ts        # Synced component definitions with validateBeforeChange()
+    ├── messages.ts       # Message definitions via registerMessages()
+    └── timeSync.ts       # NTP-style time synchronization
+```
+
+### Synced Components
+
+Components use `validateBeforeChange()` to ensure only the server can modify them:
+
+- **RoundStateComponent**: Round phase, timer, speed multiplier
+- **LeaderboardComponent**: All-time player rankings with best times and heights
+- **WinnersComponent**: Top 3 winners of current round
+- **TowerConfigComponent**: Tower chunk configuration
+- **ChunkComponent**: Tag for tower chunk entities
+
+### Messages
+
+Client-to-Server:
+- `playerJoin`: Player joins the game
+- `playerStarted`: Player entered start trigger (server validates height)
+- `playerFinished`: Player claims to have finished (server validates and calculates time)
+
+Server-to-Client:
+- `playerFinishedBroadcast`: Announces a player finish with server-authoritative time
+- `timeSyncResponse`: NTP-style time sync response
+
+## Tower Structure
 
 ### Chunk Types
+
 - **ChunkStart**: Base chunk (permanently placed at Y=0, position 40, 0, 40)
 - **Middle Chunks**: Randomly selected from Chunk01, Chunk02, Chunk03
 - **ChunkEnd**: Top chunk that triggers win condition
 
 ### Stacking Logic
+
 - Each chunk has a height of **10.821 units**
 - Chunks stack vertically with alternating rotations:
-  - Even indices (0, 2, 4...): 180° Y rotation
-  - Odd indices (1, 3, 5...): 0° Y rotation
+  - Even indices (0, 2, 4...): 180 degree Y rotation
+  - Odd indices (1, 3, 5...): 0 degree Y rotation
 - ChunkEnd rotation matches the last middle chunk's rotation pattern
 
 ### Generation Rules
-- **Middle Chunks**: 3-6 chunks randomly selected (can repeat)
+
+- **Middle Chunks**: 3-8 chunks randomly selected (can repeat)
 - **Position**: All chunks spawn at X=40, Z=40 (same as ChunkStart)
-- **Height Calculation**: `(total middle chunks + 1) × 10.821`
+- **Height Calculation**: `(total chunks + 2) * 10.821` (includes ChunkStart and ChunkEnd)
 
-## 🎯 Game Flow
+## Game Flow
 
-1. **Scene Load**: Tower automatically generates
-2. **Game Start**: Player enters TriggerStart area
-3. **Climbing**: Player climbs the procedurally generated tower
-4. **Win**: Player reaches TriggerEnd (at ChunkEnd)
-5. **Death**: Player falls and hits TriggerDeath area
-6. **Restart**: Return to TriggerStart to begin again
+### Round Phases
 
-## 🛠️ Technical Details
+```
+ACTIVE  -> Players climb, timer counts down
+ENDING  -> 3 seconds, show top 3 winners
+BREAK   -> 10 seconds pause, then start new round
+```
 
-### Built With
-- **Decentraland SDK7**: Latest ECS architecture
-- **TypeScript**: Type-safe development
-- **React ECS**: UI rendering system
+### Player Flow
 
-### Key Components
+1. **Scene Load**: Tower automatically generates, player connects to server
+2. **Game Start**: Player enters TriggerStart area (server validates height < 20m)
+3. **Climbing**: Player climbs the procedurally generated tower (server tracks height via LiveKit)
+4. **Win**: Player reaches TriggerEnd - server validates height and calculates time
+5. **Death**: Player falls and hits TriggerDeath area - can restart
+6. **Next Round**: After timer expires, winners shown, brief break, new tower generated
 
-#### `towerGenerator.ts`
-- Manages tower generation and chunk placement
-- Tracks chunk usage for UI display
-- Handles entity cleanup on regeneration
-- Exports tower height and chunk list
-
-#### `index.ts`
-- Main game logic and state management
-- Trigger area detection (Start, End, Death)
-- Player height tracking system
-- Game timer system
-- Button panel interaction
-
-#### `ui.tsx`
-- Real-time UI updates
-- Player height display
-- Game timer display
-- Best scores tracking
-- Tower chunks list
-
-## 📦 Installation & Setup
+## Installation and Setup
 
 ### Prerequisites
-- Node.js >= 16.0.0
+
+- Node.js >= 20.0.0
 - npm >= 6.0.0
 
 ### Installation
+
 ```bash
 npm install
 ```
 
-### Development
+### Development (with Authoritative Server)
+
+```bash
+npx @dcl/hammurabi-server@next
+```
+
+### Development (Standard - no multiplayer)
+
 ```bash
 npm run start
 ```
 
 ### Build
+
 ```bash
 npm run build
 ```
 
 ### Deploy
+
 ```bash
 npm run deploy
 ```
 
-## 📁 Project Structure
-
-```
-Tower of Madness/
-├── src/
-│   ├── index.ts           # Main game logic
-│   ├── towerGenerator.ts  # Tower generation system
-│   └── ui.tsx             # UI components
-├── assets/
-│   ├── chunks/            # Tower chunk models
-│   │   ├── ChunkStart.glb
-│   │   ├── Chunk01.glb
-│   │   ├── Chunk02.glb
-│   │   ├── Chunk03.glb
-│   │   └── ChunkEnd.glb
-│   └── scene/             # Scene configuration
-├── scene.json             # Scene metadata
-└── package.json           # Dependencies
-```
-
-## 🎨 UI Layout
-
-```
-┌─────────────────────────────────────────┐
-│  Top Center:                            │
-│  ┌─────────────────────┐               │
-│  │ Player Height        │               │
-│  │ Game Timer (active) │               │
-│  └─────────────────────┘               │
-│                                         │
-│  Top Right:                             │
-│  ┌─────────────────────┐               │
-│  │ Best Time           │               │
-│  │ Best Height         │               │
-│  └─────────────────────┘               │
-│  ┌─────────────────────┐               │
-│  │ 5 chunks            │               │
-│  │ ChunkEnd            │               │
-│  │ Chunk02             │               │
-│  │ Chunk01             │               │
-│  │ Chunk03             │               │
-│  │ Chunk01             │               │
-│  │ ChunkStart          │               │
-│  └─────────────────────┘               │
-│                                         │
-│  Center:                                 │
-│  Player Height (when not in game)       │
-└─────────────────────────────────────────┘
-```
-
-## 🎮 Controls
-
-- **Movement**: Standard Decentraland WASD controls
-- **Jump**: Space bar
-- **Interact**: Click button panel to regenerate tower
-- **Start Game**: Enter TriggerStart area
-- **Win**: Reach TriggerEnd at the top
-- **Restart**: Return to TriggerStart after death
-
-## 📊 Game Statistics
-
-The game tracks:
-- **Current Height**: Real-time player Y position
-- **Game Timer**: Elapsed time during active game
-- **Best Time**: Fastest completion time
-- **Best Height**: Highest point reached
-- **Tower Height**: Current tower's total height
-- **Chunk Count**: Number of chunks in current tower
-
-## 🔧 Configuration
+## Configuration
 
 ### Tower Generation
-Edit `src/towerGenerator.ts` to modify:
-- `MIN_MIDDLE_CHUNKS`: Minimum middle chunks (default: 3)
-- `MAX_MIDDLE_CHUNKS`: Maximum middle chunks (default: 6)
+
+Edit `src/server/gameState.ts` to modify:
+- `MIN_CHUNKS`: Minimum middle chunks (default: 3)
+- `MAX_CHUNKS`: Maximum middle chunks (default: 8)
 - `CHUNK_HEIGHT`: Height of each chunk (default: 10.821)
+- `BASE_TIMER`: Round duration in seconds (default: 420 / 7 minutes)
 - `TOWER_X`, `TOWER_Z`: Tower base position (default: 40, 40)
 
-## 🚀 Future Enhancements
+### Anti-Cheat Settings
 
-Potential features to add:
-- Difficulty levels (more chunks, different patterns)
-- Power-ups and collectibles
-- Multiplayer leaderboards
-- Particle effects on chunk placement
-- Sound effects and music
-- More chunk variety
+Edit `src/server/server.ts` to modify:
+- `maxStartHeight`: Maximum height to start an attempt (default: 20m)
+- Finish validation: Must be within 5m of tower top
 
-## 📝 License
+## Troubleshooting
+
+### "Outside of bounds" CRDT Error
+
+Delete `.crdt` files when changing schemas:
+
+```bash
+rm *.crdt
+```
+
+### Entities Not Rendering on Client
+
+1. Check server logs show entity creation
+2. Verify `syncEntity()` is called with correct component IDs
+3. Check client debug logs for received entities
+
+### Timer Desync
+
+The game uses NTP-style time synchronization. Check the sync offset indicator in the bottom-left of the UI. A well-synced client should show offset under 100ms.
+
+## Code Style
+
+Prettier configured: single quotes, no semicolons, 120 char width, no trailing commas.
+
+## License
 
 This project is open source and available for use in Decentraland scenes.
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Feel free to submit issues or pull requests.
 
 ---
 
-**Built with ❤️ for Decentraland**
+**Built for Decentraland**
