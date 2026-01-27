@@ -234,7 +234,7 @@ export class GameState {
     endTransform.rotation = Quaternion.fromEulerDegrees(0, endRotationY, 0)
     endTransform.scale = Vector3.One()
 
-    GltfContainer.getMutable(endEntity).src = 'assets/chunks/ChunkEnd.glb'
+    GltfContainer.getMutable(endEntity).src = 'assets/custom/chunkend01.glb/ChunkEnd.glb'
     VisibilityComponent.getMutable(endEntity).visible = true
 
     this.towerEntities.push(endEntity)
