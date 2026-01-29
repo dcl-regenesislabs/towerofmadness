@@ -90,6 +90,27 @@
         "serializationType": "transform"
       },
       "data": {
+        "512": {
+          "json": {
+            "position": {
+              "x": 27.373455047607422,
+              "y": -4.601698254218245e-13,
+              "z": 57.45470428466797
+            },
+            "rotation": {
+              "x": 0,
+              "y": 0.9914448857307434,
+              "z": 0,
+              "w": 0.13052618503570557
+            },
+            "scale": {
+              "x": 1.7999999523162842,
+              "y": 1.7999999523162842,
+              "z": 1.7999999523162842
+            },
+            "parent": 0
+          }
+        },
         "514": {
           "json": {
             "position": {
@@ -198,6 +219,47 @@
       }
     },
     {
+      "name": "core::Animator",
+      "jsonSchema": {
+        "type": "object",
+        "properties": {},
+        "serializationType": "protocol-buffer",
+        "protocolBuffer": "PBAnimator"
+      },
+      "data": {
+        "512": {
+          "json": {
+            "states": [
+              {
+                "clip": "Breath",
+                "playing": true,
+                "weight": 1,
+                "speed": 1,
+                "loop": true,
+                "shouldReset": false
+              },
+              {
+                "clip": "T-Pose",
+                "playing": false,
+                "weight": 1,
+                "speed": 1,
+                "loop": false,
+                "shouldReset": false
+              },
+              {
+                "clip": "Talk",
+                "playing": false,
+                "weight": 1,
+                "speed": 1,
+                "loop": false,
+                "shouldReset": false
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
       "name": "core::GltfContainer",
       "jsonSchema": {
         "type": "object",
@@ -206,6 +268,13 @@
         "protocolBuffer": "PBGltfContainer"
       },
       "data": {
+        "512": {
+          "json": {
+            "src": "assets/scene/Models/CoolBed/CoolBed.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
         "514": {
           "json": {
             "src": "assets/asset-packs/ambient_sound_-_crickets/ambient_sound.glb",
@@ -256,9 +325,14 @@
         "serializationType": "map"
       },
       "data": {
+        "512": {
+          "json": {
+            "value": "CoolBed.glb"
+          }
+        },
         "514": {
           "json": {
-            "value": "Ambient Sound - Crickets"
+            "value": "Ambient Sound"
           }
         },
         "586": {
@@ -351,9 +425,9 @@
         "serializationType": "map"
       },
       "data": {
-        "0": {
+        "512": {
           "json": {
-            "gizmo": 0
+            "gizmo": 3
           }
         }
       }
@@ -1371,7 +1445,8 @@
                   587,
                   600,
                   602,
-                  514
+                  514,
+                  512
                 ]
               },
               {
@@ -1400,6 +1475,10 @@
               },
               {
                 "entity": 514,
+                "children": []
+              },
+              {
+                "entity": 512,
                 "children": []
               }
             ]
@@ -2028,6 +2107,12 @@
         "serializationType": "map"
       },
       "data": {
+        "512": {
+          "json": {}
+        },
+        "513": {
+          "json": {}
+        },
         "514": {
           "json": {}
         },

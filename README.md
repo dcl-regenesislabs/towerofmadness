@@ -222,7 +222,7 @@ This project is open source and available for use in Decentraland scenes.
 
 ## Contributing
 
-Contributions are welcome! Feel free to submit issues or pull requests.
+Contributions are welcome! Feel free to [submit issues or pull requests](https://github.com/dcl-regenesislabs/towerofmadness/issues).
 
 ---
 

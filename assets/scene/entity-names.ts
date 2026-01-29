@@ -5,11 +5,10 @@
  * Object containing all entity names in the scene for autocomplete support.
  */
 export enum EntityNames {
-  Ambient_Sound___Crickets = "Ambient Sound - Crickets",
+  Ambient_Sound = "Ambient Sound",
   Button_Panel = "Button Panel",
-  ChunkEnd01 = "ChunkEnd01",
   ChunkStart_glb = "ChunkStart.glb",
+  CoolBed_glb = "CoolBed.glb",
   TriggerDeath = "TriggerDeath",
-  TriggerEnd = "TriggerEnd",
   TriggerStart = "TriggerStart",
 } 

@@ -2,6 +2,10 @@
   "name": "tower-of-madness",
   "version": "1.0.0",
   "description": "Tower climbing multiplayer game for Decentraland",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dcl-regenesislabs/towerofmadness.git"
+  },
   "scripts": {
     "start": "sdk-commands start",
     "deploy": "sdk-commands deploy",

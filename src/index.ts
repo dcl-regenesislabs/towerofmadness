@@ -1,4 +1,19 @@
-import { engine, Transform, TriggerArea, ColliderLayer, AudioSource, Entity, AvatarBase } from '@dcl/sdk/ecs'
+import {
+  engine,
+  Transform,
+  TriggerArea,
+  ColliderLayer,
+  AudioSource,
+  Entity,
+  AvatarBase,
+  Animator,
+  GltfContainer,
+  MeshCollider,
+  PointerEvents,
+  PointerEventType,
+  InputAction,
+  pointerEventsSystem
+} from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { EntityNames } from '../assets/scene/entity-names'
@@ -335,6 +350,115 @@ export async function main() {
   engine.addSystem(() => {
     updateTriggerEndPosition()
   }, undefined, 'trigger-end-update-system')
+
+  // ============================================
+  // COOLBED CHARACTER: CLICK TO TALK (2x speed) + SMOOTH BLEND (Breath loop set in Creator Hub)
+  // ============================================
+
+  const TALK_SPEED = 2
+  const BLEND_DURATION_MS = 250
+  const TALK_ANIMATION_DURATION_MS = 3000
+  let coolBedEntity: Entity | null = null
+  let coolBedSetupDone = false
+  type CoolBedPhase = 'idle' | 'blendToTalk' | 'talking' | 'blendToBreath'
+  let coolBedPhase: CoolBedPhase = 'idle'
+  let coolBedPhaseStartTime = 0
+
+  function setupCoolBed(entity: Entity) {
+    if (coolBedSetupDone) return
+    coolBedSetupDone = true
+    coolBedEntity = entity
+    console.log('[Game] CoolBed found, adding click-to-Talk (MeshCollider + PointerEvents)')
+
+    MeshCollider.setBox(entity, ColliderLayer.CL_POINTER)
+
+    PointerEvents.create(entity, {
+      pointerEvents: [
+        {
+          eventType: PointerEventType.PET_DOWN,
+          eventInfo: {
+            button: InputAction.IA_POINTER,
+            hoverText: 'Talk',
+            showFeedback: true,
+            maxDistance: 10
+          }
+        }
+      ]
+    })
+
+    pointerEventsSystem.onPointerDown(
+      { entity, opts: { button: InputAction.IA_POINTER } },
+      () => {
+        if (!Animator.has(entity)) return
+        const breathClip = Animator.getClipOrNull(entity, 'Breath')
+        const talkClip = Animator.getClipOrNull(entity, 'Talk')
+        if (!breathClip || !talkClip) return
+        if (coolBedPhase !== 'idle' && coolBedPhase !== 'talking') return
+        talkClip.playing = true
+        talkClip.speed = TALK_SPEED
+        talkClip.weight = 0
+        if (breathClip) breathClip.weight = 1
+        coolBedPhase = 'blendToTalk'
+        coolBedPhaseStartTime = Date.now()
+      }
+    )
+  }
+
+  function findCoolBedEntity(): Entity | null {
+    const byName = engine.getEntityOrNullByName(EntityNames.CoolBed_glb)
+    if (byName) return byName
+    for (const [entity] of engine.getEntitiesWith(GltfContainer)) {
+      const src = GltfContainer.get(entity).src
+      if (src && src.includes('CoolBed')) return entity
+    }
+    return null
+  }
+
+  engine.addSystem(() => {
+    if (!coolBedSetupDone) {
+      const entity = findCoolBedEntity()
+      if (entity) setupCoolBed(entity)
+      return
+    }
+
+    const entity = coolBedEntity
+    if (!entity || !Animator.has(entity)) return
+
+    const breathClip = Animator.getClipOrNull(entity, 'Breath')
+    const talkClip = Animator.getClipOrNull(entity, 'Talk')
+    if (!breathClip || !talkClip) return
+
+    const now = Date.now()
+    const elapsed = now - coolBedPhaseStartTime
+
+    if (coolBedPhase === 'blendToTalk') {
+      const t = Math.min(1, elapsed / BLEND_DURATION_MS)
+      talkClip.weight = t
+      breathClip.weight = 1 - t
+      if (t >= 1) {
+        coolBedPhase = 'talking'
+        coolBedPhaseStartTime = now
+      }
+    } else if (coolBedPhase === 'talking') {
+      if (elapsed >= TALK_ANIMATION_DURATION_MS) {
+        coolBedPhase = 'blendToBreath'
+        coolBedPhaseStartTime = now
+      }
+    } else if (coolBedPhase === 'blendToBreath') {
+      const t = Math.min(1, elapsed / BLEND_DURATION_MS)
+      talkClip.weight = 1 - t
+      breathClip.weight = t
+      if (t >= 1) {
+        coolBedPhase = 'idle'
+        talkClip.playing = false
+        breathClip.weight = 1
+        talkClip.weight = 0
+      }
+    } else if (coolBedPhase === 'idle') {
+      breathClip.weight = 1
+      talkClip.weight = 0
+    }
+  }, undefined, 'coolbed-animation-system')
 
   // ============================================
   // TRIGGER DETECTION SYSTEM
