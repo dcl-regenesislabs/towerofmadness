@@ -30,6 +30,7 @@ import {
   towerConfig
 } from "./index"
 import { RoundPhase, getTimeSyncOffset, isTimeSyncReady, getLocalPlayerHeights, formatTime, getTowerChunksFromEntities } from "./multiplayer"
+import { getDebugSnapshots } from "./debugSnapshots"
 
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(GameUI)
@@ -42,6 +43,156 @@ const CHUNK_COLORS: Record<string, Color4> = {
   'Chunk02': Color4.create(0.85, 0.75, 0.4, 1),  // Yellow/Tan
   'Chunk03': Color4.create(0.9, 0.9, 0.9, 1),  // White
   'ChunkEnd': Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish)
+}
+
+function formatWalletShort(wallet: string): string {
+  if (!wallet) return ''
+  return wallet.length > 12 ? `${wallet.slice(0, 6)}...${wallet.slice(-4)}` : wallet
+}
+
+const DebugSnapshotsPanel = () => {
+  const s = getScaleUIFactor()
+  const snapshots = getDebugSnapshots()
+  const maxRows = 6
+  const rows = snapshots.slice(0, maxRows)
+
+  if (rows.length === 0) return null
+
+  const PANEL_WIDTH = 280
+  const HEADER_HEIGHT = 24
+  const ROW_HEIGHT = 50
+  const PADDING = 8
+  const panelHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT + PADDING * 2
+
+  const getStatusText = (status: string) => {
+    if (status === 'ok') return 'snapshot ok'
+    if (status === 'missing') return 'no snapshot'
+    if (status === 'error') return 'error'
+    return 'loading...'
+  }
+
+  const getStatusColor = (status: string) => {
+    if (status === 'ok') return Color4.Green()
+    if (status === 'missing') return Color4.create(0.9, 0.7, 0.2, 1)
+    if (status === 'error') return Color4.Red()
+    return Color4.Yellow()
+  }
+
+  return (
+    <UiEntity
+      uiTransform={{
+        width: PANEL_WIDTH * s,
+        height: panelHeight * s,
+        positionType: 'absolute',
+        position: { bottom: 80 * s, right: 20 * s },
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start'
+      }}
+      uiBackground={{
+        color: Color4.create(0.05, 0.05, 0.1, 0.9)
+      }}
+    >
+      <UiEntity
+        uiTransform={{
+          width: '100%',
+          height: HEADER_HEIGHT * s,
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+        uiText={{
+          value: 'SNAPSHOT DEBUG',
+          fontSize: 12 * s,
+          color: Color4.create(0.7, 0.8, 1, 1),
+          textAlign: 'middle-center'
+        }}
+      />
+
+      {rows.map((entry, index) => (
+        <UiEntity
+          key={`snap-${index}`}
+          uiTransform={{
+            width: '100%',
+            height: ROW_HEIGHT * s,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            margin: { left: PADDING * s, right: PADDING * s }
+          }}
+        >
+          <UiEntity
+            uiTransform={{
+              width: 40 * s,
+              height: 40 * s,
+              margin: { right: 8 * s }
+            }}
+            uiBackground={
+              entry.snapshotUrl
+                ? {
+                    color: Color4.White(),
+                    texture: { src: entry.snapshotUrl },
+                    textureMode: 'stretch'
+                  }
+                : { color: Color4.create(0.2, 0.2, 0.2, 0.9) }
+            }
+          />
+
+          <UiEntity
+            uiTransform={{
+              width: (PANEL_WIDTH - 60) * s,
+              height: '100%',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              justifyContent: 'center'
+            }}
+          >
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                height: 20 * s,
+                alignItems: 'center',
+                justifyContent: 'flex-start'
+              }}
+              uiText={{
+                value: entry.displayName || formatWalletShort(entry.wallet),
+                fontSize: 12 * s,
+                color: Color4.White(),
+                textAlign: 'middle-left'
+              }}
+            />
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                height: 20 * s,
+                alignItems: 'center',
+                justifyContent: 'flex-start'
+              }}
+              uiText={{
+                value: getStatusText(entry.status),
+                fontSize: 10 * s,
+                color: getStatusColor(entry.status),
+                textAlign: 'middle-left'
+              }}
+            />
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                height: 18 * s,
+                alignItems: 'center',
+                justifyContent: 'flex-start'
+              }}
+              uiText={{
+                value: formatWalletShort(entry.wallet),
+                fontSize: 9 * s,
+                color: Color4.create(0.7, 0.7, 0.7, 1),
+                textAlign: 'middle-left'
+              }}
+            />
+          </UiEntity>
+        </UiEntity>
+      ))}
+    </UiEntity>
+  )
 }
 
 // Tower Progress Bar Component
@@ -769,6 +920,9 @@ const GameUI = () => {
 
       {/* Tower Progress Bar - Right Side */}
       <TowerProgressBar />
+
+      {/* Snapshot Debug Panel - Bottom Left */}
+      <DebugSnapshotsPanel />
 
       {/* NTP Time Sync Debug - Bottom Left */}
       <UiEntity

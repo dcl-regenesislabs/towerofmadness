@@ -6,6 +6,7 @@ import {
   AudioSource,
   Entity,
   AvatarBase,
+  PlayerIdentityData,
   Animator,
   GltfContainer,
   MeshCollider,
@@ -34,6 +35,7 @@ import {
   WinnerEntry,
   TowerConfig
 } from './multiplayer'
+import { requestPlayerSnapshot } from './debugSnapshots'
 
 // ============================================
 // GAME STATE
@@ -307,6 +309,18 @@ export async function main() {
       resultTimestamp = Date.now()
     }
   })
+
+  const knownPlayerWallets = new Set<string>()
+  engine.addSystem(() => {
+    for (const [entity, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
+      const wallet = identity.address?.toLowerCase()
+      if (!wallet || knownPlayerWallets.has(wallet)) continue
+
+      knownPlayerWallets.add(wallet)
+      const avatarBase = AvatarBase.getOrNull(entity)
+      requestPlayerSnapshot(wallet, avatarBase?.name)
+    }
+  }, undefined, 'debug-snapshot-player-enter-system')
 
   // ============================================
   // TRIGGER SETUP
