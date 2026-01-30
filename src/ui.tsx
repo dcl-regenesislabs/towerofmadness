@@ -193,6 +193,34 @@ const TowerProgressBar = () => {
                   : { color: Color4.create(0.2, 0.2, 0.2, 0.9) }
               }
             />
+
+            {isLocal && (
+              <UiEntity
+                uiTransform={{
+                  width: 4 * s,
+                  height: BAR_HEIGHT + 8 * s,
+                  positionType: 'absolute',
+                  position: { left: PLAYER_MARKER_SIZE + 2 * s, top: -(BAR_HEIGHT / 2) + (PLAYER_MARKER_SIZE / 2) - 4 * s }
+                }}
+                uiBackground={{
+                  color: Color4.White()
+                }}
+              >
+                <UiEntity
+                  uiTransform={{
+                    width: 4 * s,
+                    height: BAR_HEIGHT + 8 * s,
+                    positionType: 'absolute',
+                    position: { left: 0, top: 0 },
+                    borderColor: Color4.Black(),
+                    borderWidth: 1 * s
+                  }}
+                  uiBackground={{
+                    color: Color4.create(0, 0, 0, 0)
+                  }}
+                />
+              </UiEntity>
+            )}
           </UiEntity>
         )
       })}
