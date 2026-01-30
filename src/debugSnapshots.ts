@@ -9,6 +9,14 @@ export type DebugSnapshotEntry = {
 const debugSnapshots: DebugSnapshotEntry[] = []
 const snapshotByWallet = new Map<string, DebugSnapshotEntry>()
 
+const CATALYST_URL = 'https://peer.decentraland.org'
+const CATALYST_FALLBACKS = [
+  'https://peer-ec2.decentraland.org',
+  'https://interconnected.online',
+  'https://peer.decentral.io'
+]
+const DEFAULT_AVATAR_IMAGE = 'https://decentraland.org/images/male.png'
+
 export function requestPlayerSnapshot(wallet: string, displayName?: string) {
   if (!wallet) return
 
@@ -58,22 +66,24 @@ export function getDebugSnapshots(): DebugSnapshotEntry[] {
 }
 
 async function getPlayerSnapshot(wallet: string): Promise<string | null> {
-  const res = await fetch(`https://peer.decentraland.org/lambdas/profile/${wallet}`)
-  if (!res.ok) return null
-  const data = await res.json()
-  const avatar = data?.avatars?.[0]?.avatar
+  const profile = await fetchProfileWithFallback(wallet)
+  const avatar = profile?.avatars?.[0]?.avatar
   const snapshots = avatar?.snapshots ?? {}
   const rawFace256 = snapshots?.face256 ?? null
+  const rawFace = snapshots?.face ?? null
   const normalizedFace256 = normalizeSnapshotUrl(rawFace256)
-  const chosen = normalizedFace256 ?? null
+  const normalizedFace = normalizeSnapshotUrl(rawFace)
+  const chosen = normalizedFace256 ?? normalizedFace ?? DEFAULT_AVATAR_IMAGE
+  const chosenCid = chosen ? extractCidFromUrl(chosen) : null
 
   console.log(
     '[DebugSnapshots] snapshot details',
     wallet,
     JSON.stringify({
-      raw: { face256: rawFace256 },
-      normalized: { face256: normalizedFace256 },
-      chosen
+      raw: { face256: rawFace256, face: rawFace },
+      normalized: { face256: normalizedFace256, face: normalizedFace },
+      chosen,
+      cid: chosenCid
     })
   )
 
@@ -97,4 +107,28 @@ function normalizeSnapshotUrl(url: string | null): string | null {
   if (!/^https?:\/\//i.test(trimmed)) return null
 
   return trimmed
+}
+
+function extractCidFromUrl(url: string): string | null {
+  const match = url.match(/\/content\/contents\/([^/?#]+)/i)
+  return match?.[1] ?? null
+}
+
+async function fetchProfilesFrom(base: string, wallet: string) {
+  const url = `${base}/lambdas/profiles/${wallet}`
+  const res = await fetch(url)
+  if (!res.ok) return null
+  return res.json()
+}
+
+async function fetchProfileWithFallback(wallet: string) {
+  const primary = await fetchProfilesFrom(CATALYST_URL, wallet)
+  if (primary?.avatars?.length) return primary
+
+  for (const base of CATALYST_FALLBACKS) {
+    const data = await fetchProfilesFrom(base, wallet)
+    if (data?.avatars?.length) return data
+  }
+
+  return null
 }
