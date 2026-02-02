@@ -47,18 +47,16 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
   entry.status = 'loading'
   entry.lastUpdated = Date.now()
 
-  void (async () => {
-    try {
-      const snapshotUrl = await getPlayerSnapshot(normalized)
-      entry.snapshotUrl = snapshotUrl
-      entry.status = snapshotUrl ? 'ok' : 'missing'
-      entry.lastUpdated = Date.now()
-    } catch (err) {
-      entry.status = 'error'
-      entry.lastUpdated = Date.now()
-      console.log('[Snapshots] Failed to fetch snapshot', err)
-    }
-  })()
+  try {
+    const snapshotUrl = await getPlayerSnapshot(normalized)
+    entry.snapshotUrl = snapshotUrl
+    entry.status = snapshotUrl ? 'ok' : 'missing'
+    entry.lastUpdated = Date.now()
+  } catch (err) {
+    entry.status = 'error'
+    entry.lastUpdated = Date.now()
+    console.log('[Snapshots] Failed to fetch snapshot', err)
+  }
 }
 
 export function getSnapshots(): SnapshotEntry[] {
