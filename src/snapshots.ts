@@ -17,7 +17,7 @@ const CATALYST_FALLBACKS = [
 ]
 const DEFAULT_AVATAR_IMAGE = 'https://decentraland.org/images/male.png'
 
-export function requestPlayerSnapshot(wallet: string, displayName?: string) {
+export async function requestPlayerSnapshot(wallet: string, displayName?: string) {
   if (!wallet) return
 
   const normalized = wallet.toLowerCase()
