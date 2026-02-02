@@ -35,7 +35,7 @@ import {
   WinnerEntry,
   TowerConfig
 } from './multiplayer'
-import { requestPlayerSnapshot } from './debugSnapshots'
+import { requestPlayerSnapshot } from './snapshots'
 
 // ============================================
 // GAME STATE
@@ -320,7 +320,7 @@ export async function main() {
       const avatarBase = AvatarBase.getOrNull(entity)
       requestPlayerSnapshot(wallet, avatarBase?.name)
     }
-  }, undefined, 'debug-snapshot-player-enter-system')
+  }, undefined, 'snapshot-player-enter-system')
 
   // ============================================
   // TRIGGER SETUP

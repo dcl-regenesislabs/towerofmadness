@@ -1,4 +1,4 @@
-export type DebugSnapshotEntry = {
+export type SnapshotEntry = {
   wallet: string
   displayName: string
   snapshotUrl: string | null
@@ -6,8 +6,8 @@ export type DebugSnapshotEntry = {
   lastUpdated: number
 }
 
-const debugSnapshots: DebugSnapshotEntry[] = []
-const snapshotByWallet = new Map<string, DebugSnapshotEntry>()
+const snapshots: SnapshotEntry[] = []
+const snapshotByWallet = new Map<string, SnapshotEntry>()
 
 const CATALYST_URL = 'https://peer.decentraland.org'
 const CATALYST_FALLBACKS = [
@@ -33,10 +33,10 @@ export function requestPlayerSnapshot(wallet: string, displayName?: string) {
       lastUpdated: Date.now()
     }
     snapshotByWallet.set(normalized, entry)
-    debugSnapshots.unshift(entry)
+    snapshots.unshift(entry)
 
-    if (debugSnapshots.length > 12) {
-      debugSnapshots.length = 12
+    if (snapshots.length > 12) {
+      snapshots.length = 12
     }
   } else if (displayName && entry.displayName.startsWith('0x')) {
     entry.displayName = displayName
@@ -56,13 +56,13 @@ export function requestPlayerSnapshot(wallet: string, displayName?: string) {
     } catch (err) {
       entry.status = 'error'
       entry.lastUpdated = Date.now()
-      console.log('[DebugSnapshots] Failed to fetch snapshot', err)
+      console.log('[Snapshots] Failed to fetch snapshot', err)
     }
   })()
 }
 
-export function getDebugSnapshots(): DebugSnapshotEntry[] {
-  return debugSnapshots
+export function getSnapshots(): SnapshotEntry[] {
+  return snapshots
 }
 
 async function getPlayerSnapshot(wallet: string): Promise<string | null> {
@@ -77,7 +77,7 @@ async function getPlayerSnapshot(wallet: string): Promise<string | null> {
   const chosenCid = chosen ? extractCidFromUrl(chosen) : null
 
   console.log(
-    '[DebugSnapshots] snapshot details',
+    '[Snapshots] snapshot details',
     wallet,
     JSON.stringify({
       raw: { face256: rawFace256, face: rawFace },

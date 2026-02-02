@@ -30,7 +30,7 @@ import {
   towerConfig
 } from "./index"
 import { RoundPhase, getTimeSyncOffset, isTimeSyncReady, getLocalPlayerHeights, formatTime, getTowerChunksFromEntities } from "./multiplayer"
-import { getDebugSnapshots } from "./debugSnapshots"
+import { getSnapshots } from "./snapshots"
 
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(GameUI)
@@ -46,11 +46,11 @@ const CHUNK_COLORS: Record<string, Color4> = {
 }
 
 // Tower Progress Bar Component
-const TowerProgressBar = () => {
+const TowerProgressBar = () => { 
   const s = getScaleUIFactor()
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
   const screenWidth = uiCanvasInfo?.width ?? 1920 * s
-  const snapshots = getDebugSnapshots()
+  const snapshots = getSnapshots()
   const snapshotByWallet = new Map(
     snapshots.map((entry) => [entry.wallet.toLowerCase(), entry.snapshotUrl])
   )
