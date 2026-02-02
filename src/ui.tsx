@@ -42,7 +42,7 @@ const CHUNK_COLORS: Record<string, Color4> = {
   'Chunk01': Color4.create(0.2, 0.8, 0.2, 1),  // Green
   'Chunk02': Color4.create(0.85, 0.75, 0.4, 1),  // Yellow/Tan
   'Chunk03': Color4.create(0.9, 0.9, 0.9, 1),  // White
-  'ChunkEnd': Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish)
+  'ChunkEnd': Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish) 
 }
 
 // Tower Progress Bar Component
@@ -249,13 +249,6 @@ const GameUI = () => {
   // Show winners display
   const showWinners = (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && roundWinners.length > 0
 
-  // Timer color based on time remaining
-  const getTimerColor = () => {
-    if (roundTimer <= 30) return Color4.create(1, 0.2, 0.2, 1)
-    if (roundTimer <= 60) return Color4.create(1, 0.8, 0, 1)
-    return Color4.create(0.3, 1, 0.3, 1)
-  }
-
   // Show loading screen while connecting
   if (!isConnectedToServer) {
     const syncStatus = isSynced()
@@ -343,29 +336,74 @@ const GameUI = () => {
             height: 90 * s,
             alignItems: 'center',
             justifyContent: 'center',
-            flexDirection: 'column'
-          }}
-          uiBackground={{
-            color: roundSpeedMultiplier > 1
-              ? Color4.create(0.6, 0.2, 0, 0.95)
-              : Color4.create(0.1, 0.1, 0.15, 0.95)
+            flexDirection: 'column',
+            positionType: 'relative'
           }}
         >
           {/* Round Timer - BIG */}
           <UiEntity
             uiTransform={{
               width: '100%',
-              height: 55 * s,
+              height: 80 * s,
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
             }}
-            uiText={{
-              value: `${formatTime(roundTimer)}`,
-              fontSize: 42 * s,
-              color: getTimerColor(),
-              textAlign: 'middle-center'
-            }}
-          />
+          >
+            {[
+              { x: -3, y: 0 },
+              { x: 3, y: 0 },
+              { x: 0, y: -3 },
+              { x: 0, y: 3 },
+              { x: -3, y: -1 },
+              { x: -3, y: 1 },
+              { x: 3, y: -1 },
+              { x: 3, y: 1 },
+              { x: -1, y: -3 },
+              { x: 1, y: -3 },
+              { x: -1, y: 3 },
+              { x: 1, y: 3 },
+              { x: -2, y: -2 },
+              { x: 2, y: -2 },
+              { x: -2, y: 2 },
+              { x: 2, y: 2 }
+            ].map((offset, index) => (
+              <UiEntity
+                key={`timer-outline-${index}`}
+                uiTransform={{
+                  width: '100%',
+                  height: '100%',
+                  positionType: 'absolute',
+                  position: { left: offset.x * s, top: offset.y * s },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: `${formatTime(roundTimer)}`,
+                  fontSize: 80 * s,
+                  color: Color4.Black(),
+                  textAlign: 'middle-center'
+                }}
+              />
+            ))}
+            <UiEntity
+              uiTransform={{
+                width: '100%',
+                height: '100%',
+                positionType: 'absolute',
+                position: { left: 0, top: 0 },
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              uiText={{
+                value: `${formatTime(roundTimer)}`,
+                fontSize: 80 * s,
+                color: roundTimer <= 60
+                  ? Color4.create(0.6, 0.0, 0.15, 1)
+                  : Color4.White(),
+                textAlign: 'middle-center'
+              }}
+            />
+          </UiEntity>
 
           {/* Speed Multiplier (if active) */}
           {roundSpeedMultiplier > 1 && (
@@ -650,7 +688,7 @@ const GameUI = () => {
               const display = winner.time > 0
                 ? `${winner.time.toFixed(2)}s`
                 : `${winner.height.toFixed(0)}m`
-
+ 
               return (
                 <UiEntity
                   key={`winner-${i}`}
@@ -661,7 +699,7 @@ const GameUI = () => {
                     justifyContent: 'center'
                   }}
                   uiText={{
-                    value: `${medal} ${winner.displayName} - ${display}`,
+                    value: `${medal} ${winner.displayName} - ${display}`, 
                     fontSize: 22 * s,
                     color: i === 0 ? Color4.create(1, 0.84, 0, 1) : Color4.White(),
                     textAlign: 'middle-center'
