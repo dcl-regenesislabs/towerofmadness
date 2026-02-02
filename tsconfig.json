@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "jsx": "react",
     "allowJs": true,
     "strict": true,
     "skipLibCheck": true
