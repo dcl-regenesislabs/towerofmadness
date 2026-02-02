@@ -318,7 +318,9 @@ export async function main() {
 
       knownPlayerWallets.add(wallet)
       const avatarBase = AvatarBase.getOrNull(entity)
-      requestPlayerSnapshot(wallet, avatarBase?.name)
+      requestPlayerSnapshot(wallet, avatarBase?.name).then((ok) => {
+        if (!ok) knownPlayerWallets.delete(wallet)
+      })
     }
   }, undefined, 'snapshot-player-enter-system')
 

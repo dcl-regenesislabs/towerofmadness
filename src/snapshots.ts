@@ -17,8 +17,8 @@ const CATALYST_FALLBACKS = [
 ]
 const DEFAULT_AVATAR_IMAGE = 'https://decentraland.org/images/male.png'
 
-export async function requestPlayerSnapshot(wallet: string, displayName?: string) {
-  if (!wallet) return
+export async function requestPlayerSnapshot(wallet: string, displayName?: string): Promise<boolean> {
+  if (!wallet) return false
 
   const normalized = wallet.toLowerCase()
   let entry = snapshotByWallet.get(normalized)
@@ -42,7 +42,7 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
     entry.displayName = displayName
   }
 
-  if (!isNew && entry.status === 'loading') return
+  if (!isNew && entry.status === 'loading') return false
 
   entry.status = 'loading'
   entry.lastUpdated = Date.now()
@@ -52,10 +52,12 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
     entry.snapshotUrl = snapshotUrl
     entry.status = snapshotUrl ? 'ok' : 'missing'
     entry.lastUpdated = Date.now()
+    return true
   } catch (err) {
     entry.status = 'error'
     entry.lastUpdated = Date.now()
     console.log('[Snapshots] Failed to fetch snapshot', err)
+    return false
   }
 }
 
