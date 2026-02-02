@@ -1,6 +1,6 @@
 import ReactEcs, { UiEntity, ReactEcsRenderer } from "@dcl/sdk/react-ecs"
 import { Color4 } from "@dcl/sdk/math"
-import { engine, UiCanvasInformation } from "@dcl/sdk/ecs"
+import { engine, UiCanvasInformation, PlayerIdentityData } from "@dcl/sdk/ecs"
 
 // UI Scaling based on screen resolution (reference: 1920x1080)
 function getScaleUIFactor(): number {
@@ -30,6 +30,7 @@ import {
   towerConfig
 } from "./index"
 import { RoundPhase, getTimeSyncOffset, isTimeSyncReady, getLocalPlayerHeights, formatTime, getTowerChunksFromEntities } from "./multiplayer"
+import { getSnapshots } from "./snapshots"
 
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(GameUI)
@@ -45,8 +46,15 @@ const CHUNK_COLORS: Record<string, Color4> = {
 }
 
 // Tower Progress Bar Component
-const TowerProgressBar = () => {
+const TowerProgressBar = () => { 
   const s = getScaleUIFactor()
+  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
+  const screenWidth = uiCanvasInfo?.width ?? 1920 * s
+  const snapshots = getSnapshots()
+  const snapshotByWallet = new Map(
+    snapshots.map((entry) => [entry.wallet.toLowerCase(), entry.snapshotUrl])
+  )
+  const localWallet = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
 
   // Get chunks directly from synced entities for accurate colors
   const chunkIds = getTowerChunksFromEntities()
@@ -56,137 +64,166 @@ const TowerProgressBar = () => {
     return null
   }
 
-  const BAR_HEIGHT = 400 * s
-  const BAR_WIDTH = 20 * s
-  const PLAYER_BAR_WIDTH = 80 * s
+  const BAR_WIDTH = 980 * s
+  const BAR_HEIGHT = 52 * s
+  const PLAYER_MARKER_SIZE = 44 * s
 
   // Use towerConfig for total height, fall back to calculation
   const totalHeight = towerConfig?.totalHeight || (chunkIds.length * 10.821)
 
   // Calculate segment height for each chunk
-  const segmentHeight = BAR_HEIGHT / chunkIds.length
+  const segmentWidth = (BAR_WIDTH - 4 * s) / chunkIds.length
 
   // Calculate player position as percentage of tower
-  const getPlayerYPosition = (height: number): number => {
+  const getPlayerXPosition = (height: number): number => {
     const clampedHeight = Math.max(0, Math.min(height, totalHeight))
-    return (clampedHeight / totalHeight) * BAR_HEIGHT
+    return (clampedHeight / totalHeight) * BAR_WIDTH
   }
 
   return (
     <UiEntity
       uiTransform={{
         width: BAR_WIDTH,
-        height: BAR_HEIGHT + 40 * s,
+        height: BAR_HEIGHT,
         positionType: 'absolute',
-        position: { left: 120 * s, bottom: 120 * s },
-        flexDirection: 'row',
-        alignItems: 'flex-end'
+        position: { top: 130 * s, left: (screenWidth - BAR_WIDTH) / 2 },
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start'
       }}
     >
       {/* Tower bar */}
       <UiEntity
-        uiTransform={{
+        uiTransform={{ 
           width: BAR_WIDTH,
           height: BAR_HEIGHT,
-          flexDirection: 'column',
-          alignItems: 'center'
+          flexDirection: 'row',
+          alignItems: 'center',
+          padding: { left: 1 * s, right: 1 * s, top: 2 * s, bottom: 2 * s }
         }}
         uiBackground={{
-          color: Color4.create(0.1, 0.1, 0.1, 0.9)
+          color: Color4.create(0, 0, 0, 0) 
         }}
       >
-        {/* Chunk segments */}
-        {[...chunkIds].reverse().map((chunkId, index) => {
-          const color = CHUNK_COLORS[chunkId] || Color4.Gray()
-          return (
+        <UiEntity
+          uiTransform={{
+            width: BAR_WIDTH - 4 * s,
+            height: BAR_HEIGHT - 4 * s,
+            flexDirection: 'row',
+            alignItems: 'center',
+            borderRadius: (BAR_HEIGHT - 4 * s) / 2,
+            overflow: 'hidden'
+          }}
+          uiBackground={{
+            color: Color4.create(0.1, 0.1, 0.1, 0.9)
+          }}
+        >
+          {/* Chunk segments */}
+          {[...chunkIds].map((chunkId, index) => {
+            const color = CHUNK_COLORS[chunkId] || Color4.Gray()
+            return (
             <UiEntity
               key={`chunk-${index}`}
               uiTransform={{
-                width: BAR_WIDTH,
-                height: segmentHeight
+                width: segmentWidth,
+                height: BAR_HEIGHT - 4 * s
               }}
               uiBackground={{
                 color: color
               }}
             />
-          )
-        })}
+            )
+          })}
+        </UiEntity>
       </UiEntity>
 
-      {/* Player indicators area */}
+      {/* Border overlay */}
       <UiEntity
         uiTransform={{
-          width: PLAYER_BAR_WIDTH,
+          width: BAR_WIDTH,
           height: BAR_HEIGHT,
-          positionType: 'relative'
+          positionType: 'absolute',
+          position: { top: 0, left: 0 },
+          borderColor: Color4.Black(),
+          borderWidth: 3 * s,
+          borderRadius: BAR_HEIGHT / 2
         }}
-      >
-        {/* Current player indicator */}
-        <UiEntity
-          uiTransform={{
-            width: PLAYER_BAR_WIDTH,
-            height: 20 * s,
-            positionType: 'absolute',
-            position: { bottom: getPlayerYPosition(playerHeight), left: 5 * s }
-          }}
-        >
+        uiBackground={{
+          color: Color4.create(0, 0, 0, 0)
+        }}
+      />
+
+      {/* Player indicators inside bar */}
+      {getLocalPlayerHeights(false).slice(0, 12).map((player, index) => {
+        const xPos = getPlayerXPosition(player.height)
+        const wallet = player.address?.toLowerCase() ?? ''
+        const snapshotUrl = snapshotByWallet.get(wallet) ?? null
+        const isLocal = wallet && wallet === localWallet
+
+        return (
           <UiEntity
+            key={`player-${index}`}
             uiTransform={{
-              width: PLAYER_BAR_WIDTH - 5 * s,
-              height: 18 * s,
-              alignItems: 'center',
-              justifyContent: 'center'
+              width: PLAYER_MARKER_SIZE,
+              height: PLAYER_MARKER_SIZE,
+              positionType: 'absolute',
+              position: {
+                left: Math.max(0, Math.min(BAR_WIDTH - PLAYER_MARKER_SIZE, xPos)),
+                top: (BAR_HEIGHT - PLAYER_MARKER_SIZE) / 2
+              }
             }}
             uiBackground={{
-              color: Color4.create(0.2, 0.8, 0.2, 0.9)
+              color: Color4.create(1, 1, 1, 0)
             }}
-            uiText={{
-              value: 'YOU',
-              fontSize: 10 * s,
-              color: Color4.White(),
-              textAlign: 'middle-center'
-            }}
-          />
-        </UiEntity>
-
-        {/* Other players */}
-        {getLocalPlayerHeights(true).slice(0, 10).map((player, index) => {
-          const yPos = getPlayerYPosition(player.height)
-          const name = player.displayName.length > 6
-            ? player.displayName.substring(0, 6) + '..'
-            : player.displayName
-
-          return (
+          >
             <UiEntity
-              key={`player-${index}`}
               uiTransform={{
-                width: PLAYER_BAR_WIDTH,
-                height: 16 * s,
+                width: PLAYER_MARKER_SIZE - 4 * s,
+                height: PLAYER_MARKER_SIZE - 4 * s,
                 positionType: 'absolute',
-                position: { bottom: yPos, left: 5 * s }
+                position: { left: 2 * s, top: 2 * s }
               }}
-            >
+              uiBackground={
+                snapshotUrl
+                  ? {
+                      color: Color4.White(),
+                      texture: { src: snapshotUrl },
+                      textureMode: 'stretch'
+                    }
+                  : { color: Color4.create(0.2, 0.2, 0.2, 0.9) }
+              }
+            />
+
+            {isLocal && (
               <UiEntity
                 uiTransform={{
-                  width: PLAYER_BAR_WIDTH - 5 * s,
-                  height: 14 * s,
-                  alignItems: 'center',
-                  justifyContent: 'center'
+                  width: 4 * s,
+                  height: BAR_HEIGHT + 8 * s,
+                  positionType: 'absolute',
+                  position: { left: PLAYER_MARKER_SIZE + 2 * s, top: -(BAR_HEIGHT / 2) + (PLAYER_MARKER_SIZE / 2) - 4 * s }
                 }}
                 uiBackground={{
-                  color: Color4.create(0.3, 0.5, 0.8, 0.8)
+                  color: Color4.White()
                 }}
-                uiText={{
-                  value: name,
-                  fontSize: 9 * s,
-                  color: Color4.White(),
-                  textAlign: 'middle-center'
-                }}
-              />
-            </UiEntity>
-          )
-        })}
-      </UiEntity>
+              >
+                <UiEntity
+                  uiTransform={{
+                    width: 4 * s,
+                    height: BAR_HEIGHT + 8 * s,
+                    positionType: 'absolute',
+                    position: { left: 0, top: 0 },
+                    borderColor: Color4.Black(),
+                    borderWidth: 1 * s
+                  }}
+                  uiBackground={{
+                    color: Color4.create(0, 0, 0, 0)
+                  }}
+                />
+              </UiEntity>
+            )}
+          </UiEntity>
+        )
+      })}
     </UiEntity>
   )
 }
@@ -374,7 +411,7 @@ const GameUI = () => {
           width: '100%',
           height: 120 * s,
           positionType: 'absolute',
-          position: { top: 115 * s, left: 0 },
+          position: { top: 185 * s, left: 0 },
           alignItems: 'center',
           justifyContent: 'center'
         }}
@@ -767,7 +804,7 @@ const GameUI = () => {
         </UiEntity>
       )}
 
-      {/* Tower Progress Bar - Right Side */}
+      {/* Tower Progress Bar - Top Center */}
       <TowerProgressBar />
 
       {/* NTP Time Sync Debug - Bottom Left */}
