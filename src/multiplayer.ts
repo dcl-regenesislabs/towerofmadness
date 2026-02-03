@@ -46,6 +46,14 @@ export function setupClient() {
       onPlayerFinishedCallback(data.displayName, data.time, data.finishOrder)
     }
   })
+
+  room.onMessage('teleportWarning', (data) => {
+    const localIdentity = PlayerIdentityData.getOrNull(engine.PlayerEntity)
+    if (!localIdentity?.address) return
+    if (localIdentity.address.toLowerCase() !== data.address.toLowerCase()) return
+
+    console.log(`[AntiCheat] Teleport warning (${data.strikes}/2).`)
+  })
 }
 
 export function onPlayerFinished(callback: (displayName: string, time: number, finishOrder: number) => void) {
