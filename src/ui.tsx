@@ -644,6 +644,70 @@ const GameUI = () => {
         </UiEntity>
       )}
 
+      {/* ALL TIME HIGH - Right Side */}
+      {leaderboard.length > 0 && (
+        <UiEntity
+          uiTransform={{
+            width: 230 * s,
+            height: Math.min(200 * s, (45 + Math.min(3, leaderboard.length) * 28) * s),
+            positionType: 'absolute',
+            position: { top: '35%', right: 120 * s },
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start',
+            flexDirection: 'column'
+          }}
+          uiBackground={{
+            color: Color4.create(0, 0, 0, 0.85)
+          }}
+        >
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              height: 35 * s,
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            uiText={{
+              value: 'ALL TIME HIGH',
+              fontSize: 16 * s,
+              color: Color4.Yellow(),
+              textAlign: 'middle-center'
+            }}
+          />
+
+          {leaderboard.slice(0, 3).map((player, index) => {
+            const medal = index === 0 ? '1.' : index === 1 ? '2.' : '3.'
+            const name = player.displayName.length > 10
+              ? player.displayName.substring(0, 10) + '..'
+              : player.displayName
+
+            const hasFinished = player.allTimeFinishCount > 0
+            const statsDisplay = hasFinished
+              ? `${player.allTimeBestTime.toFixed(1)}s (${player.allTimeBestHeight.toFixed(0)}m)`
+              : `${player.allTimeBestHeight.toFixed(0)}m`
+
+            return (
+              <UiEntity
+                key={`alltime-${index}`}
+                uiTransform={{
+                  width: '100%',
+                  height: 26 * s,
+                  alignItems: 'center',
+                  justifyContent: 'flex-start',
+                  margin: { left: 8 * s }
+                }}
+                uiText={{
+                  value: `${medal} ${name} ${statsDisplay}`,
+                  fontSize: 13 * s,
+                  color: hasFinished ? Color4.Green() : Color4.White(),
+                  textAlign: 'middle-left'
+                }}
+              />
+            )
+          })}
+        </UiEntity>
+      )}
+
       {/* WINNERS DISPLAY - Center (When round ends) */}
       {showWinners && (
         <UiEntity
