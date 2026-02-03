@@ -342,8 +342,11 @@ export async function main() {
   }
 
   const triggerStart = engine.getEntityOrNullByName(EntityNames.TriggerStart)
-  const triggerEnd = engine.getEntityOrNullByName(EntityNames.TriggerEnd)
+  const triggerEnd = engine.addEntity()
   const triggerDeath = engine.getEntityOrNullByName(EntityNames.TriggerDeath)
+
+  Transform.create(triggerEnd, { position: Vector3.create(40, 0, 40) })
+  console.log('[Game] TriggerEnd created by code')
 
   setupTrigger(triggerStart)
   setupTrigger(triggerEnd)
