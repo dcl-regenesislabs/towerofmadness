@@ -739,49 +739,128 @@ const GameUI = () => {
             justifyContent: 'center'
           }}
         >
-          <UiEntity
-            uiTransform={{
-              width: (attemptResult === 'DEATH' ? 500 : 400) * s,
-              height: (attemptResult === 'DEATH' ? 180 : 120) * s,
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column'
-            }}
-            uiBackground={{
-              color: attemptResult === 'WIN'
-                ? Color4.create(0, 0.6, 0, 0.95)
-                : Color4.create(0.7, 0, 0, 0.95)
-            }}
-          >
+          {attemptResult === 'WIN' ? (
             <UiEntity
               uiTransform={{
-                width: '100%',
-                height: 60 * s,
+                width: 320 * s,
+                height: 180 * s,
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flexDirection: 'column'
               }}
-              uiText={{
-                value: attemptResult === 'WIN' ? 'FINISHED!' : 'DEATH!',
-                fontSize: 40 * s,
-                color: Color4.White(),
-                textAlign: 'middle-center'
-              }}
-            />
+            >
+              <UiEntity
+                uiTransform={{
+                  width: 100 * s,
+                  height: 100 * s,
+                  positionType: 'absolute',
+                  position: { left: 110 * s, top: 0 }
+                }}
+                uiBackground={{
+                  color: Color4.create(1, 1, 1, 1),
+                  texture: { src: 'assets/images/emoji_win.png' },
+                  textureMode: 'stretch'
+                }}
+              />
+              <UiEntity
+                uiTransform={{
+                  width: 100 * s,
+                  height: 100 * s
+                }}
+                uiBackground={{
+                  color: Color4.create(0, 0, 0, 0)
+                }}
+              />
+
+              {/* CONGRATS text with black stroke */}
+              {[
+                { x: -1, y: 0 },
+                { x: 1, y: 0 },
+                { x: 0, y: -1 },
+                { x: 0, y: 1 },
+                { x: -1, y: -1 },
+                { x: 1, y: -1 },
+                { x: -1, y: 1 },
+                { x: 1, y: 1 }
+              ].map((offset, index) => (
+                <UiEntity
+                  key={`win-text-stroke-${index}`}
+                  uiTransform={{
+                    width: 300 * s,
+                    height: 60 * s,
+                    positionType: 'absolute',
+                    position: { top: 110 * s + offset.y * s, left: 10 * s + offset.x * s },
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  uiText={{
+                    value: 'CONGRATS\nYOU MADE IT!',
+                    fontSize: 26 * s,
+                    color: Color4.Black(),
+                    textAlign: 'middle-center',
+                    font: 'sans-serif'
+                  }}
+                />
+              ))}
+              <UiEntity
+                uiTransform={{
+                  width: 300 * s,
+                  height: 60 * s,
+                  positionType: 'absolute',
+                  position: { top: 110 * s, left: 10 * s },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: 'CONGRATS\nYOU MADE IT!',
+                  fontSize: 26 * s,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+            </UiEntity>
+          ) : (
             <UiEntity
               uiTransform={{
-                width: '100%',
-                height: 40 * s,
+                width: 500 * s,
+                height: 180 * s,
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flexDirection: 'column'
               }}
-              uiText={{
-                value: resultMessage,
-                fontSize: 18 * s,
-                color: Color4.White(),
-                textAlign: 'middle-center'
+              uiBackground={{
+                color: Color4.create(0.7, 0, 0, 0.95)
               }}
-            />
-            {attemptResult === 'DEATH' && (
+            >
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  height: 60 * s,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: 'DEATH!',
+                  fontSize: 40 * s,
+                  color: Color4.White(),
+                  textAlign: 'middle-center'
+                }}
+              />
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  height: 40 * s,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultMessage,
+                  fontSize: 18 * s,
+                  color: Color4.White(),
+                  textAlign: 'middle-center'
+                }}
+              />
               <UiEntity
                 uiTransform={{
                   width: '100%',
@@ -796,8 +875,8 @@ const GameUI = () => {
                   textAlign: 'middle-center'
                 }}
               />
-            )}
-          </UiEntity>
+            </UiEntity>
+          )}
         </UiEntity>
       )}
 
