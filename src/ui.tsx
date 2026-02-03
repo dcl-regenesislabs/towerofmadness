@@ -20,6 +20,7 @@ import {
   attemptResult,
   resultMessage,
   resultTimestamp,
+  startMessageTimestamp,
   roundPhase,
   roundTimer,
   roundSpeedMultiplier,
@@ -230,6 +231,11 @@ const TowerProgressBar = () => {
 
 const GameUI = () => {
   const s = getScaleUIFactor()
+  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
+  const screenWidth = uiCanvasInfo?.width ?? 1920 * s
+  const playerInfoWidth = 260 * s
+  const startMessageWidth = 260 * s
+  const startMessageGap = 96 * s
 
   // Format time with milliseconds
   const formatTimeMs = (seconds: number): string => {
@@ -245,6 +251,8 @@ const GameUI = () => {
   // Show result for 5 seconds
   const timeSinceResult = resultTimestamp > 0 ? (Date.now() - resultTimestamp) / 1000 : 999
   const showResult = attemptResult && timeSinceResult < 5
+  const timeSinceStartMessage = startMessageTimestamp > 0 ? (Date.now() - startMessageTimestamp) / 1000 : 999
+  const showStartMessage = attemptState === AttemptState.IN_PROGRESS && timeSinceStartMessage < 4
 
   // Show winners display
   const showWinners = (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && roundWinners.length > 0
@@ -844,6 +852,84 @@ const GameUI = () => {
 
       {/* Tower Progress Bar - Top Center */}
       <TowerProgressBar />
+
+      {/* START MESSAGE - Below Progress Bar Left */}
+      {showStartMessage && (
+        <UiEntity
+          uiTransform={{
+            width: startMessageWidth,
+            height: 140 * s,
+            positionType: 'absolute',
+            position: {
+              top: 205 * s,
+              left: screenWidth / 2 - playerInfoWidth / 2 - startMessageGap - startMessageWidth
+            },
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'column'
+          }}
+        >
+          <UiEntity
+            uiTransform={{
+              width: 85 * s,
+              height: 85 * s
+            }}
+            uiBackground={{
+              color: Color4.White(),
+              texture: { src: 'assets/images/emoji_start.png' },
+              textureMode: 'stretch'
+            }}
+          />
+
+          {/* Good Luck text with black stroke */}
+          {[
+            { x: -1, y: 0 },
+            { x: 1, y: 0 },
+            { x: 0, y: -1 },
+            { x: 0, y: 1 },
+            { x: -1, y: -1 },
+            { x: 1, y: -1 },
+            { x: -1, y: 1 },
+            { x: 1, y: 1 }
+          ].map((offset, index) => (
+            <UiEntity
+              key={`start-text-stroke-${index}`}
+              uiTransform={{
+                width: 240 * s,
+                height: 36 * s,
+                positionType: 'absolute',
+                position: { top: 108 * s + offset.y * s, left: 10 * s + offset.x * s },
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              uiText={{
+                value: 'Good Luck!',
+                fontSize: 24 * s,
+                color: Color4.Black(),
+                textAlign: 'middle-center',
+                font: 'sans-serif'
+              }}
+            />
+          ))}
+          <UiEntity
+            uiTransform={{
+              width: 240 * s,
+              height: 36 * s,
+              positionType: 'absolute',
+              position: { top: 108 * s, left: 10 * s },
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            uiText={{
+              value: 'Good Luck!',
+              fontSize: 24 * s,
+              color: Color4.White(),
+              textAlign: 'middle-center',
+              font: 'sans-serif'
+            }}
+          />
+        </UiEntity>
+      )}
 
       {/* NTP Time Sync Debug - Bottom Left */}
       <UiEntity
