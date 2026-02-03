@@ -245,6 +245,10 @@ const GameUI = () => {
   // Show result for 5 seconds
   const timeSinceResult = resultTimestamp > 0 ? (Date.now() - resultTimestamp) / 1000 : 999
   const showResult = attemptResult && timeSinceResult < 5
+  const isDeathResult = attemptResult === 'DEATH'
+  const deathShakeActive = isDeathResult && timeSinceResult < 5
+  const deathShakeX = deathShakeActive ? Math.sin(timeSinceResult * 24) * 6 * s : 0
+  const deathShakeY = deathShakeActive ? Math.cos(timeSinceResult * 28) * 6 * s : 0
 
   // Show winners display
   const showWinners = (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && roundWinners.length > 0
@@ -739,65 +743,134 @@ const GameUI = () => {
             justifyContent: 'center'
           }}
         >
-          <UiEntity
-            uiTransform={{
-              width: (attemptResult === 'DEATH' ? 500 : 400) * s,
-              height: (attemptResult === 'DEATH' ? 180 : 120) * s,
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column'
-            }}
-            uiBackground={{
-              color: attemptResult === 'WIN'
-                ? Color4.create(0, 0.6, 0, 0.95)
-                : Color4.create(0.7, 0, 0, 0.95)
-            }}
-          >
+          {attemptResult === 'WIN' && (
             <UiEntity
               uiTransform={{
-                width: '100%',
-                height: 60 * s,
+                width: 400 * s,
+                height: 120 * s,
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flexDirection: 'column'
               }}
-              uiText={{
-                value: attemptResult === 'WIN' ? 'FINISHED!' : 'DEATH!',
-                fontSize: 40 * s,
-                color: Color4.White(),
-                textAlign: 'middle-center'
+              uiBackground={{
+                color: Color4.create(0, 0.6, 0, 0.95)
               }}
-            />
-            <UiEntity
-              uiTransform={{
-                width: '100%',
-                height: 40 * s,
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              uiText={{
-                value: resultMessage,
-                fontSize: 18 * s,
-                color: Color4.White(),
-                textAlign: 'middle-center'
-              }}
-            />
-            {attemptResult === 'DEATH' && (
+            >
               <UiEntity
                 uiTransform={{
                   width: '100%',
-                  height: 35 * s,
+                  height: 60 * s,
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
                 uiText={{
-                  value: 'Go to TriggerStart to retry!',
-                  fontSize: 16 * s,
-                  color: Color4.Yellow(),
-                  textAlign: 'middle-center'
+                  value: 'FINISHED!',
+                  fontSize: 40 * s,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
                 }}
               />
-            )}
-          </UiEntity>
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  height: 40 * s,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultMessage,
+                  fontSize: 18 * s,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+            </UiEntity>
+          )}
+
+          {attemptResult === 'DEATH' && (
+            <UiEntity
+              uiTransform={{
+                width: 320 * s,
+                height: 180 * s,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column'
+              }}
+            >
+              <UiEntity
+                uiTransform={{
+                  width: 100 * s,
+                  height: 100 * s,
+                  positionType: 'absolute',
+                  position: { left: 110 * s + deathShakeX, top: deathShakeY }
+                }}
+                uiBackground={{
+                  color: Color4.create(1, 1, 1, 1),
+                  texture: { src: 'assets/images/emoji_try.png' },
+                  textureMode: 'stretch'
+                }}
+              />
+              <UiEntity
+                uiTransform={{
+                  width: 100 * s,
+                  height: 100 * s
+                }}
+                uiBackground={{
+                  color: Color4.create(0, 0, 0, 0)
+                }}
+              />
+
+              {/* OOPS TRY AGAIN text with black stroke */}
+              {[
+                { x: -1, y: 0 },
+                { x: 1, y: 0 },
+                { x: 0, y: -1 },
+                { x: 0, y: 1 },
+                { x: -1, y: -1 },
+                { x: 1, y: -1 },
+                { x: -1, y: 1 },
+                { x: 1, y: 1 }
+              ].map((offset, index) => (
+                <UiEntity
+                  key={`death-text-stroke-${index}`}
+                  uiTransform={{
+                    width: 300 * s,
+                    height: 40 * s,
+                    positionType: 'absolute',
+                    position: { top: 110 * s + offset.y * s, left: 10 * s + offset.x * s },
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  uiText={{
+                    value: 'OOPS TRY AGAIN',
+                    fontSize: 28 * s,
+                    color: Color4.Black(),
+                    textAlign: 'middle-center',
+                    font: 'sans-serif'
+                  }}
+                />
+              ))}
+              <UiEntity
+                uiTransform={{
+                  width: 300 * s,
+                  height: 40 * s,
+                  positionType: 'absolute',
+                  position: { top: 110 * s, left: 10 * s },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: 'OOPS TRY AGAIN',
+                  fontSize: 28 * s,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+            </UiEntity>
+          )}
         </UiEntity>
       )}
 
