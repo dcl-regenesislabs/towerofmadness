@@ -869,6 +869,94 @@ const GameUI = () => {
                   font: 'sans-serif'
                 }}
               />
+              <UiEntity
+                uiTransform={{
+                  width: 320 * s,
+                  height: 32 * s,
+                  positionType: 'absolute',
+                  position: { top: 150 * s, left: 0 },
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <UiEntity
+                  uiTransform={{
+                    width: 26 * s,
+                    height: 26 * s
+                  }}
+                  uiBackground={{
+                    color: Color4.White(),
+                    texture: { src: 'assets/images/dead.png' },
+                    textureMode: 'stretch'
+                  }}
+                />
+                <UiEntity
+                  uiTransform={{
+                    width: 2 * s,
+                    height: 1
+                  }}
+                  uiBackground={{
+                    color: Color4.create(0, 0, 0, 0)
+                  }}
+                />
+                <UiEntity
+                  uiTransform={{
+                    width: 140 * s,
+                    height: 28 * s,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    positionType: 'relative'
+                  }}
+                >
+                  {[
+                    { x: -1, y: 0 },
+                    { x: 1, y: 0 },
+                    { x: 0, y: -1 },
+                    { x: 0, y: 1 },
+                    { x: -1, y: -1 },
+                    { x: 1, y: -1 },
+                    { x: -1, y: 1 },
+                    { x: 1, y: 1 }
+                  ].map((offset, index) => (
+                    <UiEntity
+                      key={`death-at-stroke-${index}`}
+                      uiTransform={{
+                        width: '100%',
+                        height: '100%',
+                        positionType: 'absolute',
+                        position: { left: offset.x * s, top: offset.y * s },
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      uiText={{
+                        value: `DEATH AT ${playerMaxHeight.toFixed(1)}m`,
+                        fontSize: 15 * s,
+                        color: Color4.Black(),
+                        textAlign: 'middle-center',
+                        font: 'sans-serif'
+                      }}
+                    />
+                  ))}
+                  <UiEntity
+                    uiTransform={{
+                      width: '100%',
+                      height: '100%',
+                      positionType: 'absolute',
+                      position: { left: 0, top: 0 },
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    uiText={{
+                      value: `DEATH AT ${playerMaxHeight.toFixed(1)}m`,
+                      fontSize: 15 * s,
+                      color: Color4.White(),
+                      textAlign: 'middle-center',
+                      font: 'sans-serif'
+                    }}
+                  />
+                </UiEntity>
+              </UiEntity>
             </UiEntity>
           )}
         </UiEntity>
