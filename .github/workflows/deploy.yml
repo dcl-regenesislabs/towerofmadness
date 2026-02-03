@@ -23,7 +23,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy to ${{ env.DEPLOY_ENV }}
+    name: Deploy
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
