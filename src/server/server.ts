@@ -104,8 +104,14 @@ export function server() {
       if (dtSeconds > 0 && (deltaY > maxAllowedDelta || deltaY > HARD_MAX_DELTA)) {
         playerData.teleportStrikes += 1
         console.log(
-          `[Server] Teleport suspicious: ${playerData.displayName} deltaY=${deltaY.toFixed(2)}m dt=${rawDtSeconds.toFixed(2)}s`
+          `[Server] Teleport suspicious: ${playerData.displayName} deltaY=${deltaY.toFixed(2)}m dt=${rawDtSeconds.toFixed(2)}s strikes=${playerData.teleportStrikes}`
         )
+        if (playerData.teleportStrikes === 1) {
+          room.send('teleportWarning', {
+            address: identityData.address,
+            strikes: playerData.teleportStrikes
+          })
+        }
         playerData.lastHeight = height
         playerData.lastHeightTime = now
         continue
@@ -212,7 +218,7 @@ function setupMessageHandlers(gameState: GameState) {
     }
 
     // Validate: no teleporting detected during attempt
-    if (player.teleportStrikes > 0) {
+    if (player.teleportStrikes > 1) {
       console.log(`[Server] Rejected finish from ${player.displayName}: teleport detected (${player.teleportStrikes})`)
       return
     }

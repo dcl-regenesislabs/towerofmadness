@@ -19,6 +19,12 @@ export const Messages = {
     finishOrder: Schemas.Number,
     speedMultiplier: Schemas.Number,
     time: Schemas.Number // Server-calculated finish time
+  }),
+
+  // Server -> Client: Teleport warning (client filters by address)
+  teleportWarning: Schemas.Map({
+    address: Schemas.String,
+    strikes: Schemas.Number
   })
 }
 
