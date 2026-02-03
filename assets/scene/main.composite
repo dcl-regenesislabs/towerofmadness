@@ -97,16 +97,16 @@
               "y": -4.601698254218245e-13,
               "z": 57.45470428466797
             },
+            "scale": {
+              "x": 1.7999999523162842,
+              "y": 1.7999999523162842,
+              "z": 1.7999999523162842
+            },
             "rotation": {
               "x": 0,
               "y": 0.9914448857307434,
               "z": 0,
               "w": 0.13052618503570557
-            },
-            "scale": {
-              "x": 1.7999999523162842,
-              "y": 1.7999999523162842,
-              "z": 1.7999999523162842
             },
             "parent": 0
           }
@@ -128,6 +128,27 @@
               "y": 0,
               "z": 0,
               "w": 1
+            },
+            "parent": 0
+          }
+        },
+        "515": {
+          "json": {
+            "position": {
+              "x": 47,
+              "y": 0,
+              "z": 61
+            },
+            "rotation": {
+              "x": 0,
+              "y": -0.9238795042037964,
+              "z": 0,
+              "w": 0.3826834261417389
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
             },
             "parent": 0
           }
@@ -282,6 +303,13 @@
             "invisibleMeshesCollisionMask": 0
           }
         },
+        "515": {
+          "json": {
+            "src": "assets/scene/Models/Podium01/Podium01.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
         "586": {
           "json": {
             "src": "assets/asset-packs/trigger_area/trigger_area.glb",
@@ -333,6 +361,11 @@
         "514": {
           "json": {
             "value": "Ambient Sound"
+          }
+        },
+        "515": {
+          "json": {
+            "value": "Podium01.glb"
           }
         },
         "586": {
@@ -425,9 +458,9 @@
         "serializationType": "map"
       },
       "data": {
-        "512": {
+        "0": {
           "json": {
-            "gizmo": 3
+            "gizmo": 2
           }
         }
       }
@@ -1446,7 +1479,8 @@
                   600,
                   602,
                   514,
-                  512
+                  512,
+                  515
                 ]
               },
               {
@@ -1479,6 +1513,10 @@
               },
               {
                 "entity": 512,
+                "children": []
+              },
+              {
+                "entity": 515,
                 "children": []
               }
             ]
@@ -1517,8 +1555,32 @@
           "json": {
             "value": [
               {
+                "type": "player_face_item",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "freeze_player",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "unfreeze_player",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "change_collisions",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"visibleCollisions\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"invisibleCollisions\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}}},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "change_skybox",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"time\":{\"type\":\"integer\",\"serializationType\":\"int32\"},\"direction\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}}},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "reset_skybox",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
+              },
+              {
                 "type": "play_animation",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"animation\":{\"type\":\"string\",\"serializationType\":\"utf8-string\"},\"loop\":{\"type\":\"boolean\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"boolean\",\"serializationType\":\"boolean\"}},\"shouldReset\":{\"type\":\"boolean\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"boolean\",\"serializationType\":\"boolean\"}}},\"serializationType\":\"map\"}"
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"animation\":{\"type\":\"string\",\"serializationType\":\"utf8-string\"},\"loop\":{\"type\":\"boolean\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"boolean\",\"serializationType\":\"boolean\"}}},\"serializationType\":\"map\"}"
               },
               {
                 "type": "stop_animation",
@@ -1582,7 +1644,7 @@
               },
               {
                 "type": "teleport_player",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"to_coordinates\",\"to_world\"],\"default\":\"to_coordinates\",\"serializationType\":\"enum-string\",\"enumObject\":{\"TO_COORDINATES\":\"to_coordinates\",\"TO_WORLD\":\"to_world\"}},\"x\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"y\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"realm\":{\"type\":\"string\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"string\",\"serializationType\":\"utf8-string\"}}},\"serializationType\":\"map\"}"
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"integer\",\"serializationType\":\"int32\"},\"y\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"serializationType\":\"map\"}"
               },
               {
                 "type": "move_player",
@@ -1646,10 +1708,6 @@
               },
               {
                 "type": "move_player_here",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "player_face_item",
                 "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
               },
               {
@@ -1731,26 +1789,6 @@
               {
                 "type": "slide_texture",
                 "jsonSchema": "{\"type\":\"object\",\"properties\":{\"direction\":{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\",\"serializationType\":\"float32\"},\"y\":{\"type\":\"number\",\"serializationType\":\"float32\"}},\"serializationType\":\"map\"},\"speed\":{\"type\":\"number\",\"serializationType\":\"float32\"},\"movementType\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"enum\":[0,1],\"default\":0,\"serializationType\":\"enum-int\",\"enumObject\":{\"0\":\"TMT_OFFSET\",\"1\":\"TMT_TILING\",\"TMT_OFFSET\":0,\"TMT_TILING\":1}}},\"duration\":{\"type\":\"number\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"number\",\"serializationType\":\"float32\"}}},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "freeze_player",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "unfreeze_player",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "change_collisions",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"visibleCollisions\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"invisibleCollisions\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}}},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "change_skybox",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"time\":{\"type\":\"integer\",\"serializationType\":\"int32\"},\"direction\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}}},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "reset_skybox",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
               }
             ]
           }
@@ -2116,6 +2154,9 @@
         "514": {
           "json": {}
         },
+        "515": {
+          "json": {}
+        },
         "586": {
           "json": {}
         },
@@ -2201,7 +2242,6 @@
                     "core::VisibilityComponent",
                     "core::LightSource",
                     "core::GltfNodeModifiers",
-                    "core::VirtualCamera",
                     "inspector::Selection",
                     "inspector::SceneMetadata-v2",
                     "inspector::Nodes",
@@ -2248,7 +2288,6 @@
                     "VISIBILITY_COMPONENT": "core::VisibilityComponent",
                     "LIGHT_SOURCE": "core::LightSource",
                     "GLTF_NODE_MODIFIERS": "core::GltfNodeModifiers",
-                    "VIRTUAL_CAMERA": "core::VirtualCamera",
                     "Selection": "inspector::Selection",
                     "Scene": "inspector::SceneMetadata-v2",
                     "Nodes": "inspector::Nodes",

@@ -4,12 +4,12 @@ import { getPlayer } from '@dcl/sdk/players'
 import type { WinnerEntry } from './multiplayer'
 
 const PODIUM_POSITIONS: Vector3[] = [
-  Vector3.create(8, 0.6, 8),
-  Vector3.create(6.5, 0, 8),
-  Vector3.create(9.5, 0, 8)
+  Vector3.create(47.0, 2.25, 61.0), // 1st place
+  Vector3.create(46.0, 1.65, 61.5), // 2nd place
+  Vector3.create(47.75, 1.25, 60.25) // 3rd place
 ]
 
-const PODIUM_ROTATION = Quaternion.fromEulerDegrees(0, 180, 0)
+const PODIUM_ROTATION = Quaternion.fromEulerDegrees(0, 225, 0)
 const SYNC_INTERVAL_SECONDS = 0.75
 const DEFAULT_EXPRESSION_IDS = ['dance', 'clap', 'clap']
 const EMOTE_REPLAY_SECONDS = 4
@@ -26,7 +26,6 @@ type PodiumSlot = {
 
 let initialized = false
 let podiumActive = false
-let previewMode = false
 let elapsedSeconds = 0
 const podiumSlots: PodiumSlot[] = []
 
@@ -40,7 +39,7 @@ export function initPodiumAvatars(): void {
     Transform.create(entity, {
       position: PODIUM_POSITIONS[i],
       rotation: PODIUM_ROTATION,
-      scale: Vector3.One()
+      scale: Vector3.Zero()
     })
     VisibilityComponent.create(entity, { visible: false })
 
@@ -60,7 +59,7 @@ export function initPodiumAvatars(): void {
     elapsedSeconds += dt
 
     for (const slot of podiumSlots) {
-      if (!slot.address && !previewMode) continue
+      if (!slot.address) continue
 
       const needsSync =
         slot.lastSyncedAddress !== slot.address ||
@@ -99,7 +98,6 @@ export function initPodiumAvatars(): void {
 export function showPodiumWinners(winners: WinnerEntry[]): void {
   if (!initialized) initPodiumAvatars()
   podiumActive = true
-  previewMode = false
   const sortedWinners = winners.slice().sort((a, b) => a.rank - b.rank)
 
   for (let i = 0; i < podiumSlots.length; i += 1) {
@@ -113,12 +111,12 @@ export function showPodiumWinners(winners: WinnerEntry[]): void {
     slot.emoteTriggerCounter = 0
 
     VisibilityComponent.getMutable(slot.entity).visible = !!slot.address
+    Transform.getMutable(slot.entity).scale = slot.address ? Vector3.One() : Vector3.Zero()
   }
 }
 
 export function hidePodiumWinners(): void {
   podiumActive = false
-  previewMode = false
   for (const slot of podiumSlots) {
     slot.address = null
     slot.lastSyncedAddress = null
@@ -127,20 +125,6 @@ export function hidePodiumWinners(): void {
     slot.lastEmoteTime = 0
     slot.emoteTriggerCounter = 0
     VisibilityComponent.getMutable(slot.entity).visible = false
-  }
-}
-
-export function enablePodiumPreview(): void {
-  if (!initialized) initPodiumAvatars()
-  podiumActive = true
-  previewMode = true
-  for (const slot of podiumSlots) {
-    slot.address = null
-    slot.lastSyncedAddress = null
-    slot.lastSyncTime = 0
-    slot.emotePlayed = false
-    slot.lastEmoteTime = 0
-    slot.emoteTriggerCounter = 0
-    VisibilityComponent.getMutable(slot.entity).visible = true
+    Transform.getMutable(slot.entity).scale = Vector3.Zero()
   }
 }
