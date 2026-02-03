@@ -36,7 +36,7 @@ import {
   TowerConfig
 } from './multiplayer'
 import { requestPlayerSnapshot } from './snapshots'
-import { initPodiumAvatars, showPodiumWinners, hidePodiumWinners } from './podiumAvatars'
+import { initPodiumAvatars, showPodiumWinners, hidePodiumWinners, enablePodiumPreview } from './podiumAvatars'
 
 // ============================================
 // GAME STATE
@@ -303,6 +303,10 @@ export async function main() {
 
   setupClient()
   initPodiumAvatars()
+  const PODIUM_PREVIEW = true
+  if (PODIUM_PREVIEW) {
+    enablePodiumPreview()
+  }
 
   // Set up callback for when players finish - update our best time if it's us
   onPlayerFinished((displayName, time, _finishOrder) => {

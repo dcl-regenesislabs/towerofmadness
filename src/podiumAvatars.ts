@@ -4,23 +4,29 @@ import { getPlayer } from '@dcl/sdk/players'
 import type { WinnerEntry } from './multiplayer'
 
 const PODIUM_POSITIONS: Vector3[] = [
-  Vector3.create(8, 0, 8),
+  Vector3.create(8, 0.6, 8),
   Vector3.create(6.5, 0, 8),
   Vector3.create(9.5, 0, 8)
 ]
 
 const PODIUM_ROTATION = Quaternion.fromEulerDegrees(0, 180, 0)
 const SYNC_INTERVAL_SECONDS = 0.75
+const DEFAULT_EXPRESSION_IDS = ['dance', 'clap', 'clap']
+const EMOTE_REPLAY_SECONDS = 4
 
 type PodiumSlot = {
   entity: Entity
   address: string | null
   lastSyncedAddress: string | null
   lastSyncTime: number
+  emotePlayed: boolean
+  lastEmoteTime: number
+  emoteTriggerCounter: number
 }
 
 let initialized = false
 let podiumActive = false
+let previewMode = false
 let elapsedSeconds = 0
 const podiumSlots: PodiumSlot[] = []
 
@@ -42,7 +48,10 @@ export function initPodiumAvatars(): void {
       entity,
       address: null,
       lastSyncedAddress: null,
-      lastSyncTime: 0
+      lastSyncTime: 0,
+      emotePlayed: false,
+      lastEmoteTime: 0,
+      emoteTriggerCounter: 0
     })
   }
 
@@ -51,7 +60,7 @@ export function initPodiumAvatars(): void {
     elapsedSeconds += dt
 
     for (const slot of podiumSlots) {
-      if (!slot.address) continue
+      if (!slot.address && !previewMode) continue
 
       const needsSync =
         slot.lastSyncedAddress !== slot.address ||
@@ -59,17 +68,28 @@ export function initPodiumAvatars(): void {
 
       if (!needsSync) continue
 
-      const player = getPlayer({ userId: slot.address })
-      if (!player || !player.wearables || !player.avatar) continue
+      const player = slot.address ? getPlayer({ userId: slot.address }) : null
+      if (slot.address && (!player || !player.wearables || !player.avatar)) continue
 
       const avatar = AvatarShape.getMutable(slot.entity)
-      avatar.wearables = player.wearables.slice()
-      avatar.bodyShape = player.avatar.bodyShapeUrn
-      avatar.eyeColor = player.avatar.eyesColor
-      avatar.skinColor = player.avatar.skinColor
-      avatar.hairColor = player.avatar.hairColor
+      if (player && player.avatar) {
+        avatar.wearables = player.wearables.slice()
+        avatar.bodyShape = player.avatar.bodyShapeUrn
+        avatar.eyeColor = player.avatar.eyesColor
+        avatar.skinColor = player.avatar.skinColor
+        avatar.hairColor = player.avatar.hairColor
+      }
 
       VisibilityComponent.getMutable(slot.entity).visible = true
+
+      const slotIndex = podiumSlots.indexOf(slot)
+      if (slotIndex >= 0 && (elapsedSeconds - slot.lastEmoteTime >= EMOTE_REPLAY_SECONDS)) {
+        slot.emoteTriggerCounter += 1
+        avatar.expressionTriggerId = DEFAULT_EXPRESSION_IDS[slotIndex] || 'clap'
+        avatar.expressionTriggerTimestamp = slot.emoteTriggerCounter
+        slot.emotePlayed = true
+        slot.lastEmoteTime = elapsedSeconds
+      }
       slot.lastSyncedAddress = slot.address
       slot.lastSyncTime = elapsedSeconds
     }
@@ -79,6 +99,7 @@ export function initPodiumAvatars(): void {
 export function showPodiumWinners(winners: WinnerEntry[]): void {
   if (!initialized) initPodiumAvatars()
   podiumActive = true
+  previewMode = false
   const sortedWinners = winners.slice().sort((a, b) => a.rank - b.rank)
 
   for (let i = 0; i < podiumSlots.length; i += 1) {
@@ -87,6 +108,9 @@ export function showPodiumWinners(winners: WinnerEntry[]): void {
     slot.address = winner?.address ? winner.address.toLowerCase() : null
     slot.lastSyncedAddress = null
     slot.lastSyncTime = 0
+    slot.emotePlayed = false
+    slot.lastEmoteTime = 0
+    slot.emoteTriggerCounter = 0
 
     VisibilityComponent.getMutable(slot.entity).visible = !!slot.address
   }
@@ -94,10 +118,29 @@ export function showPodiumWinners(winners: WinnerEntry[]): void {
 
 export function hidePodiumWinners(): void {
   podiumActive = false
+  previewMode = false
   for (const slot of podiumSlots) {
     slot.address = null
     slot.lastSyncedAddress = null
     slot.lastSyncTime = 0
+    slot.emotePlayed = false
+    slot.lastEmoteTime = 0
+    slot.emoteTriggerCounter = 0
     VisibilityComponent.getMutable(slot.entity).visible = false
+  }
+}
+
+export function enablePodiumPreview(): void {
+  if (!initialized) initPodiumAvatars()
+  podiumActive = true
+  previewMode = true
+  for (const slot of podiumSlots) {
+    slot.address = null
+    slot.lastSyncedAddress = null
+    slot.lastSyncTime = 0
+    slot.emotePlayed = false
+    slot.lastEmoteTime = 0
+    slot.emoteTriggerCounter = 0
+    VisibilityComponent.getMutable(slot.entity).visible = true
   }
 }
