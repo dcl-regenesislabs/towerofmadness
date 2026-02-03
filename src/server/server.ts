@@ -6,6 +6,9 @@ import { RoundPhase } from '../shared/schemas'
 
 const ROUND_END_DISPLAY_TIME = 3 // seconds
 const NEW_ROUND_DELAY = 10 // seconds
+const MAX_UP_SPEED = 12 // m/s allowed upward speed before considering teleport
+const HEIGHT_TOLERANCE = 0.5 // m of extra leeway per sample
+const HARD_MAX_DELTA = 20 // m allowed upward jump regardless of sample time
 
 export function server() {
   console.log('[Server] Tower of Madness starting...')
@@ -86,6 +89,37 @@ export function server() {
       if (!player?.position) continue
 
       const height = player.position.y
+      const now = Date.now()
+      if (playerData.lastHeightTime === 0) {
+        playerData.lastHeight = height
+        playerData.lastHeightTime = now
+        continue
+      }
+
+      const rawDtSeconds = (now - playerData.lastHeightTime) / 1000
+      const dtSeconds = Math.min(rawDtSeconds, 0.5)
+      const deltaY = height - playerData.lastHeight
+      const maxAllowedDelta = MAX_UP_SPEED * dtSeconds + HEIGHT_TOLERANCE
+
+      if (dtSeconds > 0 && (deltaY > maxAllowedDelta || deltaY > HARD_MAX_DELTA)) {
+        playerData.teleportStrikes += 1
+        console.log(
+          `[Server] Teleport suspicious: ${playerData.displayName} deltaY=${deltaY.toFixed(2)}m dt=${rawDtSeconds.toFixed(2)}s strikes=${playerData.teleportStrikes}`
+        )
+        if (playerData.teleportStrikes === 1) {
+          room.send('teleportWarning', {
+            address: identityData.address,
+            strikes: playerData.teleportStrikes
+          })
+        }
+        playerData.lastHeight = height
+        playerData.lastHeightTime = now
+        continue
+      }
+
+      playerData.lastHeight = height
+      playerData.lastHeightTime = now
+
       if (height > playerData.maxHeight) {
         playerData.maxHeight = height
         gameState.setPlayer(identityData.address, playerData)
@@ -130,7 +164,10 @@ function setupMessageHandlers(gameState: GameState) {
       bestTime: 0,
       isFinished: false,
       finishOrder: 0,
-      attemptStartTime: 0
+      attemptStartTime: 0,
+      lastHeight: 0,
+      lastHeightTime: 0,
+      teleportStrikes: 0
     })
   })
 
@@ -158,6 +195,9 @@ function setupMessageHandlers(gameState: GameState) {
     // Record attempt start time (server-authoritative)
     player.attemptStartTime = Date.now()
     player.maxHeight = 0 // Reset height for new attempt
+    player.lastHeight = currentHeight
+    player.lastHeightTime = Date.now()
+    player.teleportStrikes = 0
     gameState.setPlayer(context.from, player)
 
     console.log(`[Server] Player started attempt: ${player.displayName} at height ${currentHeight.toFixed(1)}m`)
@@ -174,6 +214,12 @@ function setupMessageHandlers(gameState: GameState) {
     // Validate: player must have started an attempt
     if (player.attemptStartTime === 0) {
       console.log(`[Server] Rejected finish from ${player.displayName}: no active attempt`)
+      return
+    }
+
+    // Validate: no teleporting detected during attempt
+    if (player.teleportStrikes > 1) {
+      console.log(`[Server] Rejected finish from ${player.displayName}: teleport detected (${player.teleportStrikes})`)
       return
     }
 
