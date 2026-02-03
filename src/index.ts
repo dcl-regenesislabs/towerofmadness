@@ -9,13 +9,17 @@ import {
   PlayerIdentityData,
   Animator,
   GltfContainer,
+  MeshRenderer,
+  Material,
+  VisibilityComponent,
   MeshCollider,
   PointerEvents,
   PointerEventType,
   InputAction,
-  pointerEventsSystem
+  pointerEventsSystem,
+  inputSystem
 } from '@dcl/sdk/ecs'
-import { Vector3 } from '@dcl/sdk/math'
+import { Vector3, Color4 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
@@ -345,7 +349,19 @@ export async function main() {
   const triggerEnd = engine.addEntity()
   const triggerDeath = engine.getEntityOrNullByName(EntityNames.TriggerDeath)
 
-  Transform.create(triggerEnd, { position: Vector3.create(40, 0, 40) })
+  const TRIGGER_END_OFFSET = Vector3.create(0, 0, -37.25)
+  const TRIGGER_END_SCALE = Vector3.create(23.6, 10.9, 19.6)
+  Transform.create(triggerEnd, {
+    position: Vector3.create(40 + TRIGGER_END_OFFSET.x, 0 + TRIGGER_END_OFFSET.y, 40 + TRIGGER_END_OFFSET.z),
+    scale: TRIGGER_END_SCALE
+  })
+  MeshRenderer.setBox(triggerEnd)
+  Material.setPbrMaterial(triggerEnd, {
+    albedoColor: Color4.create(1, 0, 0, 0.4),
+    metallic: 0,
+    roughness: 1
+  })
+  VisibilityComponent.create(triggerEnd, { visible: true })
   console.log('[Game] TriggerEnd created by code')
 
   setupTrigger(triggerStart)
@@ -361,7 +377,12 @@ export async function main() {
     lastTowerHeight = towerConfig.totalHeight
     const transform = Transform.getMutable(triggerEnd)
     // Position at top of tower (totalHeight includes ChunkEnd)
-    transform.position = Vector3.create(40, towerConfig.totalHeight - 5, 40) // Tower is at X=40, Z=40
+    transform.position = Vector3.create(
+      40 + TRIGGER_END_OFFSET.x,
+      towerConfig.totalHeight - 5 + TRIGGER_END_OFFSET.y,
+      40 + TRIGGER_END_OFFSET.z
+    ) // Tower is at X=40, Z=40
+    transform.scale = TRIGGER_END_SCALE
     console.log(`[Game] Updated TriggerEnd position to height ${transform.position.y.toFixed(1)}m`)
   }
 
@@ -499,7 +520,7 @@ export async function main() {
   engine.addSystem(() => {
     if (!Transform.has(engine.PlayerEntity)) return
     const playerPos = Transform.get(engine.PlayerEntity).position
-
+ 
     for (const trigger of triggers) {
       if (!trigger.entity || !Transform.has(trigger.entity)) continue
 
