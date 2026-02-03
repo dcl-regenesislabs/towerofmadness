@@ -36,6 +36,7 @@ import {
   TowerConfig
 } from './multiplayer'
 import { requestPlayerSnapshot } from './snapshots'
+import { initPodiumAvatars, showPodiumWinners, hidePodiumWinners } from './podiumAvatars'
 
 // ============================================
 // GAME STATE
@@ -190,13 +191,16 @@ function syncRoundState() {
       attemptResult = null
       resultMessage = '🎮 New round! Go to TriggerStart to begin'
       resultTimestamp = Date.now()
+      hidePodiumWinners()
     } else if (state.phase === RoundPhase.ENDING) {
       roundWinners = getWinners()
       resultMessage = '🏁 Round Complete!'
       resultTimestamp = Date.now()
+      showPodiumWinners(roundWinners)
     } else if (state.phase === RoundPhase.BREAK) {
       resultMessage = '⏳ Next round in 10 seconds...'
       resultTimestamp = Date.now()
+      showPodiumWinners(roundWinners)
     }
   }
 
@@ -298,6 +302,7 @@ export async function main() {
   // ============================================
 
   setupClient()
+  initPodiumAvatars()
 
   // Set up callback for when players finish - update our best time if it's us
   onPlayerFinished((displayName, time, _finishOrder) => {
