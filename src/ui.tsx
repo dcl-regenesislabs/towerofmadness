@@ -675,16 +675,17 @@ const GameUI = () => {
             }}
           />
 
-          {leaderboard.slice(0, 3).map((player, index) => {
+          {leaderboard
+            .filter((player) => player.allTimeFinishCount > 0 && player.allTimeBestTime > 0)
+            .sort((a, b) => a.allTimeBestTime - b.allTimeBestTime)
+            .slice(0, 3)
+            .map((player, index) => {
             const medal = index === 0 ? '1.' : index === 1 ? '2.' : '3.'
             const name = player.displayName.length > 10
               ? player.displayName.substring(0, 10) + '..'
               : player.displayName
 
-            const hasFinished = player.allTimeFinishCount > 0
-            const statsDisplay = hasFinished
-              ? `${player.allTimeBestTime.toFixed(1)}s (${player.allTimeBestHeight.toFixed(0)}m)`
-              : `${player.allTimeBestHeight.toFixed(0)}m`
+            const statsDisplay = `${player.allTimeBestTime.toFixed(2)}s`
 
             return (
               <UiEntity
@@ -699,7 +700,7 @@ const GameUI = () => {
                 uiText={{
                   value: `${medal} ${name} ${statsDisplay}`,
                   fontSize: 13 * s,
-                  color: hasFinished ? Color4.Green() : Color4.White(),
+                  color: Color4.Green(),
                   textAlign: 'middle-left'
                 }}
               />
