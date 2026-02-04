@@ -28,7 +28,7 @@ function protectServerEntity(entity: Entity, components: ComponentWithValidation
 const CHUNK_OPTIONS = ['Chunk01', 'Chunk02', 'Chunk03']
 const MIN_CHUNKS = 3
 const MAX_CHUNKS = 8
-const BASE_TIMER = 150
+const BASE_TIMER = 420 // 7 minutes
 const CHUNK_HEIGHT = 10.821
 const TOWER_X = 40
 const TOWER_Z = 40

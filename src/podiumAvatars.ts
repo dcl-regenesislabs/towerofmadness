@@ -4,9 +4,9 @@ import { getPlayer } from '@dcl/sdk/players'
 import type { WinnerEntry } from './multiplayer'
 
 const PODIUM_POSITIONS: Vector3[] = [
-  Vector3.create(47.0, 2.25, 61.0), // 1st place
-  Vector3.create(46.0, 1.65, 61.5), // 2nd place
-  Vector3.create(47.75, 1.25, 60.25) // 3rd place
+  Vector3.create(47.0, 2.4, 61.0), // 1st place
+  Vector3.create(46.0, 1.8, 61.5), // 2nd place
+  Vector3.create(47.75, 1.4, 60.25) // 3rd place
 ]
 
 const PODIUM_ROTATION = Quaternion.fromEulerDegrees(0, 225, 0)
@@ -112,6 +112,17 @@ export function showPodiumWinners(winners: WinnerEntry[]): void {
 
     VisibilityComponent.getMutable(slot.entity).visible = !!slot.address
     Transform.getMutable(slot.entity).scale = slot.address ? Vector3.One() : Vector3.Zero()
+  }
+
+  // Trigger emote immediately for visible winners (no delay on round end)
+  for (let i = 0; i < podiumSlots.length; i += 1) {
+    const slot = podiumSlots[i]
+    if (!slot.address) continue
+    const avatar = AvatarShape.getMutable(slot.entity)
+    slot.emoteTriggerCounter += 1
+    avatar.expressionTriggerId = DEFAULT_EXPRESSION_IDS[i] || 'clap'
+    avatar.expressionTriggerTimestamp = slot.emoteTriggerCounter
+    slot.lastEmoteTime = elapsedSeconds
   }
 }
 

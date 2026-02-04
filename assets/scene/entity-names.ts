@@ -6,7 +6,6 @@
  */
 export enum EntityNames {
   Ambient_Sound = "Ambient Sound",
-  Box_Big = "Box Big",
   Button_Panel = "Button Panel",
   ChunkStart_glb = "ChunkStart.glb",
   CoolBed_glb = "CoolBed.glb",

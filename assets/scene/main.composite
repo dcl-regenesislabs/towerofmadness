@@ -136,7 +136,7 @@
           "json": {
             "position": {
               "x": 47,
-              "y": 0,
+              "y": 0.25,
               "z": 61
             },
             "rotation": {
@@ -458,9 +458,9 @@
         "serializationType": "map"
       },
       "data": {
-        "0": {
+        "600": {
           "json": {
-            "gizmo": 2
+            "gizmo": 1
           }
         }
       }
