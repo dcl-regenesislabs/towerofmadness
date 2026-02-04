@@ -20,6 +20,7 @@ import {
   attemptResult,
   resultMessage,
   resultTimestamp,
+  startMessageTimestamp,
   roundPhase,
   roundTimer,
   roundSpeedMultiplier,
@@ -230,6 +231,11 @@ const TowerProgressBar = () => {
 
 const GameUI = () => {
   const s = getScaleUIFactor()
+  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
+  const screenWidth = uiCanvasInfo?.width ?? 1920 * s
+  const playerInfoWidth = 260 * s
+  const startMessageWidth = 260 * s
+  const startMessageGap = 96 * s
 
   // Format time with milliseconds
   const formatTimeMs = (seconds: number): string => {
@@ -241,10 +247,19 @@ const GameUI = () => {
 
   const isAttemptActive = attemptState === AttemptState.IN_PROGRESS
   const isRoundActive = roundPhase === RoundPhase.ACTIVE
+  const showPlayerHeightUi = false
+  const showPersonalBestUi = false
+  const showLeaderboardUi = false
 
   // Show result for 5 seconds
   const timeSinceResult = resultTimestamp > 0 ? (Date.now() - resultTimestamp) / 1000 : 999
   const showResult = attemptResult && timeSinceResult < 5
+  const isDeathResult = attemptResult === 'DEATH'
+  const deathShakeActive = isDeathResult && timeSinceResult < 5
+  const deathShakeX = deathShakeActive ? Math.sin(timeSinceResult * 24) * 6 * s : 0
+  const deathShakeY = deathShakeActive ? Math.cos(timeSinceResult * 28) * 6 * s : 0
+  const timeSinceStartMessage = startMessageTimestamp > 0 ? (Date.now() - startMessageTimestamp) / 1000 : 999
+  const showStartMessage = attemptState === AttemptState.IN_PROGRESS && timeSinceStartMessage < 4
 
   // Show winners display
   const showWinners = (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && roundWinners.length > 0
@@ -444,46 +459,30 @@ const GameUI = () => {
       </UiEntity>
 
       {/* PLAYER INFO - Below Round Timer */}
-      <UiEntity
-        uiTransform={{
-          width: '100%',
-          height: 120 * s,
-          positionType: 'absolute',
-          position: { top: 185 * s, left: 0 },
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-      >
+      {showPlayerHeightUi && (
         <UiEntity
           uiTransform={{
-            width: 260 * s,
-            height: isAttemptActive ? 110 * s : 70 * s,
+            width: '100%',
+            height: 120 * s,
+            positionType: 'absolute',
+            position: { top: 185 * s, left: 0 },
             alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'column'
-          }}
-          uiBackground={{
-            color: Color4.create(0, 0, 0, 0.8)
+            justifyContent: 'center'
           }}
         >
-          {/* Current Height */}
           <UiEntity
             uiTransform={{
-              width: '100%',
-              height: 35 * s,
+              width: 260 * s,
+              height: isAttemptActive ? 110 * s : 70 * s,
               alignItems: 'center',
-              justifyContent: 'center'
+              justifyContent: 'center',
+              flexDirection: 'column'
             }}
-            uiText={{
-              value: `Height: ${playerHeight.toFixed(1)}m`,
-              fontSize: 22 * s,
-              color: Color4.White(),
-              textAlign: 'middle-center'
+            uiBackground={{
+              color: Color4.create(0, 0, 0, 0.8)
             }}
-          />
-
-          {/* Attempt Timer (only during attempt) */}
-          {isAttemptActive && (
+          >
+            {/* Current Height */}
             <UiEntity
               uiTransform={{
                 width: '100%',
@@ -492,95 +491,115 @@ const GameUI = () => {
                 justifyContent: 'center'
               }}
               uiText={{
-                value: `Attempt: ${formatTimeMs(attemptTimer)}`,
-                fontSize: 20 * s,
-                color: Color4.create(0.5, 0.8, 1, 1),
+                value: `Height: ${playerHeight.toFixed(1)}m`,
+                fontSize: 22 * s,
+                color: Color4.White(),
                 textAlign: 'middle-center'
               }}
             />
-          )}
 
-          {/* Max Height (only during attempt) */}
-          {isAttemptActive && (
-            <UiEntity
-              uiTransform={{
-                width: '100%',
-                height: 30 * s,
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              uiText={{
-                value: `Max: ${playerMaxHeight.toFixed(1)}m`,
-                fontSize: 16 * s,
-                color: Color4.Yellow(),
-                textAlign: 'middle-center'
-              }}
-            />
-          )}
+            {/* Attempt Timer (only during attempt) */}
+            {isAttemptActive && (
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  height: 35 * s,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: `Attempt: ${formatTimeMs(attemptTimer)}`,
+                  fontSize: 20 * s,
+                  color: Color4.create(0.5, 0.8, 1, 1),
+                  textAlign: 'middle-center'
+                }}
+              />
+            )}
+
+            {/* Max Height (only during attempt) */}
+            {isAttemptActive && (
+              <UiEntity
+                uiTransform={{
+                  width: '100%',
+                  height: 30 * s,
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: `Max: ${playerMaxHeight.toFixed(1)}m`,
+                  fontSize: 16 * s,
+                  color: Color4.Yellow(),
+                  textAlign: 'middle-center'
+                }}
+              />
+            )}
+          </UiEntity>
         </UiEntity>
-      </UiEntity>
+      )}
 
       {/* PERSONAL BEST - Top Right */}
-      <UiEntity
-        uiTransform={{
-          width: 220 * s,
-          height: 100 * s,
-          positionType: 'absolute',
-          position: { top: 15 * s, right: 15 * s },
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexDirection: 'column'
-        }}
-        uiBackground={{
-          color: Color4.create(0, 0, 0, 0.8)
-        }}
-      >
+      {showPersonalBestUi && (
         <UiEntity
           uiTransform={{
-            width: '100%',
-            height: 30 * s,
+            width: 220 * s,
+            height: 100 * s,
+            positionType: 'absolute',
+            position: { top: 15 * s, right: 15 * s },
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'center',
+            flexDirection: 'column'
           }}
-          uiText={{
-            value: 'PERSONAL BEST',
-            fontSize: 14 * s,
-            color: Color4.Yellow(),
-            textAlign: 'middle-center'
+          uiBackground={{
+            color: Color4.create(0, 0, 0, 0.8)
           }}
-        />
-        <UiEntity
-          uiTransform={{
-            width: '100%',
-            height: 30 * s,
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          uiText={{
-            value: `Time: ${bestAttemptTime > 0 ? formatTimeMs(bestAttemptTime) : '--:--.--'}`,
-            fontSize: 16 * s,
-            color: Color4.White(),
-            textAlign: 'middle-center'
-          }}
-        />
-        <UiEntity
-          uiTransform={{
-            width: '100%',
-            height: 30 * s,
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          uiText={{
-            value: `Height: ${bestAttemptHeight > 0 ? bestAttemptHeight.toFixed(1) + 'm' : '--'}`,
-            fontSize: 16 * s,
-            color: Color4.White(),
-            textAlign: 'middle-center'
-          }}
-        />
-      </UiEntity>
+        >
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              height: 30 * s,
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            uiText={{
+              value: 'PERSONAL BEST',
+              fontSize: 14 * s,
+              color: Color4.Yellow(),
+              textAlign: 'middle-center'
+            }}
+          />
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              height: 30 * s,
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            uiText={{
+              value: `Time: ${bestAttemptTime > 0 ? formatTimeMs(bestAttemptTime) : '--:--.--'}`,
+              fontSize: 16 * s,
+              color: Color4.White(),
+              textAlign: 'middle-center'
+            }}
+          />
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              height: 30 * s,
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            uiText={{
+              value: `Height: ${bestAttemptHeight > 0 ? bestAttemptHeight.toFixed(1) + 'm' : '--'}`,
+              fontSize: 16 * s,
+              color: Color4.White(),
+              textAlign: 'middle-center'
+            }}
+          />
+        </UiEntity>
+      )}
 
       {/* LEADERBOARD - Left Side */}
-      {leaderboard.length > 0 && (
+      {showLeaderboardUi && leaderboard.length > 0 && (
         <UiEntity
           uiTransform={{
             width: 230 * s,
@@ -714,7 +733,7 @@ const GameUI = () => {
         <UiEntity
           uiTransform={{
             width: '100%',
-            height: '100%',
+            height: '100%', 
             positionType: 'absolute',
             position: { top: 0, left: 0 },
             alignItems: 'center',
@@ -804,69 +823,263 @@ const GameUI = () => {
             justifyContent: 'center'
           }}
         >
-          <UiEntity
-            uiTransform={{
-              width: (attemptResult === 'DEATH' ? 500 : 400) * s,
-              height: (attemptResult === 'DEATH' ? 180 : 120) * s,
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column'
-            }}
-            uiBackground={{
-              color: attemptResult === 'WIN'
-                ? Color4.create(0, 0.6, 0, 0.95)
-                : Color4.create(0.7, 0, 0, 0.95)
-            }}
-          >
+          {attemptResult === 'WIN' && (
             <UiEntity
               uiTransform={{
-                width: '100%',
-                height: 60 * s,
+                width: 320 * s,
+                height: 180 * s,
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                flexDirection: 'column'
               }}
-              uiText={{
-                value: attemptResult === 'WIN' ? 'FINISHED!' : 'DEATH!',
-                fontSize: 40 * s,
-                color: Color4.White(),
-                textAlign: 'middle-center'
-              }}
-            />
-            <UiEntity
-              uiTransform={{
-                width: '100%',
-                height: 40 * s,
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              uiText={{
-                value: resultMessage,
-                fontSize: 18 * s,
-                color: Color4.White(),
-                textAlign: 'middle-center'
-              }}
-            />
-            {attemptResult === 'DEATH' && (
+            >
               <UiEntity
                 uiTransform={{
-                  width: '100%',
-                  height: 35 * s,
+                  width: 100 * s,
+                  height: 100 * s,
+                  positionType: 'absolute',
+                  position: { left: 110 * s, top: 0 }
+                }}
+                uiBackground={{
+                  color: Color4.create(1, 1, 1, 1),
+                  texture: { src: 'assets/images/emoji_win.png' },
+                  textureMode: 'stretch'
+                }}
+              />
+              <UiEntity
+                uiTransform={{
+                  width: 100 * s,
+                  height: 100 * s
+                }}
+                uiBackground={{
+                  color: Color4.create(0, 0, 0, 0)
+                }}
+              />
+
+              {/* CONGRATS text with black stroke */}
+              {[
+                { x: -1, y: 0 },
+                { x: 1, y: 0 },
+                { x: 0, y: -1 },
+                { x: 0, y: 1 },
+                { x: -1, y: -1 },
+                { x: 1, y: -1 },
+                { x: -1, y: 1 },
+                { x: 1, y: 1 }
+              ].map((offset, index) => (
+                <UiEntity
+                  key={`win-text-stroke-${index}`}
+                  uiTransform={{
+                    width: 300 * s,
+                    height: 60 * s,
+                    positionType: 'absolute',
+                    position: { top: 110 * s + offset.y * s, left: 10 * s + offset.x * s },
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  uiText={{
+                    value: 'CONGRATS\nYOU MADE IT!',
+                    fontSize: 26 * s,
+                    color: Color4.Black(),
+                    textAlign: 'middle-center',
+                    font: 'sans-serif'
+                  }}
+                />
+              ))}
+              <UiEntity
+                uiTransform={{
+                  width: 300 * s,
+                  height: 60 * s,
+                  positionType: 'absolute',
+                  position: { top: 110 * s, left: 10 * s },
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
                 uiText={{
-                  value: 'Go to TriggerStart to retry!',
-                  fontSize: 16 * s,
-                  color: Color4.Yellow(),
-                  textAlign: 'middle-center'
+                  value: 'CONGRATS\nYOU MADE IT!',
+                  fontSize: 26 * s,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
                 }}
               />
-            )}
-          </UiEntity>
+            </UiEntity>
+          )}
+
+          {attemptResult === 'DEATH' && (
+            <UiEntity
+              uiTransform={{
+                width: 320 * s,
+                height: 180 * s,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column'
+              }}
+            >
+              <UiEntity
+                uiTransform={{
+                  width: 100 * s,
+                  height: 100 * s,
+                  positionType: 'absolute',
+                  position: { left: 110 * s + deathShakeX, top: deathShakeY }
+                }}
+                uiBackground={{
+                  color: Color4.create(1, 1, 1, 1),
+                  texture: { src: 'assets/images/emoji_try.png' },
+                  textureMode: 'stretch'
+                }}
+              />
+              <UiEntity
+                uiTransform={{
+                  width: 100 * s,
+                  height: 100 * s
+                }}
+                uiBackground={{
+                  color: Color4.create(0, 0, 0, 0)
+                }}
+              />
+
+              {/* OOPS TRY AGAIN text with black stroke */}
+              {[
+                { x: -1, y: 0 },
+                { x: 1, y: 0 },
+                { x: 0, y: -1 },
+                { x: 0, y: 1 },
+                { x: -1, y: -1 },
+                { x: 1, y: -1 },
+                { x: -1, y: 1 },
+                { x: 1, y: 1 }
+              ].map((offset, index) => (
+                <UiEntity
+                  key={`death-text-stroke-${index}`}
+                  uiTransform={{
+                    width: 300 * s,
+                    height: 40 * s,
+                    positionType: 'absolute',
+                    position: { top: 110 * s + offset.y * s, left: 10 * s + offset.x * s },
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  uiText={{
+                    value: 'OOPS TRY AGAIN',
+                    fontSize: 28 * s,
+                    color: Color4.Black(),
+                    textAlign: 'middle-center',
+                    font: 'sans-serif'
+                  }}
+                />
+              ))}
+              <UiEntity
+                uiTransform={{
+                  width: 300 * s,
+                  height: 40 * s,
+                  positionType: 'absolute',
+                  position: { top: 110 * s, left: 10 * s },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: 'OOPS TRY AGAIN',
+                  fontSize: 28 * s,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+              <UiEntity
+                uiTransform={{
+                  width: 320 * s,
+                  height: 32 * s,
+                  positionType: 'absolute',
+                  position: { top: 150 * s, left: 0 },
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <UiEntity
+                  uiTransform={{
+                    width: 26 * s,
+                    height: 26 * s
+                  }}
+                  uiBackground={{
+                    color: Color4.White(),
+                    texture: { src: 'assets/images/dead.png' },
+                    textureMode: 'stretch'
+                  }}
+                />
+                <UiEntity
+                  uiTransform={{
+                    width: 2 * s,
+                    height: 1
+                  }}
+                  uiBackground={{
+                    color: Color4.create(0, 0, 0, 0)
+                  }}
+                />
+                <UiEntity
+                  uiTransform={{
+                    width: 140 * s,
+                    height: 28 * s,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    positionType: 'relative'
+                  }}
+                >
+                  {[
+                    { x: -1, y: 0 },
+                    { x: 1, y: 0 },
+                    { x: 0, y: -1 },
+                    { x: 0, y: 1 },
+                    { x: -1, y: -1 },
+                    { x: 1, y: -1 },
+                    { x: -1, y: 1 },
+                    { x: 1, y: 1 }
+                  ].map((offset, index) => (
+                    <UiEntity
+                      key={`death-at-stroke-${index}`}
+                      uiTransform={{
+                        width: '100%',
+                        height: '100%',
+                        positionType: 'absolute',
+                        position: { left: offset.x * s, top: offset.y * s },
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                      uiText={{
+                        value: `DEATH AT ${playerMaxHeight.toFixed(1)}m`,
+                        fontSize: 15 * s,
+                        color: Color4.Black(),
+                        textAlign: 'middle-center',
+                        font: 'sans-serif'
+                      }}
+                    />
+                  ))}
+                  <UiEntity
+                    uiTransform={{
+                      width: '100%',
+                      height: '100%',
+                      positionType: 'absolute',
+                      position: { left: 0, top: 0 },
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                    uiText={{
+                      value: `DEATH AT ${playerMaxHeight.toFixed(1)}m`,
+                      fontSize: 15 * s,
+                      color: Color4.White(),
+                      textAlign: 'middle-center',
+                      font: 'sans-serif'
+                    }}
+                  />
+                </UiEntity>
+              </UiEntity>
+            </UiEntity>
+          )}
         </UiEntity>
       )}
-
-      {/* STATUS MESSAGE - Bottom Center */}
+      {/* STATUS MESSAGE - Bottom Center (hidden) */}
+      {/*
       {attemptState === AttemptState.NOT_STARTED && isRoundActive && (
         <UiEntity
           uiTransform={{
@@ -906,11 +1119,88 @@ const GameUI = () => {
           </UiEntity>
         </UiEntity>
       )}
-
+      */}
       {/* Tower Progress Bar - Top Center */}
       <TowerProgressBar />
+      {/* START MESSAGE - Below Progress Bar Left */}
+      {showStartMessage && (
+        <UiEntity
+          uiTransform={{
+            width: startMessageWidth,
+            height: 140 * s,
+            positionType: 'absolute',
+            position: {
+              top: 205 * s,
+              left: screenWidth / 2 - playerInfoWidth / 2 - startMessageGap - startMessageWidth
+            },
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexDirection: 'column'
+          }}
+        >
+          <UiEntity
+            uiTransform={{
+              width: 85 * s,
+              height: 85 * s
+            }}
+            uiBackground={{
+              color: Color4.White(),
+              texture: { src: 'assets/images/emoji_start.png' },
+              textureMode: 'stretch'
+            }}
+          />
 
-      {/* NTP Time Sync Debug - Bottom Left */}
+          {/* Good Luck text with black stroke */}
+          {[
+            { x: -1, y: 0 },
+            { x: 1, y: 0 },
+            { x: 0, y: -1 },
+            { x: 0, y: 1 },
+            { x: -1, y: -1 },
+            { x: 1, y: -1 },
+            { x: -1, y: 1 },
+            { x: 1, y: 1 }
+          ].map((offset, index) => (
+            <UiEntity
+              key={`start-text-stroke-${index}`}
+              uiTransform={{
+                width: 240 * s,
+                height: 36 * s,
+                positionType: 'absolute',
+                position: { top: 108 * s + offset.y * s, left: 10 * s + offset.x * s },
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              uiText={{
+                value: 'Good Luck!',
+                fontSize: 24 * s,
+                color: Color4.Black(),
+                textAlign: 'middle-center',
+                font: 'sans-serif'
+              }}
+            />
+          ))}
+          <UiEntity
+            uiTransform={{
+              width: 240 * s,
+              height: 36 * s,
+              positionType: 'absolute',
+              position: { top: 108 * s, left: 10 * s },
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            uiText={{
+              value: 'Good Luck!',
+              fontSize: 24 * s,
+              color: Color4.White(),
+              textAlign: 'middle-center',
+              font: 'sans-serif'
+            }}
+          />
+        </UiEntity>
+      )}
+
+      {/* NTP Time Sync Debug - Bottom Left *
       <UiEntity
         uiTransform={{
           width: 200 * s,
@@ -958,8 +1248,10 @@ const GameUI = () => {
           }}
         />
       </UiEntity>
+      */}
 
-      {/* Multiplayer Indicator - Bottom Right */}
+      {/* Multiplayer Indicator - Bottom Right (hidden) */}
+      {/*
       <UiEntity
         uiTransform={{
           width: 140 * s,
@@ -975,7 +1267,7 @@ const GameUI = () => {
       >
         <UiEntity
           uiTransform={{
-            width: '100%',
+            width: '100%', 
             height: '100%',
             alignItems: 'center',
             justifyContent: 'center'
@@ -988,6 +1280,7 @@ const GameUI = () => {
           }}
         />
       </UiEntity>
+      */}
     </UiEntity>
   )
 }

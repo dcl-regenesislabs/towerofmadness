@@ -1,0 +1,35 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'testing'
+        type: choice
+        options:
+          - testing
+          - production
+
+env:
+  DCL_PRIVATE_KEY: ${{ secrets.DCL_WORLDS_PRIVATE_KEY }}
+  DEPLOY_ENV: ${{ inputs.environment || (github.event_name == 'release' && 'production') || 'testing' }}
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install npm packages
+      run: npm install
+    - name: Build scene
+      run: npm run build
+    - name: Deploy scene
+      run: npm run deploy:${{ env.DEPLOY_ENV }}

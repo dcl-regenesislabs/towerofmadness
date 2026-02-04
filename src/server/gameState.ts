@@ -46,6 +46,9 @@ interface PlayerData {
   isFinished: boolean
   finishOrder: number
   attemptStartTime: number // Server timestamp when player started attempt (0 = not started)
+  lastHeight: number
+  lastHeightTime: number
+  teleportStrikes: number
 }
 
 // All-time best scores (persisted)
@@ -323,6 +326,9 @@ export class GameState {
       player.isFinished = false
       player.finishOrder = 0
       player.attemptStartTime = 0
+      player.lastHeight = 0
+      player.lastHeightTime = 0
+      player.teleportStrikes = 0
     })
 
     // Clear winners
