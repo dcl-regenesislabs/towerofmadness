@@ -811,7 +811,8 @@ const GameUI = () => {
       {/* Tower Progress Bar - Top Center */}
       <TowerProgressBar />
 
-      {/* NTP Time Sync Debug - Bottom Left */}
+      {/* NTP Time Sync Debug - Bottom Left (hidden) */}
+      {/*
       <UiEntity
         uiTransform={{
           width: 200 * s,
@@ -859,8 +860,10 @@ const GameUI = () => {
           }}
         />
       </UiEntity>
+      */}
 
-      {/* Multiplayer Indicator - Bottom Right */}
+      {/* Multiplayer Indicator - Bottom Right (hidden) */}
+      {/*
       <UiEntity
         uiTransform={{
           width: 140 * s,
@@ -889,6 +892,7 @@ const GameUI = () => {
           }}
         />
       </UiEntity>
+      */}
     </UiEntity>
   )
 }
