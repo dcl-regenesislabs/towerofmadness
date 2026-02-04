@@ -1013,8 +1013,8 @@ const GameUI = () => {
           )}
         </UiEntity>
       )}
-
-      {/* STATUS MESSAGE - Bottom Center */}
+      {/* STATUS MESSAGE - Bottom Center (hidden) */}
+      {/*
       {attemptState === AttemptState.NOT_STARTED && isRoundActive && (
         <UiEntity
           uiTransform={{
@@ -1054,7 +1054,7 @@ const GameUI = () => {
           </UiEntity>
         </UiEntity>
       )}
-
+      */}
       {/* Tower Progress Bar - Top Center */}
       <TowerProgressBar />
       {/* START MESSAGE - Below Progress Bar Left */}
