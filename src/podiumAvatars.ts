@@ -115,8 +115,7 @@ export function showPodiumWinners(winners: WinnerEntry[]): void {
   }
 
   // Trigger emote immediately for visible winners (no delay on round end)
-  for (let i = 0; i < podiumSlots.length; i += 1) {
-    const slot = podiumSlots[i]
+  for (const [i, slot] of podiumSlots.entries()) {
     if (!slot.address) continue
     const avatar = AvatarShape.getMutable(slot.entity)
     slot.emoteTriggerCounter += 1
