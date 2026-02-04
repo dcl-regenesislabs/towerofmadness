@@ -808,47 +808,6 @@ const GameUI = () => {
         </UiEntity>
       )}
 
-      {/* STATUS MESSAGE - Bottom Center */}
-      {attemptState === AttemptState.NOT_STARTED && isRoundActive && (
-        <UiEntity
-          uiTransform={{
-            width: '100%',
-            height: 60 * s,
-            positionType: 'absolute',
-            position: { bottom: 40 * s, left: 0 },
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <UiEntity
-            uiTransform={{
-              width: 380 * s,
-              height: 50 * s,
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            uiBackground={{
-              color: Color4.create(0.1, 0.4, 0.1, 0.9)
-            }}
-          >
-            <UiEntity
-              uiTransform={{
-                width: '100%',
-                height: '100%',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              uiText={{
-                value: 'Go to TriggerStart to begin your attempt!',
-                fontSize: 18 * s,
-                color: Color4.White(),
-                textAlign: 'middle-center'
-              }}
-            />
-          </UiEntity>
-        </UiEntity>
-      )}
-
       {/* Tower Progress Bar - Top Center */}
       <TowerProgressBar />
 
