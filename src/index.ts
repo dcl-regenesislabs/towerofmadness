@@ -84,6 +84,7 @@ export function updateBestTime(time: number) {
 export let attemptResult: 'WIN' | 'DEATH' | null = null
 export let resultMessage: string = ''
 export let resultTimestamp: number = 0
+export let startMessageTimestamp: number = 0
 
 // Connection state
 export let isConnectedToServer: boolean = false
@@ -236,6 +237,7 @@ function startAttempt() {
   attemptResult = null
   resultMessage = '🏃 GO! Climb to the top!'
   resultTimestamp = Date.now()
+  startMessageTimestamp = Date.now()
 
   // Notify server (server tracks authoritative start time)
   sendPlayerStarted()
