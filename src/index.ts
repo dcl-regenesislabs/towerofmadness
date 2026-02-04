@@ -21,7 +21,6 @@ import {
 } from '@dcl/sdk/ecs'
 import { Vector3, Color4 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
-import { movePlayerTo } from '~system/RestrictedActions'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
 import { server } from './server/server'
@@ -371,48 +370,6 @@ export async function main() {
   setupTrigger(triggerEnd)
   setupTrigger(triggerDeath)
 
-  // ============================================
-  // TEMP TELEPORT (CLICKABLE BOX)
-  // ============================================
-
-  const teleportEntity = engine.addEntity()
-  const teleportPos = triggerStart && Transform.has(triggerStart)
-    ? Vector3.add(Transform.get(triggerStart).position, Vector3.create(2, 0.6, 0))
-    : Vector3.create(40, 0.6, 40)
-  Transform.create(teleportEntity, {
-    position: teleportPos,
-    scale: Vector3.create(2, 2, 2)
-  })
-  MeshRenderer.setBox(teleportEntity)
-  Material.setPbrMaterial(teleportEntity, {
-    albedoColor: Color4.fromInts(40, 160, 255, 200),
-    metallic: 0,
-    roughness: 0.6
-  })
-  MeshCollider.setBox(teleportEntity, ColliderLayer.CL_POINTER)
-  PointerEvents.create(teleportEntity, {
-    pointerEvents: [
-      {
-        eventType: PointerEventType.PET_DOWN,
-        eventInfo: {
-          button: InputAction.IA_POINTER,
-          hoverText: 'TP 95m',
-          showFeedback: true,
-          maxDistance: 10
-        }
-      }
-    ]
-  })
-  pointerEventsSystem.onPointerDown(
-    { entity: teleportEntity, opts: { button: InputAction.IA_POINTER } },
-    () => {
-      movePlayerTo({
-        newRelativePosition: { x: 40, y: 95, z: 40 },
-        cameraTarget: { x: 40, y: 95, z: 41 }
-      })
-    }
-  )
-
   // Update TriggerEnd position when tower config changes
   let lastTowerHeight = 0
   function updateTriggerEndPosition() {
@@ -635,7 +592,7 @@ function setupBackgroundMusic(audioPath: string) {
         audioStarted = true
       }
     }
-  }, undefined, 'background-music-system')
+  }, undefined, 'backg round-music-system')
 
   return backgroundMusicEntity
 }
