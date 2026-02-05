@@ -131,6 +131,7 @@ BREAK   -> 10 seconds pause, then start new round
 
 ### Player Flow
 
+
 1. **Scene Load**: Tower automatically generates, player connects to server
 2. **Game Start**: Player enters TriggerStart area (server validates height < 20m)
 3. **Climbing**: Player climbs the procedurally generated tower (server tracks height via LiveKit)
