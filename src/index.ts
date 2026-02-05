@@ -19,8 +19,9 @@ import {
   pointerEventsSystem,
   inputSystem
 } from '@dcl/sdk/ecs'
-import { Vector3, Color4 } from '@dcl/sdk/math'
+import { Vector3 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
+import { movePlayerTo } from '~system/RestrictedActions'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
 import { setupWorldLeaderboard } from './Leaderboard'
@@ -41,6 +42,7 @@ import {
   TowerConfig
 } from './multiplayer'
 import { requestPlayerSnapshot } from './snapshots'
+import { TriggerEndComponent } from './shared/schemas'
 
 // ============================================
 // GAME STATE
@@ -351,51 +353,31 @@ export async function main() {
   }
 
   const triggerStart = engine.getEntityOrNullByName(EntityNames.TriggerStart)
-  const triggerEnd = engine.addEntity()
   const triggerDeath = engine.getEntityOrNullByName(EntityNames.TriggerDeath)
 
-  const TRIGGER_END_OFFSET = Vector3.create(0, 0, -37.25)
-  const TRIGGER_END_SCALE = Vector3.create(23.6, 10.9, 19.6)
-  Transform.create(triggerEnd, {
-    position: Vector3.create(40 + TRIGGER_END_OFFSET.x, 0 + TRIGGER_END_OFFSET.y, 40 + TRIGGER_END_OFFSET.z),
-    scale: TRIGGER_END_SCALE
-  })
-  MeshRenderer.setBox(triggerEnd)
-  Material.setPbrMaterial(triggerEnd, {
-    albedoColor: Color4.create(1, 0, 0, 0.4),
-    metallic: 0,
-    roughness: 1
-  })
-  VisibilityComponent.create(triggerEnd, { visible: true })
-  console.log('[Game] TriggerEnd created by code')
-
   setupTrigger(triggerStart)
-  setupTrigger(triggerEnd)
   setupTrigger(triggerDeath)
 
-  // Update TriggerEnd position when tower config changes
-  let lastTowerHeight = 0
-  function updateTriggerEndPosition() {
-    if (!triggerEnd || !towerConfig) return
-    if (towerConfig.totalHeight === lastTowerHeight) return
-
-    lastTowerHeight = towerConfig.totalHeight
-    const transform = Transform.getMutable(triggerEnd)
-    // Position at top of tower (totalHeight includes ChunkEnd)
-    transform.position = Vector3.create(
-      40 + TRIGGER_END_OFFSET.x,
-      towerConfig.totalHeight - 5 + TRIGGER_END_OFFSET.y,
-      40 + TRIGGER_END_OFFSET.z
-    ) // Tower is at X=40, Z=40
-    transform.scale = TRIGGER_END_SCALE
-    console.log(`[Game] Updated TriggerEnd position to height ${transform.position.y.toFixed(1)}m`)
+  let cachedTriggerEndEntity: Entity | null = null
+  let loggedTriggerEnd = false
+  function findTriggerEndEntity(): Entity | null {
+    if (cachedTriggerEndEntity && TriggerEndComponent.has(cachedTriggerEndEntity)) {
+      return cachedTriggerEndEntity
+    }
+    for (const [entity] of engine.getEntitiesWith(TriggerEndComponent)) {
+      cachedTriggerEndEntity = entity
+      if (!loggedTriggerEnd && Transform.has(entity)) {
+        const pos = getWorldPosition(entity)
+        console.log(`[Debug] TriggerEnd found at ${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}`)
+        loggedTriggerEnd = true
+      }
+      return entity
+    }
+    cachedTriggerEndEntity = null
+    return null
   }
 
-  // Check for tower config changes periodically
-  engine.addSystem(() => {
-    updateTriggerEndPosition()
-  }, undefined, 'trigger-end-update-system')
-
+ 
   // ============================================
   // COOLBED CHARACTER: CLICK TO TALK (2x speed) + SMOOTH BLEND (Breath loop set in Creator Hub)
   // ============================================
@@ -518,14 +500,14 @@ export async function main() {
 
   const triggers = [
     { entity: triggerStart, wasInside: false, useWorldPos: false, onEnter: startAttempt },
-    { entity: triggerEnd, wasInside: false, useWorldPos: true, onEnter: finishAttempt },
     { entity: triggerDeath, wasInside: false, useWorldPos: false, onEnter: dieAttempt }
   ]
 
+  let triggerEndWasInside = false
   engine.addSystem(() => {
     if (!Transform.has(engine.PlayerEntity)) return
     const playerPos = Transform.get(engine.PlayerEntity).position
- 
+
     for (const trigger of triggers) {
       if (!trigger.entity || !Transform.has(trigger.entity)) continue
 
@@ -540,6 +522,25 @@ export async function main() {
         trigger.wasInside = false
       }
     }
+
+    const triggerEnd = findTriggerEndEntity()
+    if (triggerEnd && Transform.has(triggerEnd)) {
+      if (!TriggerArea.has(triggerEnd)) {
+        setupTrigger(triggerEnd)
+      }
+      const t = Transform.get(triggerEnd)
+      const pos = getWorldPosition(triggerEnd)
+      const inside = isInsideBox(playerPos, pos, t.scale)
+
+      if (inside && !triggerEndWasInside) {
+        triggerEndWasInside = true
+        finishAttempt()
+      } else if (!inside && triggerEndWasInside) {
+        triggerEndWasInside = false
+      }
+    } else {
+      triggerEndWasInside = false
+    }
   }, undefined, 'trigger-detection-system')
 
   // ============================================
@@ -551,7 +552,7 @@ export async function main() {
 
   // ============================================
   // INITIALIZE UI
-  // ============================================
+  // ============================================ 
 
   setupUi()
 
@@ -567,7 +568,6 @@ export async function main() {
 // ============================================
 // BACKGROUND MUSIC
 // ============================================
-
 let backgroundMusicEntity: Entity | null = null
 let audioStarted = false
 

@@ -89,6 +89,22 @@ ChunkComponent.validateBeforeChange((value) => {
 })
 
 // ============================================
+// CHUNK END COMPONENT (Empty tag for the ChunkEnd entity)
+// ============================================
+export const ChunkEndComponent = engine.defineComponent('tower:ChunkEnd', {})
+ChunkEndComponent.validateBeforeChange((value) => {
+  return value.senderAddress === AUTH_SERVER_PEER_ID
+})
+
+// ============================================
+// TRIGGER END COMPONENT (Empty tag for the TriggerEnd entity)
+// ============================================
+export const TriggerEndComponent = engine.defineComponent('tower:TriggerEnd', {})
+TriggerEndComponent.validateBeforeChange((value) => {
+  return value.senderAddress === AUTH_SERVER_PEER_ID
+})
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 export type LeaderboardEntry = {
