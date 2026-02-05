@@ -75,7 +75,7 @@
   ],
   "featureToggles": {
     "voiceChat": "enabled",
-    "portableExperiences": "enabled"
+    "portableExperiences": "disabled"
   },
   "creator": "",
   "skyboxConfig": {
