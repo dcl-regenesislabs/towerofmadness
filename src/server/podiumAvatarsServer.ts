@@ -1,4 +1,4 @@
-import { engine, Entity, Transform, AvatarShape, VisibilityComponent } from '@dcl/sdk/ecs'
+import { engine, Entity, Transform, AvatarShape, VisibilityComponent, TextShape } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { syncEntity } from '@dcl/sdk/network'
 import { getPlayer } from '@dcl/sdk/players'
@@ -12,12 +12,16 @@ const PODIUM_POSITIONS: Vector3[] = [
 ]
 
 const PODIUM_ROTATION = Quaternion.fromEulerDegrees(0, 225, 0)
+const PODIUM_TEXT_ROTATION = Quaternion.fromEulerDegrees(0, 180, 0)
 const PODIUM_SYNC_INTERVAL_SECONDS = 0.75
 const DEFAULT_EXPRESSION_IDS = ['dance', 'clap', 'clap']
 const PODIUM_EMOTE_REPLAY_SECONDS = 4
+const PODIUM_TEXT_OFFSET = Vector3.create(0, 2.2, 0)
+const PODIUM_TEXT_SCALE = Vector3.create(-1, 1, 1)
 type PodiumSlot = {
   index: number
   entity: Entity
+  textEntity: Entity
   address: string | null
   lastSyncedAddress: string | null
   lastSyncTime: number
@@ -25,7 +29,7 @@ type PodiumSlot = {
   emoteTriggerCounter: number
 }
 
-type AvatarColor = { r: number; g: number; b: number }
+type AvatarColor = { r: number; g: number; b: number; a?: number }
 type AvatarAppearance = {
   wearables: string[]
   bodyShape: string
@@ -59,6 +63,9 @@ export class PodiumAvatarsServer {
 
       VisibilityComponent.getMutable(slot.entity).visible = false
       Transform.getMutable(slot.entity).scale = Vector3.Zero()
+      VisibilityComponent.getMutable(slot.textEntity).visible = false
+      Transform.getMutable(slot.textEntity).scale = Vector3.Zero()
+      TextShape.getMutable(slot.textEntity).text = winner ? `${winner.height.toFixed(1)}m` : ''
     }
   }
 
@@ -72,12 +79,16 @@ export class PodiumAvatarsServer {
       slot.emoteTriggerCounter = 0
       VisibilityComponent.getMutable(slot.entity).visible = false
       Transform.getMutable(slot.entity).scale = Vector3.Zero()
+      VisibilityComponent.getMutable(slot.textEntity).visible = false
+      Transform.getMutable(slot.textEntity).scale = Vector3.Zero()
+      TextShape.getMutable(slot.textEntity).text = ''
     }
   }
 
   private initEntities() {
     for (let i = 0; i < PODIUM_POSITIONS.length; i += 1) {
       const entity = engine.addEntity()
+      const textEntity = engine.addEntity()
       AvatarShape.create(entity, { id: `podium-avatar-${i + 1}`, wearables: [], emotes: [] })
       Transform.create(entity, {
         position: PODIUM_POSITIONS[i],
@@ -87,9 +98,25 @@ export class PodiumAvatarsServer {
       VisibilityComponent.create(entity, { visible: false })
       syncEntity(entity, [Transform.componentId, VisibilityComponent.componentId, AvatarShape.componentId])
 
+      TextShape.create(textEntity, {
+        text: '',
+        fontSize: 2,
+        textColor: { r: 1, g: 0.9, b: 0.1, a: 1 },
+        outlineWidth: 0.12,
+        outlineColor: { r: 0, g: 0, b: 0 }
+      })
+      Transform.create(textEntity, {
+        position: Vector3.add(PODIUM_POSITIONS[i], PODIUM_TEXT_OFFSET),
+        rotation: PODIUM_TEXT_ROTATION,
+        scale: Vector3.Zero()
+      })
+      VisibilityComponent.create(textEntity, { visible: false })
+      syncEntity(textEntity, [Transform.componentId, VisibilityComponent.componentId, TextShape.componentId])
+
       this.slots.push({
         index: i,
         entity,
+        textEntity,
         address: null,
         lastSyncedAddress: null,
         lastSyncTime: 0,
@@ -158,10 +185,12 @@ export class PodiumAvatarsServer {
 
         VisibilityComponent.getMutable(slot.entity).visible = true
         Transform.getMutable(slot.entity).scale = Vector3.One()
+        VisibilityComponent.getMutable(slot.textEntity).visible = true
+        Transform.getMutable(slot.textEntity).scale = PODIUM_TEXT_SCALE
 
-         if (this.elapsedSeconds - slot.lastEmoteTime >= PODIUM_EMOTE_REPLAY_SECONDS) {
+        if (this.elapsedSeconds - slot.lastEmoteTime >= PODIUM_EMOTE_REPLAY_SECONDS) {
           slot.emoteTriggerCounter += 1
-           avatarShape.expressionTriggerId = DEFAULT_EXPRESSION_IDS[slot.index] || 'clap'
+          avatarShape.expressionTriggerId = DEFAULT_EXPRESSION_IDS[slot.index] || 'clap'
           avatarShape.expressionTriggerTimestamp = slot.emoteTriggerCounter
           slot.lastEmoteTime = this.elapsedSeconds
         }
