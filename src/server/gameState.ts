@@ -35,7 +35,6 @@ const TOWER_X = 40
 const TOWER_Z = 40
 const GLOBAL_LEADERBOARD_KEY = 'globalLeaderboard'
 const GLOBAL_LEADERBOARD_SIZE = 5
-const GLOBAL_LEADERBOARD_SAVE_COOLDOWN_MS = 5000
 
 // Player tracking (server-side only, current round)
 interface PlayerData {
@@ -82,7 +81,6 @@ export class GameState {
 
   // All-time best scores (persisted)
   private allTimeBests = new Map<string, AllTimeBest>()
-  private lastGlobalSaveAt = 0
 
   public static getInstance(): GameState {
     if (!GameState.instance) {
@@ -492,10 +490,6 @@ export class GameState {
 
   private maybePersistGlobalLeaderboard() {
     if (!isServer()) return
-
-    const now = Date.now()
-    if (now - this.lastGlobalSaveAt < GLOBAL_LEADERBOARD_SAVE_COOLDOWN_MS) return
-    this.lastGlobalSaveAt = now
     void this.persistGlobalLeaderboard()
   }
 }
