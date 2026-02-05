@@ -26,7 +26,6 @@ import { setupUi } from './ui'
 import { server } from './server/server'
 import {
   setupClient,
-  initAvatarAppearanceSync,
   sendPlayerStarted,
   sendPlayerFinished,
   sendPlayerJoined,
@@ -303,7 +302,6 @@ export async function main() {
   // ============================================
 
   setupClient()
-  initAvatarAppearanceSync()
 
   // Set up callback for when players finish - update our best time if it's us
   onPlayerFinished((displayName, time, _finishOrder) => {

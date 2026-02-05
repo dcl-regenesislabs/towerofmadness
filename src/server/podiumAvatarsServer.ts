@@ -1,6 +1,7 @@
 import { engine, Entity, Transform, AvatarShape, VisibilityComponent } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { syncEntity } from '@dcl/sdk/network'
+import { getPlayer } from '@dcl/sdk/players'
 import { room } from '../shared/messages'
 import type { WinnerEntry } from '../shared/schemas'
 
@@ -14,7 +15,6 @@ const PODIUM_ROTATION = Quaternion.fromEulerDegrees(0, 225, 0)
 const PODIUM_SYNC_INTERVAL_SECONDS = 0.75
 const DEFAULT_EXPRESSION_IDS = ['dance', 'clap', 'clap']
 const PODIUM_EMOTE_REPLAY_SECONDS = 4
-
 type PodiumSlot = {
   index: number
   entity: Entity
@@ -38,8 +38,7 @@ export class PodiumAvatarsServer {
   private slots: PodiumSlot[] = []
   private active: boolean = false
   private elapsedSeconds: number = 0
-  private appearanceByAddress = new Map<string, AvatarAppearance>()
-  private missingAppearanceLogged = new Set<string>()
+  private debugLogged = new Set<string>()
 
   constructor() {
     this.initEntities()
@@ -112,33 +111,58 @@ export class PodiumAvatarsServer {
 
         if (!needsSync) continue
 
-        const appearance = this.appearanceByAddress.get(slot.address)
-        const hasAppearance = !!(appearance?.wearables?.length || appearance?.bodyShape)
-        if (!hasAppearance) {
-          if (!this.missingAppearanceLogged.has(slot.address)) {
-            this.missingAppearanceLogged.add(slot.address)
-            room.send('podiumDebug', {
-              address: slot.address,
-              info: 'No appearance data yet from client.'
-            })
+        const player = getPlayer({ userId: slot.address })
+        const wearables = player?.wearables ?? []
+        const avatar = player?.avatar
+        const hasServerAppearance = !!(wearables.length || avatar?.bodyShapeUrn)
+
+        if (!this.debugLogged.has(slot.address)) {
+          this.debugLogged.add(slot.address)
+          let payload = ''
+          try {
+            payload = JSON.stringify(
+              player,
+              (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+              2
+            )
+          } catch (_err) {
+            payload = '[unserializable getPlayer payload]'
           }
+          if (payload.length > 1500) {
+            payload = `${payload.slice(0, 1500)}...<truncated>`
+          }
+          room.send('podiumDebug', {
+            address: slot.address,
+            info: `getPlayer server-side payload:\n${payload}`
+          })
+        }
+
+        if (!hasServerAppearance) {
           continue
         }
 
-        const avatar = AvatarShape.getMutable(slot.entity)
-        if (appearance.wearables?.length) avatar.wearables = appearance.wearables.slice()
-        if (appearance.bodyShape) avatar.bodyShape = appearance.bodyShape
-        if (appearance.eyeColor) avatar.eyeColor = appearance.eyeColor
-        if (appearance.skinColor) avatar.skinColor = appearance.skinColor
-        if (appearance.hairColor) avatar.hairColor = appearance.hairColor
+        const appearance: AvatarAppearance = {
+          wearables,
+          bodyShape: avatar?.bodyShapeUrn || '',
+          eyeColor: avatar?.eyesColor ?? { r: 0, g: 0, b: 0 },
+          skinColor: avatar?.skinColor ?? { r: 0, g: 0, b: 0 },
+          hairColor: avatar?.hairColor ?? { r: 0, g: 0, b: 0 }
+        }
+
+        const avatarShape = AvatarShape.getMutable(slot.entity)
+        if (appearance.wearables?.length) avatarShape.wearables = appearance.wearables.slice()
+        if (appearance.bodyShape) avatarShape.bodyShape = appearance.bodyShape
+        if (appearance.eyeColor) avatarShape.eyeColor = appearance.eyeColor
+        if (appearance.skinColor) avatarShape.skinColor = appearance.skinColor
+        if (appearance.hairColor) avatarShape.hairColor = appearance.hairColor
 
         VisibilityComponent.getMutable(slot.entity).visible = true
         Transform.getMutable(slot.entity).scale = Vector3.One()
 
-        if (this.elapsedSeconds - slot.lastEmoteTime >= PODIUM_EMOTE_REPLAY_SECONDS) {
+         if (this.elapsedSeconds - slot.lastEmoteTime >= PODIUM_EMOTE_REPLAY_SECONDS) {
           slot.emoteTriggerCounter += 1
-          avatar.expressionTriggerId = DEFAULT_EXPRESSION_IDS[slot.index] || 'clap'
-          avatar.expressionTriggerTimestamp = slot.emoteTriggerCounter
+           avatarShape.expressionTriggerId = DEFAULT_EXPRESSION_IDS[slot.index] || 'clap'
+          avatarShape.expressionTriggerTimestamp = slot.emoteTriggerCounter
           slot.lastEmoteTime = this.elapsedSeconds
         }
 
@@ -149,17 +173,6 @@ export class PodiumAvatarsServer {
   }
 
   private bindMessages() {
-    room.onMessage('avatarAppearance', (data, context) => {
-      if (!context) return
-      const address = context.from.toLowerCase()
-      this.appearanceByAddress.set(address, {
-        bodyShape: data.bodyShape,
-        wearables: data.wearables,
-        eyeColor: data.eyeColor,
-        skinColor: data.skinColor,
-        hairColor: data.hairColor
-      })
-      this.missingAppearanceLogged.delete(address)
-    })
+    // no-op: server-side getPlayer is the source of truth
   }
 }
