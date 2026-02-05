@@ -32,6 +32,7 @@ import {
 } from "./index"
 import { RoundPhase, getTimeSyncOffset, isTimeSyncReady, getLocalPlayerHeights, formatTime, getTowerChunksFromEntities } from "./multiplayer"
 import { getSnapshots } from "./snapshots"
+import { OutlinedText, OUTLINE_OFFSETS_16, OUTLINE_OFFSETS_8 } from "./outlinedTextComponent"
 
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(GameUI)
@@ -364,43 +365,10 @@ const GameUI = () => {
               justifyContent: 'center',
             }}
           >
-            {[
-              { x: -3, y: 0 },
-              { x: 3, y: 0 },
-              { x: 0, y: -3 },
-              { x: 0, y: 3 },
-              { x: -3, y: -1 },
-              { x: -3, y: 1 },
-              { x: 3, y: -1 },
-              { x: 3, y: 1 },
-              { x: -1, y: -3 },
-              { x: 1, y: -3 },
-              { x: -1, y: 3 },
-              { x: 1, y: 3 },
-              { x: -2, y: -2 },
-              { x: 2, y: -2 },
-              { x: -2, y: 2 },
-              { x: 2, y: 2 }
-            ].map((offset, index) => (
-              <UiEntity
-                key={`timer-outline-${index}`}
-                uiTransform={{
-                  width: '100%',
-                  height: '100%',
-                  positionType: 'absolute',
-                  position: { left: offset.x * s, top: offset.y * s },
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                uiText={{
-                  value: `${formatTime(roundTimer)}`,
-                  fontSize: 80 * s,
-                  color: Color4.Black(),
-                  textAlign: 'middle-center'
-                }}
-              />
-            ))}
-            <UiEntity
+            <OutlinedText
+              outlineKeyPrefix="timer-outline"
+              outlineOffsets={OUTLINE_OFFSETS_16}
+              outlineScale={s}
               uiTransform={{
                 width: '100%',
                 height: '100%',
@@ -857,36 +825,10 @@ const GameUI = () => {
               />
 
               {/* CONGRATS text with black stroke */}
-              {[
-                { x: -1, y: 0 },
-                { x: 1, y: 0 },
-                { x: 0, y: -1 },
-                { x: 0, y: 1 },
-                { x: -1, y: -1 },
-                { x: 1, y: -1 },
-                { x: -1, y: 1 },
-                { x: 1, y: 1 }
-              ].map((offset, index) => (
-                <UiEntity
-                  key={`win-text-stroke-${index}`}
-                  uiTransform={{
-                    width: 300 * s,
-                    height: 60 * s,
-                    positionType: 'absolute',
-                    position: { top: 110 * s + offset.y * s, left: 10 * s + offset.x * s },
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  uiText={{
-                    value: 'CONGRATS\nYOU MADE IT!',
-                    fontSize: 26 * s,
-                    color: Color4.Black(),
-                    textAlign: 'middle-center',
-                    font: 'sans-serif'
-                  }}
-                />
-              ))}
-              <UiEntity
+              <OutlinedText
+                outlineKeyPrefix="win-text-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={s}
                 uiTransform={{
                   width: 300 * s,
                   height: 60 * s,
@@ -940,36 +882,10 @@ const GameUI = () => {
               />
 
               {/* OOPS TRY AGAIN text with black stroke */}
-              {[
-                { x: -1, y: 0 },
-                { x: 1, y: 0 },
-                { x: 0, y: -1 },
-                { x: 0, y: 1 },
-                { x: -1, y: -1 },
-                { x: 1, y: -1 },
-                { x: -1, y: 1 },
-                { x: 1, y: 1 }
-              ].map((offset, index) => (
-                <UiEntity
-                  key={`death-text-stroke-${index}`}
-                  uiTransform={{
-                    width: 300 * s,
-                    height: 40 * s,
-                    positionType: 'absolute',
-                    position: { top: 110 * s + offset.y * s, left: 10 * s + offset.x * s },
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}
-                  uiText={{
-                    value: 'OOPS TRY AGAIN',
-                    fontSize: 28 * s,
-                    color: Color4.Black(),
-                    textAlign: 'middle-center',
-                    font: 'sans-serif'
-                  }}
-                />
-              ))}
-              <UiEntity
+              <OutlinedText
+                outlineKeyPrefix="death-text-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={s}
                 uiTransform={{
                   width: 300 * s,
                   height: 40 * s,
@@ -1026,36 +942,10 @@ const GameUI = () => {
                     positionType: 'relative'
                   }}
                 >
-                  {[
-                    { x: -1, y: 0 },
-                    { x: 1, y: 0 },
-                    { x: 0, y: -1 },
-                    { x: 0, y: 1 },
-                    { x: -1, y: -1 },
-                    { x: 1, y: -1 },
-                    { x: -1, y: 1 },
-                    { x: 1, y: 1 }
-                  ].map((offset, index) => (
-                    <UiEntity
-                      key={`death-at-stroke-${index}`}
-                      uiTransform={{
-                        width: '100%',
-                        height: '100%',
-                        positionType: 'absolute',
-                        position: { left: offset.x * s, top: offset.y * s },
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}
-                      uiText={{
-                        value: `DEATH AT ${playerMaxHeight.toFixed(1)}m`,
-                        fontSize: 15 * s,
-                        color: Color4.Black(),
-                        textAlign: 'middle-center',
-                        font: 'sans-serif'
-                      }}
-                    />
-                  ))}
-                  <UiEntity
+                  <OutlinedText
+                    outlineKeyPrefix="death-at-stroke"
+                    outlineOffsets={OUTLINE_OFFSETS_8}
+                    outlineScale={s}
                     uiTransform={{
                       width: '100%',
                       height: '100%',
@@ -1151,36 +1041,10 @@ const GameUI = () => {
           />
 
           {/* Good Luck text with black stroke */}
-          {[
-            { x: -1, y: 0 },
-            { x: 1, y: 0 },
-            { x: 0, y: -1 },
-            { x: 0, y: 1 },
-            { x: -1, y: -1 },
-            { x: 1, y: -1 },
-            { x: -1, y: 1 },
-            { x: 1, y: 1 }
-          ].map((offset, index) => (
-            <UiEntity
-              key={`start-text-stroke-${index}`}
-              uiTransform={{
-                width: 240 * s,
-                height: 36 * s,
-                positionType: 'absolute',
-                position: { top: 108 * s + offset.y * s, left: 10 * s + offset.x * s },
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              uiText={{
-                value: 'Good Luck!',
-                fontSize: 24 * s,
-                color: Color4.Black(),
-                textAlign: 'middle-center',
-                font: 'sans-serif'
-              }}
-            />
-          ))}
-          <UiEntity
+          <OutlinedText
+            outlineKeyPrefix="start-text-stroke"
+            outlineOffsets={OUTLINE_OFFSETS_8}
+            outlineScale={s}
             uiTransform={{
               width: 240 * s,
               height: 36 * s,
