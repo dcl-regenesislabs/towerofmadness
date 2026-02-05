@@ -9,6 +9,7 @@ export enum EntityNames {
   Button_Panel = "Button Panel",
   ChunkStart_glb = "ChunkStart.glb",
   CoolBed_glb = "CoolBed.glb",
+  LeaderBoard01_glb = "LeaderBoard01.glb",
   TriggerDeath = "TriggerDeath",
   TriggerStart = "TriggerStart",
 } 

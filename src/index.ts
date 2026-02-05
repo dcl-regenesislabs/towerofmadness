@@ -23,6 +23,7 @@ import { Vector3, Color4 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
+import { setupWorldLeaderboard } from './Leaderboard'
 import { server } from './server/server'
 import {
   setupClient,
@@ -329,6 +330,8 @@ export async function main() {
       })
     }
   }, undefined, 'snapshot-player-enter-system')
+
+  setupWorldLeaderboard(() => leaderboard)
 
   // ============================================
   // TRIGGER SETUP

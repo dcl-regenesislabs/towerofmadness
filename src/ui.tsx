@@ -664,7 +664,7 @@ const GameUI = () => {
       )}
 
       {/* ALL TIME HIGH - Right Side */}
-      {leaderboard.length > 0 && (
+      {false && leaderboard.length > 0 && (
         <UiEntity
           uiTransform={{
             width: 230 * s,
