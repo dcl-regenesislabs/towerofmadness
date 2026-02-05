@@ -1,7 +1,8 @@
 import { engine, Entity, Transform, GltfContainer, VisibilityComponent } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion } from '@dcl/sdk/math'
-import { syncEntity } from '@dcl/sdk/network'
+import { isServer, syncEntity } from '@dcl/sdk/network'
 import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
+import { Storage } from '@dcl/sdk/server'
 import {
   RoundStateComponent,
   LeaderboardComponent,
@@ -33,6 +34,8 @@ const BASE_TIMER = 420 // 7 minutes
 const CHUNK_HEIGHT = 10.821
 const TOWER_X = 40
 const TOWER_Z = 40
+const GLOBAL_LEADERBOARD_KEY = 'globalLeaderboard'
+const GLOBAL_LEADERBOARD_SIZE = 5
 
 // Player tracking (server-side only, current round)
 interface PlayerData {
@@ -147,6 +150,8 @@ export class GameState {
     this.podiumServer = new PodiumAvatarsServer()
 
     console.log('[Server] Game state initialized')
+
+    void this.loadGlobalLeaderboard()
   }
 
   // Player management (normalize address to lowercase for consistency)
@@ -160,25 +165,46 @@ export class GameState {
     this.players.set(normalizedAddress, data)
 
     // Update all-time bests in real-time
-    this.updateAllTimeBest(normalizedAddress, data.displayName, data.bestTime, data.maxHeight, data.isFinished)
+    const didUpdateAllTime = this.updateAllTimeBest(
+      normalizedAddress,
+      data.displayName,
+      data.bestTime,
+      data.maxHeight,
+      data.isFinished
+    )
+    if (didUpdateAllTime) {
+      this.maybePersistGlobalLeaderboard()
+    }
 
     this.updateLeaderboard()
   }
 
   // All-time best management
-  updateAllTimeBest(address: string, displayName: string, time: number, height: number, finished: boolean) {
+  updateAllTimeBest(
+    address: string,
+    displayName: string,
+    time: number,
+    height: number,
+    finished: boolean
+  ): boolean {
     const normalizedAddress = address.toLowerCase()
     const existing = this.allTimeBests.get(normalizedAddress)
+    let changed = false
 
     if (existing) {
       if (finished && (time < existing.bestTime || existing.bestTime === 0)) {
         existing.bestTime = time
         existing.finishCount++
+        changed = true
       }
       if (height > existing.bestHeight) {
         existing.bestHeight = height
+        changed = true
       }
-      existing.displayName = displayName
+      if (existing.displayName !== displayName) {
+        existing.displayName = displayName
+        changed = true
+      }
       existing.lastPlayed = Date.now()
     } else {
       this.allTimeBests.set(normalizedAddress, {
@@ -189,7 +215,9 @@ export class GameState {
         finishCount: finished ? 1 : 0,
         lastPlayed: Date.now()
       })
+      changed = true
     }
+    return changed
   }
 
   getAllTimeBests(): AllTimeBest[] {
@@ -381,6 +409,8 @@ export class GameState {
     this.podiumServer?.showWinners(winners.winners)
 
     console.log('[Server] Winners:', top3.map((p) => p.displayName).join(', '))
+
+    void this.persistGlobalLeaderboard()
   }
 
   setPhase(phase: RoundPhase) {
@@ -426,4 +456,48 @@ export class GameState {
     })
   }
 
+  private async loadGlobalLeaderboard() {
+    if (!isServer()) return
+
+    try {
+      const stored = await Storage.get<string>(GLOBAL_LEADERBOARD_KEY)
+      if (!stored) return
+
+      const entries = JSON.parse(stored) as AllTimeBest[]
+      for (const entry of entries) {
+        if (!entry?.address) continue
+        const normalizedAddress = entry.address.toLowerCase()
+        this.allTimeBests.set(normalizedAddress, {
+          address: normalizedAddress,
+          displayName: entry.displayName || normalizedAddress.substring(0, 8),
+          bestTime: Number(entry.bestTime) || 0,
+          bestHeight: Number(entry.bestHeight) || 0,
+          finishCount: Number(entry.finishCount) || 0,
+          lastPlayed: Number(entry.lastPlayed) || 0
+        })
+      }
+
+      console.log(`[Server][Storage] Loaded global leaderboard: ${entries.length} entries`)
+      this.updateLeaderboard()
+    } catch (error) {
+      console.error('[Server][Storage] Failed to load global leaderboard:', error)
+    }
+  }
+
+  private async persistGlobalLeaderboard() {
+    if (!isServer()) return
+
+    try {
+      const topEntries = this.getAllTimeBests().slice(0, GLOBAL_LEADERBOARD_SIZE)
+      await Storage.set(GLOBAL_LEADERBOARD_KEY, JSON.stringify(topEntries))
+      console.log(`[Server][Storage] Saved global leaderboard: ${topEntries.length} entries`)
+    } catch (error) {
+      console.error('[Server][Storage] Failed to save global leaderboard:', error)
+    }
+  }
+
+  private maybePersistGlobalLeaderboard() {
+    if (!isServer()) return
+    void this.persistGlobalLeaderboard()
+  }
 }
