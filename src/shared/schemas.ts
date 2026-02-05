@@ -97,6 +97,14 @@ ChunkEndComponent.validateBeforeChange((value) => {
 })
 
 // ============================================
+// TRIGGER END COMPONENT (Empty tag for the TriggerEnd entity)
+// ============================================
+export const TriggerEndComponent = engine.defineComponent('tower:TriggerEnd', {})
+TriggerEndComponent.validateBeforeChange((value) => {
+  return value.senderAddress === AUTH_SERVER_PEER_ID
+})
+
+// ============================================
 // TYPE EXPORTS
 // ============================================
 export type LeaderboardEntry = {

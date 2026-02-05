@@ -1,5 +1,5 @@
-import { engine, Entity, Transform, GltfContainer, VisibilityComponent } from '@dcl/sdk/ecs'
-import { Vector3, Quaternion } from '@dcl/sdk/math'
+import { engine, Entity, Transform, GltfContainer, VisibilityComponent, MeshRenderer, Material } from '@dcl/sdk/ecs'
+import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { syncEntity } from '@dcl/sdk/network'
 import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
 import {
@@ -9,6 +9,7 @@ import {
   TowerConfigComponent,
   ChunkComponent,
   ChunkEndComponent,
+  TriggerEndComponent,
   RoundPhase
 } from '../shared/schemas'
 
@@ -33,6 +34,8 @@ const BASE_TIMER = 420 // 7 minutes
 const CHUNK_HEIGHT = 10.821
 const TOWER_X = 40
 const TOWER_Z = 40
+const TRIGGER_END_OFFSET = Vector3.create(0, 0, -37.25)
+const TRIGGER_END_SCALE = Vector3.create(23.6, 10.9, 19.6)
 
 // Player tracking (server-side only, current round)
 interface PlayerData {
@@ -67,6 +70,7 @@ export class GameState {
   public leaderboardEntity!: Entity
   public winnersEntity!: Entity
   public towerConfigEntity!: Entity
+  public triggerEndEntity!: Entity
 
   // Tower entities (synced to clients)
   private towerEntities: Entity[] = []
@@ -127,6 +131,29 @@ export class GameState {
       totalHeight: 0
     })
     syncEntity(this.towerConfigEntity, [TowerConfigComponent.componentId])
+
+    // Create trigger end entity (synced; client adds TriggerArea)
+    this.triggerEndEntity = engine.addEntity()
+    Transform.create(this.triggerEndEntity, {
+      position: Vector3.create(TOWER_X + TRIGGER_END_OFFSET.x, 0 + TRIGGER_END_OFFSET.y, TOWER_Z + TRIGGER_END_OFFSET.z),
+      scale: TRIGGER_END_SCALE
+    })
+    MeshRenderer.setBox(this.triggerEndEntity)
+    Material.setPbrMaterial(this.triggerEndEntity, {
+      albedoColor: Color4.create(1, 0, 0, 0.4),
+      metallic: 0,
+      roughness: 1
+    })
+    VisibilityComponent.create(this.triggerEndEntity, { visible: false })
+    TriggerEndComponent.create(this.triggerEndEntity, {})
+    protectServerEntity(this.triggerEndEntity, [Transform, MeshRenderer, Material, VisibilityComponent, TriggerEndComponent])
+    syncEntity(this.triggerEndEntity, [
+      Transform.componentId,
+      MeshRenderer.componentId,
+      Material.componentId,
+      VisibilityComponent.componentId,
+      TriggerEndComponent.componentId
+    ])
 
     // Create entity pool for tower chunks (MAX_CHUNKS + 1 for ChunkEnd)
     for (let i = 0; i < MAX_CHUNKS + 1; i++) {
@@ -253,6 +280,18 @@ export class GameState {
     ChunkEndComponent.create(endEntity, {})
 
     this.towerEntities.push(endEntity)
+
+    // Position TriggerEnd in world space (parent is not synced to clients)
+    const triggerTransform = Transform.getMutable(this.triggerEndEntity)
+    triggerTransform.parent = undefined
+    const rotatedOffset = Vector3.rotate(TRIGGER_END_OFFSET, endTransform.rotation)
+    triggerTransform.position = Vector3.create(
+      endTransform.position.x + rotatedOffset.x,
+      endTransform.position.y + rotatedOffset.y,
+      endTransform.position.z + rotatedOffset.z
+    )
+    triggerTransform.scale = TRIGGER_END_SCALE
+    console.log(`[Server] TriggerEnd positioned at y=${triggerTransform.position.y.toFixed(2)}`)
 
     // Hide unused pool entities (if fewer chunks this round)
     for (let i = chunkIds.length + 1; i < this.towerEntityPool.length; i++) {
