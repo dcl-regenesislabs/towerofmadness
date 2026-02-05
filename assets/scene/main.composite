@@ -135,18 +135,39 @@
         "515": {
           "json": {
             "position": {
-              "x": 39.0704345703125,
-              "y": 1.25,
-              "z": 68.79901123046875
+              "x": 47,
+              "y": 0.25,
+              "z": 61
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
             },
             "rotation": {
               "x": 0,
-              "y": -0.9969173073768616,
+              "y": -0.9238795042037964,
               "z": 0,
-              "w": -0.07845909893512726
+              "w": 0.3826834261417389
+            },
+            "parent": 0
+          }
+        },
+        "516": {
+          "json": {
+            "position": {
+              "x": 38.25,
+              "y": 1.5,
+              "z": 68.5
+            },
+            "rotation": {
+              "x": 0,
+              "y": -0.9990482330322266,
+              "z": 0,
+              "w": -0.04361938685178757
             },
             "scale": {
-              "x": 1.100000023841858,
+              "x": 1,
               "y": 1,
               "z": 1
             },
@@ -305,6 +326,13 @@
         },
         "515": {
           "json": {
+            "src": "assets/scene/Models/Podium01/Podium01.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
+        "516": {
+          "json": {
             "src": "assets/scene/Models/LeaderBoard01/LeaderBoard01.glb",
             "visibleMeshesCollisionMask": 0,
             "invisibleMeshesCollisionMask": 3
@@ -364,6 +392,11 @@
           }
         },
         "515": {
+          "json": {
+            "value": "Podium01.glb"
+          }
+        },
+        "516": {
           "json": {
             "value": "LeaderBoard01.glb"
           }
@@ -458,7 +491,7 @@
         "serializationType": "map"
       },
       "data": {
-        "515": {
+        "516": {
           "json": {
             "gizmo": 1
           }
@@ -1480,7 +1513,8 @@
                   602,
                   514,
                   512,
-                  515
+                  515,
+                  516
                 ]
               },
               {
@@ -1517,6 +1551,10 @@
               },
               {
                 "entity": 515,
+                "children": []
+              },
+              {
+                "entity": 516,
                 "children": []
               }
             ]
@@ -2155,6 +2193,9 @@
           "json": {}
         },
         "515": {
+          "json": {}
+        },
+        "516": {
           "json": {}
         },
         "586": {

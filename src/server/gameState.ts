@@ -11,6 +11,7 @@ import {
   ChunkComponent,
   RoundPhase
 } from '../shared/schemas'
+import { PodiumAvatarsServer } from './podiumAvatarsServer'
 
 // Helper to protect synced components on an entity
 type ComponentWithValidation = {
@@ -73,6 +74,7 @@ export class GameState {
   // Tower entities (synced to clients)
   private towerEntities: Entity[] = []
   private towerEntityPool: Entity[] = []
+  private podiumServer: PodiumAvatarsServer | null = null
 
   // Server-only state
   private players = new Map<string, PlayerData>()
@@ -144,6 +146,8 @@ export class GameState {
       syncEntity(entity, [Transform.componentId, GltfContainer.componentId, VisibilityComponent.componentId, ChunkComponent.componentId])
       this.towerEntityPool.push(entity)
     }
+
+    this.podiumServer = new PodiumAvatarsServer()
 
     console.log('[Server] Game state initialized')
 
@@ -333,6 +337,8 @@ export class GameState {
     const winners = WinnersComponent.getMutable(this.winnersEntity)
     winners.winners = []
 
+    this.podiumServer?.clear()
+
     this.updateLeaderboard()
   }
 
@@ -399,6 +405,8 @@ export class GameState {
       height: p.maxHeight,
       rank: i + 1
     }))
+
+    this.podiumServer?.showWinners(winners.winners)
 
     console.log('[Server] Winners:', top3.map((p) => p.displayName).join(', '))
 

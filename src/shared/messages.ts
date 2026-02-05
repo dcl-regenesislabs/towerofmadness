@@ -25,6 +25,12 @@ export const Messages = {
   teleportWarning: Schemas.Map({
     address: Schemas.String,
     strikes: Schemas.Number
+  }),
+
+  // Server -> Client: Podium debug (server-side avatar data)
+  podiumDebug: Schemas.Map({
+    address: Schemas.String,
+    info: Schemas.String
   })
 }
 
