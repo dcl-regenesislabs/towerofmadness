@@ -25,6 +25,21 @@ export const Messages = {
   teleportWarning: Schemas.Map({
     address: Schemas.String,
     strikes: Schemas.Number
+  }),
+
+  // Client -> Server: Avatar appearance (for podium sync)
+  avatarAppearance: Schemas.Map({
+    bodyShape: Schemas.String,
+    wearables: Schemas.Array(Schemas.String),
+    eyeColor: Schemas.Map({ r: Schemas.Number, g: Schemas.Number, b: Schemas.Number }),
+    skinColor: Schemas.Map({ r: Schemas.Number, g: Schemas.Number, b: Schemas.Number }),
+    hairColor: Schemas.Map({ r: Schemas.Number, g: Schemas.Number, b: Schemas.Number })
+  }),
+
+  // Server -> Client: Podium debug (server-side avatar data)
+  podiumDebug: Schemas.Map({
+    address: Schemas.String,
+    info: Schemas.String
   })
 }
 

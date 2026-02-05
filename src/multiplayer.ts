@@ -7,6 +7,7 @@
  */
 
 import { engine, Transform, PlayerIdentityData, AvatarBase, VisibilityComponent, GltfContainer } from '@dcl/sdk/ecs'
+import { getPlayer } from '@dcl/sdk/players'
 import { room } from './shared/messages'
 import {
   RoundStateComponent,
@@ -54,6 +55,33 @@ export function setupClient() {
 
     console.log(`[AntiCheat] Teleport warning (${data.strikes}/2).`)
   })
+
+  room.onMessage('podiumDebug', (data) => {
+    console.log(`[Podium][Server] ${data.address}: ${data.info}`)
+  })
+}
+
+export function initAvatarAppearanceSync() {
+  let sent = false
+  engine.addSystem(() => {
+    if (sent) return
+
+    const identity = PlayerIdentityData.getOrNull(engine.PlayerEntity)
+    if (!identity?.address) return
+
+    const player = getPlayer({ userId: identity.address })
+    if (!player?.avatar || !player?.wearables) return
+
+    room.send('avatarAppearance', {
+      bodyShape: player.avatar.bodyShapeUrn || '',
+      wearables: player.wearables,
+      eyeColor: player.avatar.eyesColor ?? { r: 0, g: 0, b: 0 },
+      skinColor: player.avatar.skinColor ?? { r: 0, g: 0, b: 0 },
+      hairColor: player.avatar.hairColor ?? { r: 0, g: 0, b: 0 }
+    })
+
+    sent = true
+  }, undefined, 'avatar-appearance-sync-once')
 }
 
 export function onPlayerFinished(callback: (displayName: string, time: number, finishOrder: number) => void) {
