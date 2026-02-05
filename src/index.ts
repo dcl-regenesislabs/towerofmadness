@@ -9,7 +9,10 @@ import {
   PlayerIdentityData,
   Animator,
   GltfContainer,
+  VisibilityComponent,
   MeshCollider,
+  MeshRenderer,
+  Material,
   PointerEvents,
   PointerEventType,
   InputAction,
@@ -21,6 +24,7 @@ import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
+import { setupWorldLeaderboard } from './Leaderboard'
 import { server } from './server/server'
 import {
   setupClient,
@@ -329,6 +333,8 @@ export async function main() {
     }
   }, undefined, 'snapshot-player-enter-system')
 
+  setupWorldLeaderboard(() => leaderboard)
+
   // ============================================
   // TRIGGER SETUP
   // ============================================
@@ -589,7 +595,7 @@ function setupBackgroundMusic(audioPath: string) {
         audioStarted = true
       }
     }
-  }, undefined, 'background-music-system')
+  }, undefined, 'backg round-music-system')
 
   return backgroundMusicEntity
 }

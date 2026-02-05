@@ -54,6 +54,10 @@ export function setupClient() {
 
     console.log(`[AntiCheat] Teleport warning (${data.strikes}/2).`)
   })
+
+  room.onMessage('podiumDebug', (data) => {
+    console.log(`[Podium][Server] ${data.address}: ${data.info}`)
+  })
 }
 
 export function onPlayerFinished(callback: (displayName: string, time: number, finishOrder: number) => void) {
