@@ -21,6 +21,7 @@ import {
 } from '@dcl/sdk/ecs'
 import { Vector3, Color4 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
+import { movePlayerTo } from '~system/RestrictedActions'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
 import { server } from './server/server'
@@ -40,6 +41,7 @@ import {
   TowerConfig
 } from './multiplayer'
 import { requestPlayerSnapshot } from './snapshots'
+import { ChunkEndComponent } from './shared/schemas'
 
 // ============================================
 // GAME STATE
@@ -363,21 +365,48 @@ export async function main() {
     metallic: 0,
     roughness: 1
   })
-  VisibilityComponent.create(triggerEnd, { visible: true })
+  VisibilityComponent.create(triggerEnd, { visible: false})
   console.log('[Game] TriggerEnd created by code')
 
   setupTrigger(triggerStart)
   setupTrigger(triggerEnd)
   setupTrigger(triggerDeath)
 
+    let cachedChunkEndEntity: Entity | null = null
+    function findChunkEndEntity(): Entity | null {
+      if (cachedChunkEndEntity && ChunkEndComponent.has(cachedChunkEndEntity)) {
+        return cachedChunkEndEntity
+      }
+      for (const [entity] of engine.getEntitiesWith(ChunkEndComponent)) {
+        cachedChunkEndEntity = entity
+        return entity
+      }
+      cachedChunkEndEntity = null
+      return null
+    }
+
   // Update TriggerEnd position when tower config changes
   let lastTowerHeight = 0
   function updateTriggerEndPosition() {
+    const chunkEndEntity = findChunkEndEntity()
+    if (chunkEndEntity && Transform.has(chunkEndEntity)) {
+      const transform = Transform.getMutable(triggerEnd)
+      transform.parent = chunkEndEntity
+      transform.position = Vector3.create(
+        TRIGGER_END_OFFSET.x,
+        TRIGGER_END_OFFSET.y,
+        TRIGGER_END_OFFSET.z
+      )
+      transform.scale = TRIGGER_END_SCALE
+      return
+    }
+
     if (!triggerEnd || !towerConfig) return
     if (towerConfig.totalHeight === lastTowerHeight) return
 
     lastTowerHeight = towerConfig.totalHeight
     const transform = Transform.getMutable(triggerEnd)
+    transform.parent = undefined
     // Position at top of tower (totalHeight includes ChunkEnd)
     transform.position = Vector3.create(
       40 + TRIGGER_END_OFFSET.x,
@@ -389,10 +418,10 @@ export async function main() {
   }
 
   // Check for tower config changes periodically
-  engine.addSystem(() => {
-    updateTriggerEndPosition()
-  }, undefined, 'trigger-end-update-system')
-
+    engine.addSystem(() => {
+      updateTriggerEndPosition()
+    }, undefined, 'trigger-end-update-system') 
+ 
   // ============================================
   // COOLBED CHARACTER: CLICK TO TALK (2x speed) + SMOOTH BLEND (Breath loop set in Creator Hub)
   // ============================================

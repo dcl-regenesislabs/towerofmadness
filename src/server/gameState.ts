@@ -8,6 +8,7 @@ import {
   WinnersComponent,
   TowerConfigComponent,
   ChunkComponent,
+  ChunkEndComponent,
   RoundPhase
 } from '../shared/schemas'
 
@@ -137,8 +138,14 @@ export class GameState {
       GltfContainer.create(entity, { src: '' })
       VisibilityComponent.create(entity, { visible: false })
       ChunkComponent.create(entity, {})
-      protectServerEntity(entity, [Transform, GltfContainer, VisibilityComponent, ChunkComponent])
-      syncEntity(entity, [Transform.componentId, GltfContainer.componentId, VisibilityComponent.componentId, ChunkComponent.componentId])
+      protectServerEntity(entity, [Transform, GltfContainer, VisibilityComponent, ChunkComponent, ChunkEndComponent])
+      syncEntity(entity, [
+        Transform.componentId,
+        GltfContainer.componentId,
+        VisibilityComponent.componentId,
+        ChunkComponent.componentId,
+        ChunkEndComponent.componentId
+      ])
       this.towerEntityPool.push(entity)
     }
 
@@ -239,6 +246,11 @@ export class GameState {
 
     GltfContainer.getMutable(endEntity).src = 'assets/custom/chunkend01.glb/ChunkEnd.glb'
     VisibilityComponent.getMutable(endEntity).visible = true
+    // Ensure only the current end entity has the ChunkEnd tag
+    for (const entity of this.towerEntityPool) {
+      if (ChunkEndComponent.has(entity)) ChunkEndComponent.deleteFrom(entity)
+    }
+    ChunkEndComponent.create(endEntity, {})
 
     this.towerEntities.push(endEntity)
 
