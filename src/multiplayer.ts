@@ -7,6 +7,7 @@
  */
 
 import { engine, Transform, PlayerIdentityData, AvatarBase, VisibilityComponent, GltfContainer } from '@dcl/sdk/ecs'
+import { movePlayerTo } from '~system/RestrictedActions'
 import { room } from './shared/messages'
 import {
   RoundStateComponent,
@@ -57,6 +58,13 @@ export function setupClient() {
 
   room.onMessage('podiumDebug', (data) => {
     console.log(`[Podium][Server] ${data.address}: ${data.info}`)
+  })
+
+  room.onMessage('teleportToBase', (data) => {
+    movePlayerTo({
+      newRelativePosition: { x: data.x, y: data.y, z: data.z },
+      cameraTarget: { x: data.x, y: data.y + 1, z: data.z }
+    })
   })
 }
 

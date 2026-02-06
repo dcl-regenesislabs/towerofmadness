@@ -31,6 +31,13 @@ export const Messages = {
   podiumDebug: Schemas.Map({
     address: Schemas.String,
     info: Schemas.String
+  }),
+
+  // Server -> Client: Teleport everyone to base (end of round)
+  teleportToBase: Schemas.Map({
+    x: Schemas.Number,
+    y: Schemas.Number,
+    z: Schemas.Number
   })
 }
 
