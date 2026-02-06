@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@dcl/asset-packs": "latest",
-    "@dcl/sdk": "https://sdk-team-cdn.decentraland.org/@dcl/js-sdk-toolchain/branch/fix/unify-storage-command/dcl-sdk-7.19.1-21496291120.commit-bc3be00.tgz"
+    "@dcl/sdk": "https://sdk-team-cdn.decentraland.org/@dcl/js-sdk-toolchain/branch/feat/authorative-server/dcl-sdk-7.20.1-21728746886.commit-ae61634.tgz"
   },
   "engines": {
     "node": ">=20.0.0",
