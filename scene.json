@@ -106,9 +106,9 @@
     "projectId": "46458bd4-fc50-43fb-8b99-18c9d9374927"
   },
   "authoritativeMultiplayer": true,
-  "multiplayerId": "boedo-casla-alejo",
+  "multiplayerId": "towerofmadness",
   "worldConfiguration": {
-    "name": "boedo.dcl.eth"
+    "name": "towerofmadness.dcl.eth"
   },
   "logsPermissions": ["0xb8c4df381c6c305758f806c3aa71f37aabbcbd92","0xc502975b49398f9754AFC4E9693Cf0e1594f3275"],
   "rating": "T"
