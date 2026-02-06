@@ -227,7 +227,7 @@ function setupMessageHandlers(gameState: GameState) {
     const liveKitPlayer = getPlayer({ userId: player.address })
     const currentHeight = liveKitPlayer?.position?.y || player.maxHeight
     const towerConfig = gameState.getTowerConfig()
-    const minFinishHeight = towerConfig ? towerConfig.totalHeight - 5 : 80 // Must be near the top (within 5m)
+    const minFinishHeight = towerConfig ? towerConfig.totalHeight - 11 : 80 // Must be near the top (within 5m)
 
     console.log(`[Server] Finish attempt: height=${currentHeight.toFixed(1)}m, towerHeight=${towerConfig?.totalHeight.toFixed(1)}m, minRequired=${minFinishHeight.toFixed(1)}m`)
 
