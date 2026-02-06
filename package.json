@@ -13,7 +13,8 @@
     "deploy:production": "sdk-commands deploy --target-content https://worlds-content-server.decentraland.org",
     "build": "sdk-commands build",
     "upgrade-sdk": "npm install --save-dev @dcl/sdk@latest",
-    "upgrade-sdk:next": "npm install --save-dev @dcl/sdk@next"
+    "upgrade-sdk:next": "npm install --save-dev @dcl/sdk@next",
+    "server-logs": "sdk-commands sdk-server-logs"
   },
   "devDependencies": {
     "@dcl/asset-packs": "latest",
