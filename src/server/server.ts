@@ -10,6 +10,7 @@ const MAX_UP_SPEED = 12 // m/s allowed upward speed before considering teleport
 const HEIGHT_TOLERANCE = 0.5 // m of extra leeway per sample
 const HARD_MAX_DELTA = 20 // m allowed upward jump regardless of sample time
 const TELEPORT_BASE = { x: 45, y: 2.5, z: 59 }
+const END_TRIGGER_OFFSET = 11
 
 export function server() {
   console.log('[Server] Tower of Madness starting...')
@@ -229,7 +230,7 @@ function setupMessageHandlers(gameState: GameState) {
     const liveKitPlayer = getPlayer({ userId: player.address })
     const currentHeight = liveKitPlayer?.position?.y || player.maxHeight
     const towerConfig = gameState.getTowerConfig()
-    const minFinishHeight = towerConfig ? towerConfig.totalHeight - 5 : 80 // Must be near the top (within 5m)
+    const minFinishHeight = towerConfig ? towerConfig.totalHeight - END_TRIGGER_OFFSET : 80
 
     console.log(`[Server] Finish attempt: height=${currentHeight.toFixed(1)}m, towerHeight=${towerConfig?.totalHeight.toFixed(1)}m, minRequired=${minFinishHeight.toFixed(1)}m`)
 
