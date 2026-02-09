@@ -9,6 +9,7 @@ const NEW_ROUND_DELAY = 10 // seconds
 const MAX_UP_SPEED = 12 // m/s allowed upward speed before considering teleport
 const HEIGHT_TOLERANCE = 0.5 // m of extra leeway per sample
 const HARD_MAX_DELTA = 20 // m allowed upward jump regardless of sample time
+const TELEPORT_BASE = { x: 45, y: 2.5, z: 59 }
 const END_TRIGGER_OFFSET = 11
 
 export function server() {
@@ -35,6 +36,7 @@ export function server() {
     if (phase === RoundPhase.ACTIVE) {
       if (gameState.checkTimerExpired()) {
         gameState.endRound()
+        room.send('teleportToBase', TELEPORT_BASE)
         roundEndTime = Date.now()
       }
     } else if (phase === RoundPhase.ENDING) {
