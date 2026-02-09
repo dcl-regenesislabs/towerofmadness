@@ -4,11 +4,13 @@ import {
   GltfContainer,
   Transform,
   TextShape,
-  TextAlignMode
+  TextAlignMode,
+  VisibilityComponent
 } from '@dcl/sdk/ecs'
 import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
 import { EntityNames } from '../assets/scene/entity-names'
 import { LeaderboardEntry } from './multiplayer'
+import { createLeaderboardPanel } from './LeaderboardPanel'
 
 const LEADERBOARD_TEXT_OFFSET = Vector3.create(1.6, 5.5, 0.8)
 const LEADERBOARD_TEXT_ROTATION = Quaternion.fromEulerDegrees(0, 180, 0)
@@ -98,6 +100,7 @@ export function setupWorldLeaderboard(getEntries: () => LeaderboardEntry[]) {
       outlineWidth: 0.1,
       textAlign: TextAlignMode.TAM_TOP_LEFT
     })
+    VisibilityComponent.createOrReplace(worldLeaderboardHeaderEntity, { visible: false })
 
     const entries = getEntries()
     TextShape.create(worldLeaderboardTextEntity, {
@@ -107,6 +110,16 @@ export function setupWorldLeaderboard(getEntries: () => LeaderboardEntry[]) {
       outlineColor: Color4.Black(),
       outlineWidth: 0.1,
       textAlign: TextAlignMode.TAM_TOP_LEFT
+    })
+    VisibilityComponent.createOrReplace(worldLeaderboardTextEntity, { visible: false })
+
+    createLeaderboardPanel({
+      parent: entity,
+      transform: {
+        position: Vector3.create(0, 3.1, 0.7),
+        rotation: LEADERBOARD_TEXT_ROTATION,
+        scale: Vector3.create(1, 1, 1)
+      }
     })
   }
 
