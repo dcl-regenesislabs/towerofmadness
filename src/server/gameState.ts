@@ -40,6 +40,10 @@ const TRIGGER_END_OFFSET = Vector3.create(0, 0, -37.25)
 const TRIGGER_END_SCALE = Vector3.create(23.6, 10.9, 19.6)
 const GLOBAL_LEADERBOARD_KEY = 'globalLeaderboard'
 const GLOBAL_LEADERBOARD_SIZE = 5
+const WINNER_POINTS = [100, 90, 80]
+const ADDITIONAL_WINNER_POINTS = 30
+const NOWIN_START_POINTS = 5
+const NOWIN_MIN_POINTS = 1
 
 // Player tracking (server-side only, current round)
 interface PlayerData {
@@ -461,6 +465,8 @@ export class GameState {
 
     console.log('[Server] Winners:', top3.map((p) => p.displayName).join(', '))
 
+    this.calculateRoundPoints(playerArray)
+
     void this.persistGlobalLeaderboard()
   }
 
@@ -478,6 +484,53 @@ export class GameState {
     return {
       totalHeight: config.totalHeight,
       chunkCount: config.chunkIds.length
+    }
+  }
+
+  // TODO: Replace these logs with persistent points storage and leaderboard updates. (NEXT PR)
+  private calculateRoundPoints(players: PlayerData[]) {
+    if (players.length === 0) {
+      console.log('[Server][Points] No players this round')
+      return
+    }
+
+    const finishers = players.filter((player) => player.isFinished)
+    if (finishers.length > 0) {
+      console.log('[Server][Points] Winners detected. Awarding finish points.')
+      const sortedFinishers = [...finishers].sort((a, b) => {
+        if (a.bestTime !== b.bestTime) return a.bestTime - b.bestTime
+        if (a.finishOrder !== b.finishOrder) return a.finishOrder - b.finishOrder
+        return a.address.localeCompare(b.address)
+      })
+
+      sortedFinishers.forEach((player, index) => {
+        const points = index < 3 ? WINNER_POINTS[index] : ADDITIONAL_WINNER_POINTS
+        const label = index < 3 ? `winner #${index + 1}` : 'additional winner'
+        console.log(
+          `[Server][Points] ${player.displayName} (${player.address}) +${points} pts (${label})`
+        )
+      })
+      return
+    }
+
+    console.log(
+      `[Server][Points] No winners this round. Awarding points to highest climbers (${NOWIN_START_POINTS}..${NOWIN_MIN_POINTS}).`
+    )
+    const sortedByHeight = [...players].sort((a, b) => {
+      if (a.maxHeight !== b.maxHeight) return b.maxHeight - a.maxHeight
+      if (a.lastHeightTime !== b.lastHeightTime) return a.lastHeightTime - b.lastHeightTime
+      return a.address.localeCompare(b.address)
+    })
+
+    let points = NOWIN_START_POINTS
+    let rank = 1
+    for (const player of sortedByHeight) {
+      if (points < NOWIN_MIN_POINTS) break
+      console.log(
+        `[Server][Points] ${player.displayName} (${player.address}) +${points} pts (highest #${rank})`
+      )
+      points--
+      rank++
     }
   }
 
