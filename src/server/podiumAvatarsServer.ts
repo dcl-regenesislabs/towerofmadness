@@ -18,6 +18,7 @@ const DEFAULT_EXPRESSION_IDS = ['dance', 'clap', 'clap']
 const PODIUM_EMOTE_REPLAY_SECONDS = 4
 const PODIUM_TEXT_OFFSET = Vector3.create(0, 2.2, 0)
 const PODIUM_TEXT_SCALE = Vector3.create(-1, 1, 1)
+const DEFAULT_BODY_SHAPE = 'urn:decentraland:off-chain:base-avatars:BaseMale'
 type PodiumSlot = {
   index: number
   entity: Entity
@@ -164,21 +165,17 @@ export class PodiumAvatarsServer {
           })
         }
 
-        if (!hasServerAppearance) {
-          continue
-        }
-
         const appearance: AvatarAppearance = {
           wearables,
-          bodyShape: avatar?.bodyShapeUrn || '',
+          bodyShape: avatar?.bodyShapeUrn || DEFAULT_BODY_SHAPE,
           eyeColor: avatar?.eyesColor ?? { r: 0, g: 0, b: 0 },
           skinColor: avatar?.skinColor ?? { r: 0, g: 0, b: 0 },
           hairColor: avatar?.hairColor ?? { r: 0, g: 0, b: 0 }
         }
 
         const avatarShape = AvatarShape.getMutable(slot.entity)
-        if (appearance.wearables?.length) avatarShape.wearables = appearance.wearables.slice()
-        if (appearance.bodyShape) avatarShape.bodyShape = appearance.bodyShape
+        avatarShape.wearables = appearance.wearables.slice()
+        avatarShape.bodyShape = appearance.bodyShape
         if (appearance.eyeColor) avatarShape.eyeColor = appearance.eyeColor
         if (appearance.skinColor) avatarShape.skinColor = appearance.skinColor
         if (appearance.hairColor) avatarShape.hairColor = appearance.hairColor
