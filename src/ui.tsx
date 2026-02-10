@@ -7,11 +7,14 @@ function getScaleUIFactor(): number {
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
   if (!uiCanvasInfo) return 1
 
-  const baseScale = Math.min(uiCanvasInfo.width / 1920, uiCanvasInfo.height / 1080)
-  const minScreenSide = Math.min(uiCanvasInfo.width, uiCanvasInfo.height)
-  const isMobile = minScreenSide <= 800
+  return Math.min(uiCanvasInfo.width / 1920, uiCanvasInfo.height / 1080)
+}
 
-  return baseScale * (isMobile ? 3 : 1)
+function isMobileScreen(): boolean {
+  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
+  if (!uiCanvasInfo) return false
+
+  return Math.min(uiCanvasInfo.width, uiCanvasInfo.height) <= 800
 }
 import {
   playerHeight,
@@ -236,6 +239,9 @@ const TowerProgressBar = () => {
 
 const GameUI = () => {
   const s = getScaleUIFactor()
+  const isMobile = isMobileScreen()
+  const mobileBoostScale = s * (isMobile ? 3 : 1)
+  const startMessageScale = isMobile ? 3 : 1
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
   const screenWidth = uiCanvasInfo?.width ?? 1920 * s
   const playerInfoWidth = 260 * s
@@ -261,8 +267,8 @@ const GameUI = () => {
   const showResult = attemptResult && timeSinceResult < 5
   const isDeathResult = attemptResult === 'DEATH'
   const deathShakeActive = isDeathResult && timeSinceResult < 5
-  const deathShakeX = deathShakeActive ? Math.sin(timeSinceResult * 24) * 6 * s : 0
-  const deathShakeY = deathShakeActive ? Math.cos(timeSinceResult * 28) * 6 * s : 0
+  const deathShakeX = deathShakeActive ? Math.sin(timeSinceResult * 24) * 6 * mobileBoostScale : 0
+  const deathShakeY = deathShakeActive ? Math.cos(timeSinceResult * 28) * 6 * mobileBoostScale : 0
   const timeSinceStartMessage = startMessageTimestamp > 0 ? (Date.now() - startMessageTimestamp) / 1000 : 999
   const showStartMessage = attemptState === AttemptState.IN_PROGRESS && timeSinceStartMessage < 4
 
@@ -352,7 +358,7 @@ const GameUI = () => {
       >
         <UiEntity
           uiTransform={{
-            width: 280 * s,
+            width: 360 * s,
             height: 90 * s,
             alignItems: 'center',
             justifyContent: 'center',
@@ -367,48 +373,60 @@ const GameUI = () => {
               height: 80 * s,
               alignItems: 'center',
               justifyContent: 'center',
+              flexDirection: 'row'
             }}
           >
-            <OutlinedText
-              outlineKeyPrefix="timer-outline"
-              outlineOffsets={OUTLINE_OFFSETS_16}
-              outlineScale={s}
-              uiTransform={{
-                width: '100%',
-                height: '100%',
-                positionType: 'absolute',
-                position: { left: 0, top: 0 },
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              uiText={{
-                value: `${formatTime(roundTimer)}`,
-                fontSize: 80 * s,
-                color: roundTimer <= 60
-                  ? Color4.create(0.6, 0.0, 0.15, 1)
-                  : Color4.White(),
-                textAlign: 'middle-center'
-              }}
-            />
-          </UiEntity>
-
-          {/* Speed Multiplier (if active) */}
-          {roundSpeedMultiplier > 1 && (
             <UiEntity
               uiTransform={{
-                width: '100%',
-                height: 25 * s,
+                width: 280 * s,
+                height: 80 * s,
                 alignItems: 'center',
-                justifyContent: 'center'
+                justifyContent: 'center',
+                positionType: 'relative'
               }}
-              uiText={{
-                value: `x${roundSpeedMultiplier.toFixed(0)} SPEED!`,
-                fontSize: 18 * s,
-                color: Color4.Yellow(),
-                textAlign: 'middle-center'
-              }}
-            />
-          )}
+            >
+              <OutlinedText
+                outlineKeyPrefix="timer-outline"
+                outlineOffsets={OUTLINE_OFFSETS_16}
+                outlineScale={s}
+                uiTransform={{
+                  width: '100%',
+                  height: '100%',
+                  positionType: 'absolute',
+                  position: { left: 0, top: 0 },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: `${formatTime(roundTimer)}`,
+                  fontSize: 80 * s,
+                  color: roundTimer <= 60
+                    ? Color4.create(0.6, 0.0, 0.15, 1)
+                    : Color4.White(),
+                  textAlign: 'middle-center'
+                }}
+              />
+            </UiEntity>
+
+            {/* Speed Multiplier (if active) */}
+            {roundSpeedMultiplier > 1 && (
+              <UiEntity
+                uiTransform={{
+                  width: 80 * s,
+                  height: 25 * s,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  margin: { left: 8 * s }
+                }}
+                uiText={{
+                  value: `x${roundSpeedMultiplier.toFixed(0)} SPEED!`,
+                  fontSize: 18 * s,
+                  color: Color4.Yellow(),
+                  textAlign: 'middle-center'
+                }}
+              />
+            )}
+          </UiEntity>
 
           {/* Round Status */}
           {!isRoundActive && (
@@ -798,8 +816,8 @@ const GameUI = () => {
           {attemptResult === 'WIN' && (
             <UiEntity
               uiTransform={{
-                width: 320 * s,
-                height: 180 * s,
+                width: 320 * mobileBoostScale,
+                height: 180 * mobileBoostScale,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexDirection: 'column'
@@ -807,10 +825,10 @@ const GameUI = () => {
             >
               <UiEntity
                 uiTransform={{
-                  width: 100 * s,
-                  height: 100 * s,
+                  width: 100 * mobileBoostScale,
+                  height: 100 * mobileBoostScale,
                   positionType: 'absolute',
-                  position: { left: 110 * s, top: 0 }
+                  position: { left: 110 * mobileBoostScale, top: 0 }
                 }}
                 uiBackground={{
                   color: Color4.create(1, 1, 1, 1),
@@ -820,8 +838,8 @@ const GameUI = () => {
               />
               <UiEntity
                 uiTransform={{
-                  width: 100 * s,
-                  height: 100 * s
+                  width: 100 * mobileBoostScale,
+                  height: 100 * mobileBoostScale
                 }}
                 uiBackground={{
                   color: Color4.create(0, 0, 0, 0)
@@ -832,18 +850,18 @@ const GameUI = () => {
               <OutlinedText
                 outlineKeyPrefix="win-text-stroke"
                 outlineOffsets={OUTLINE_OFFSETS_8}
-                outlineScale={s}
+                outlineScale={mobileBoostScale}
                 uiTransform={{
-                  width: 300 * s,
-                  height: 60 * s,
+                  width: 300 * mobileBoostScale,
+                  height: 60 * mobileBoostScale,
                   positionType: 'absolute',
-                  position: { top: 110 * s, left: 10 * s },
+                  position: { top: 110 * mobileBoostScale, left: 10 * mobileBoostScale },
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
                 uiText={{
                   value: 'CONGRATS\nYOU MADE IT!',
-                  fontSize: 26 * s,
+                  fontSize: 26 * mobileBoostScale,
                   color: Color4.White(),
                   textAlign: 'middle-center',
                   font: 'sans-serif'
@@ -855,8 +873,8 @@ const GameUI = () => {
           {attemptResult === 'DEATH' && (
             <UiEntity
               uiTransform={{
-                width: 320 * s,
-                height: 180 * s,
+                width: 320 * mobileBoostScale,
+                height: 180 * mobileBoostScale,
                 alignItems: 'center',
                 justifyContent: 'center',
                 flexDirection: 'column'
@@ -864,10 +882,10 @@ const GameUI = () => {
             >
               <UiEntity
                 uiTransform={{
-                  width: 100 * s,
-                  height: 100 * s,
+                  width: 100 * mobileBoostScale,
+                  height: 100 * mobileBoostScale,
                   positionType: 'absolute',
-                  position: { left: 110 * s + deathShakeX, top: deathShakeY }
+                  position: { left: 110 * mobileBoostScale + deathShakeX, top: deathShakeY }
                 }}
                 uiBackground={{
                   color: Color4.create(1, 1, 1, 1),
@@ -877,8 +895,8 @@ const GameUI = () => {
               />
               <UiEntity
                 uiTransform={{
-                  width: 100 * s,
-                  height: 100 * s
+                  width: 100 * mobileBoostScale,
+                  height: 100 * mobileBoostScale
                 }}
                 uiBackground={{
                   color: Color4.create(0, 0, 0, 0)
@@ -889,18 +907,18 @@ const GameUI = () => {
               <OutlinedText
                 outlineKeyPrefix="death-text-stroke"
                 outlineOffsets={OUTLINE_OFFSETS_8}
-                outlineScale={s}
+                outlineScale={mobileBoostScale}
                 uiTransform={{
-                  width: 300 * s,
-                  height: 40 * s,
+                  width: 300 * mobileBoostScale,
+                  height: 40 * mobileBoostScale,
                   positionType: 'absolute',
-                  position: { top: 110 * s, left: 10 * s },
+                  position: { top: 110 * mobileBoostScale, left: 10 * mobileBoostScale },
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
                 uiText={{
                   value: 'OOPS TRY AGAIN',
-                  fontSize: 28 * s,
+                  fontSize: 28 * mobileBoostScale,
                   color: Color4.White(),
                   textAlign: 'middle-center',
                   font: 'sans-serif'
@@ -908,10 +926,10 @@ const GameUI = () => {
               />
               <UiEntity
                 uiTransform={{
-                  width: 320 * s,
-                  height: 32 * s,
+                  width: 320 * mobileBoostScale,
+                  height: 32 * mobileBoostScale,
                   positionType: 'absolute',
-                  position: { top: 150 * s, left: 0 },
+                  position: { top: 150 * mobileBoostScale, left: 0 },
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center'
@@ -919,8 +937,8 @@ const GameUI = () => {
               >
                 <UiEntity
                   uiTransform={{
-                    width: 26 * s,
-                    height: 26 * s
+                    width: 26 * mobileBoostScale,
+                    height: 26 * mobileBoostScale
                   }}
                   uiBackground={{
                     color: Color4.White(),
@@ -930,7 +948,7 @@ const GameUI = () => {
                 />
                 <UiEntity
                   uiTransform={{
-                    width: 2 * s,
+                    width: 2 * mobileBoostScale,
                     height: 1
                   }}
                   uiBackground={{
@@ -939,8 +957,8 @@ const GameUI = () => {
                 />
                 <UiEntity
                   uiTransform={{
-                    width: 140 * s,
-                    height: 28 * s,
+                    width: 140 * mobileBoostScale,
+                    height: 28 * mobileBoostScale,
                     alignItems: 'center',
                     justifyContent: 'center',
                     positionType: 'relative'
@@ -949,7 +967,7 @@ const GameUI = () => {
                   <OutlinedText
                     outlineKeyPrefix="death-at-stroke"
                     outlineOffsets={OUTLINE_OFFSETS_8}
-                    outlineScale={s}
+                    outlineScale={mobileBoostScale}
                     uiTransform={{
                       width: '100%',
                       height: '100%',
@@ -960,7 +978,7 @@ const GameUI = () => {
                     }}
                     uiText={{
                       value: `DEATH AT ${playerMaxHeight.toFixed(1)}m`,
-                      fontSize: 15 * s,
+                      fontSize: 15 * mobileBoostScale,
                       color: Color4.White(),
                       textAlign: 'middle-center',
                       font: 'sans-serif'
@@ -1020,12 +1038,12 @@ const GameUI = () => {
       {showStartMessage && (
         <UiEntity
           uiTransform={{
-            width: startMessageWidth,
-            height: 140 * s,
+            width: startMessageWidth * startMessageScale,
+            height: 140 * mobileBoostScale,
             positionType: 'absolute',
             position: {
-              top: 205 * s,
-              left: screenWidth / 2 - playerInfoWidth / 2 - startMessageGap - startMessageWidth
+              top: (isMobile ? 80 : 205) * s,
+              left: screenWidth / 2 - playerInfoWidth / 2 - startMessageGap - startMessageWidth * startMessageScale
             },
             alignItems: 'center',
             justifyContent: 'center',
@@ -1034,8 +1052,8 @@ const GameUI = () => {
         >
           <UiEntity
             uiTransform={{
-              width: 85 * s,
-              height: 85 * s
+              width: 85 * mobileBoostScale,
+              height: 85 * mobileBoostScale
             }}
             uiBackground={{
               color: Color4.White(),
@@ -1048,18 +1066,18 @@ const GameUI = () => {
           <OutlinedText
             outlineKeyPrefix="start-text-stroke"
             outlineOffsets={OUTLINE_OFFSETS_8}
-            outlineScale={s}
+            outlineScale={mobileBoostScale}
             uiTransform={{
-              width: 240 * s,
-              height: 36 * s,
+              width: 240 * mobileBoostScale,
+              height: 36 * mobileBoostScale,
               positionType: 'absolute',
-              position: { top: 108 * s, left: 10 * s },
+              position: { top: 108 * mobileBoostScale, left: 10 * mobileBoostScale },
               alignItems: 'center',
               justifyContent: 'center'
             }}
             uiText={{
               value: 'Good Luck!',
-              fontSize: 24 * s,
+              fontSize: 24 * mobileBoostScale,
               color: Color4.White(),
               textAlign: 'middle-center',
               font: 'sans-serif'
