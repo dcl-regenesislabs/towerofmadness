@@ -41,7 +41,6 @@ const TRIGGER_END_SCALE = Vector3.create(23.6, 10.9, 19.6)
 const GLOBAL_LEADERBOARD_KEY = 'globalLeaderboard'
 const GLOBAL_LEADERBOARD_SIZE = 10
 const WEEKLY_LEADERBOARD_KEY = 'weeklyLeaderboard'
-const WEEKLY_LEADERBOARD_META_KEY = 'weeklyLeaderboardMeta'
 const WEEKLY_LEADERBOARD_SIZE = 10
 
 function getWeekStartKeyUTC(now: number = Date.now()): string {
@@ -118,6 +117,8 @@ export class GameState {
   private allTimeBests = new Map<string, AllTimeBest>()
   private weeklyBests = new Map<string, WeeklyBest>()
   private weeklyMetaKey: string = getWeekStartKeyUTC()
+  private lastAllTimeKey: string = ''
+  private lastWeeklyKey: string = ''
 
   public static getInstance(): GameState {
     if (!GameState.instance) {
@@ -665,12 +666,28 @@ export class GameState {
     }
 
     const leaderboard = LeaderboardComponent.getMutable(this.leaderboardEntity)
-    leaderboard.players = allTimeSorted.slice(0, 10).map((allTime) => {
+    const allTimeTop = allTimeSorted.slice(0, 10)
+    const weeklyTop = weeklySorted.slice(0, 10)
+
+    const allTimeKey = allTimeTop
+      .map((p) => `${p.address}:${p.displayName}:${p.bestTime}:${p.bestHeight}:${p.finishCount}`)
+      .join('|')
+    const weeklyKey = weeklyTop
+      .map((p) => `${p.address}:${p.displayName}:${p.bestTime}:${p.bestHeight}:${p.finishCount}`)
+      .join('|')
+
+    if (allTimeKey === this.lastAllTimeKey && weeklyKey === this.lastWeeklyKey) {
+      return
+    }
+    this.lastAllTimeKey = allTimeKey
+    this.lastWeeklyKey = weeklyKey
+
+    leaderboard.players = allTimeTop.map((allTime) => {
       const weekly = this.weeklyBests.get(allTime.address)
       return buildEntry(allTime.address, allTime.displayName, allTime, weekly)
     })
 
-    leaderboard.weeklyPlayers = weeklySorted.slice(0, 10).map((weekly) => {
+    leaderboard.weeklyPlayers = weeklyTop.map((weekly) => {
       const allTime = this.allTimeBests.get(weekly.address)
       const displayName = allTime?.displayName || weekly.displayName
       return buildEntry(weekly.address, displayName, allTime, weekly)
@@ -710,20 +727,9 @@ export class GameState {
 
     try {
       const currentWeek = getWeekStartKeyUTC()
-      const storedMeta = await Storage.get<string>(WEEKLY_LEADERBOARD_META_KEY)
-      this.weeklyMetaKey = storedMeta || currentWeek
+      this.weeklyMetaKey = currentWeek
 
-      if (this.weeklyMetaKey !== currentWeek) {
-        this.weeklyMetaKey = currentWeek
-        this.weeklyBests.clear()
-        await Storage.set(WEEKLY_LEADERBOARD_KEY, JSON.stringify([]))
-        await Storage.set(WEEKLY_LEADERBOARD_META_KEY, this.weeklyMetaKey)
-        console.log(`[Server][Storage] Weekly leaderboard reset for ${this.weeklyMetaKey}`)
-        this.updateLeaderboard()
-        return
-      }
-
-      const stored = await Storage.get<string>(WEEKLY_LEADERBOARD_KEY)
+      const stored = await Storage.get<string>(`${WEEKLY_LEADERBOARD_KEY}_${currentWeek}`)
       if (!stored) return
 
       const entries = JSON.parse(stored) as WeeklyBest[]
@@ -765,8 +771,7 @@ export class GameState {
 
     try {
       const topEntries = this.getWeeklyBests().slice(0, WEEKLY_LEADERBOARD_SIZE)
-      await Storage.set(WEEKLY_LEADERBOARD_KEY, JSON.stringify(topEntries))
-      await Storage.set(WEEKLY_LEADERBOARD_META_KEY, this.weeklyMetaKey)
+      await Storage.set(`${WEEKLY_LEADERBOARD_KEY}_${this.weeklyMetaKey}`, JSON.stringify(topEntries))
       console.log(`[Server][Storage] Saved weekly leaderboard: ${topEntries.length} entries`)
     } catch (error) {
       console.error('[Server][Storage] Failed to save weekly leaderboard:', error)
@@ -788,6 +793,5 @@ export class GameState {
     if (this.weeklyMetaKey === currentWeek) return
     this.weeklyMetaKey = currentWeek
     this.weeklyBests.clear()
-    void this.persistWeeklyLeaderboard()
   }
 }
