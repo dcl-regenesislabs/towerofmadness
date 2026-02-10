@@ -34,6 +34,7 @@ import {
   onPlayerFinished,
   getRoundState,
   getLeaderboard,
+  getWeeklyLeaderboard,
   getWinners,
   getTowerConfig,
   RoundPhase,
@@ -99,6 +100,7 @@ export let roundTimer: number = 420
 export let roundSpeedMultiplier: number = 1.0
 export let roundPhase: RoundPhase = RoundPhase.ACTIVE
 export let leaderboard: LeaderboardEntry[] = []
+export let weeklyLeaderboard: LeaderboardEntry[] = []
 export let roundWinners: WinnerEntry[] = []
 export let towerConfig: TowerConfig | null = null
 
@@ -209,6 +211,7 @@ function syncRoundState() {
 
   // Update leaderboard
   leaderboard = getLeaderboard()
+  weeklyLeaderboard = getWeeklyLeaderboard()
 
   // Update tower config
   towerConfig = getTowerConfig()
@@ -336,7 +339,7 @@ export async function main() {
     'snapshot-player-enter-system'
   )
 
-  setupWorldLeaderboard(() => leaderboard)
+  setupWorldLeaderboard(() => leaderboard, () => weeklyLeaderboard)
 
   // ============================================
   // TRIGGER SETUP

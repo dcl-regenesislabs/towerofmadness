@@ -4,11 +4,13 @@ import {
   GltfContainer,
   Transform,
   TextShape,
-  TextAlignMode
+  TextAlignMode,
+  VisibilityComponent
 } from '@dcl/sdk/ecs'
 import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
 import { EntityNames } from '../assets/scene/entity-names'
 import { LeaderboardEntry } from './multiplayer'
+import { createLeaderboardPanel, setTabData } from './LeaderboardPanel'
 
 const LEADERBOARD_TEXT_OFFSET = Vector3.create(1.6, 5.5, 0.8)
 const LEADERBOARD_TEXT_ROTATION = Quaternion.fromEulerDegrees(0, 180, 0)
@@ -17,11 +19,17 @@ const LEADERBOARD_NAME_WIDTH = 10
 const LEADERBOARD_HEADER_GAP = 4
 const LEADERBOARD_HEADER_BODY_GAP = 0.65
 
-export function setupWorldLeaderboard(getEntries: () => LeaderboardEntry[]) {
+export function setupWorldLeaderboard(
+  getEntries: () => LeaderboardEntry[],
+  getWeeklyEntries?: () => LeaderboardEntry[]
+) {
   let worldLeaderboardTextEntity: Entity | null = null
   let worldLeaderboardHeaderEntity: Entity | null = null
   let worldLeaderboardSetupDone = false
   let lastWorldLeaderboardText = ''
+  let leaderboardPanel: ReturnType<typeof createLeaderboardPanel> | null = null
+  let lastHistoricKey = ''
+  let lastWeeklyKey = ''
 
   function findLeaderboardEntity(): Entity | null {
     const byName = engine.getEntityOrNullByName(EntityNames.LeaderBoard01_glb)
@@ -98,6 +106,7 @@ export function setupWorldLeaderboard(getEntries: () => LeaderboardEntry[]) {
       outlineWidth: 0.1,
       textAlign: TextAlignMode.TAM_TOP_LEFT
     })
+    VisibilityComponent.createOrReplace(worldLeaderboardHeaderEntity, { visible: false })
 
     const entries = getEntries()
     TextShape.create(worldLeaderboardTextEntity, {
@@ -108,6 +117,40 @@ export function setupWorldLeaderboard(getEntries: () => LeaderboardEntry[]) {
       outlineWidth: 0.1,
       textAlign: TextAlignMode.TAM_TOP_LEFT
     })
+    VisibilityComponent.createOrReplace(worldLeaderboardTextEntity, { visible: false })
+
+    leaderboardPanel = createLeaderboardPanel({
+      parent: entity,
+      transform: {
+        position: Vector3.create(0, 3.1, 0.7),
+        rotation: LEADERBOARD_TEXT_ROTATION,
+        scale: Vector3.create(1, 1, 1)
+      }
+    })
+  }
+
+  function buildHistoricTabData(entries: LeaderboardEntry[]) {
+    const finishedEntries = entries
+      .filter((player) => player.allTimeFinishCount > 0 && player.allTimeBestTime > 0)
+      .sort((a, b) => a.allTimeBestTime - b.allTimeBestTime)
+      .slice(0, 10)
+
+    return finishedEntries.map((player) => ({
+      name: player.displayName,
+      time: `${player.allTimeBestTime.toFixed(2)}s`
+    }))
+  }
+
+  function buildWeeklyTabData(entries: LeaderboardEntry[]) {
+    const finishedEntries = entries
+      .filter((player) => player.weeklyFinishCount > 0 && player.weeklyBestTime > 0)
+      .sort((a, b) => a.weeklyBestTime - b.weeklyBestTime)
+      .slice(0, 10)
+
+    return finishedEntries.map((player) => ({
+      name: player.displayName,
+      time: `${player.weeklyBestTime.toFixed(2)}s`
+    }))
   }
 
   engine.addSystem(() => {
@@ -124,6 +167,23 @@ export function setupWorldLeaderboard(getEntries: () => LeaderboardEntry[]) {
       lastWorldLeaderboardText = bodyText
       TextShape.getMutable(worldLeaderboardHeaderEntity).text = formatLeaderboardHeader()
       TextShape.getMutable(worldLeaderboardTextEntity).text = bodyText
+    }
+
+    if (leaderboardPanel) {
+      const historicData = buildHistoricTabData(entries)
+      const historicKey = historicData.map((e) => `${e.name}:${e.time}`).join('|')
+      if (historicKey !== lastHistoricKey) {
+        lastHistoricKey = historicKey
+        setTabData(leaderboardPanel, 0, historicData)
+      }
+
+      const weeklyEntries = getWeeklyEntries ? getWeeklyEntries() : []
+      const weeklyData = buildWeeklyTabData(weeklyEntries)
+      const weeklyKey = weeklyData.map((e) => `${e.name}:${e.time}`).join('|')
+      if (weeklyKey !== lastWeeklyKey) {
+        lastWeeklyKey = weeklyKey
+        setTabData(leaderboardPanel, 1, weeklyData)
+      }
     }
   }, undefined, 'world-leaderboard-text-system')
 }

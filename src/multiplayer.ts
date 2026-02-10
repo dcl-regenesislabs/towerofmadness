@@ -155,6 +155,14 @@ export function getLeaderboard(): LeaderboardEntry[] {
   return []
 }
 
+export function getWeeklyLeaderboard(): LeaderboardEntry[] {
+  for (const [entity] of engine.getEntitiesWith(LeaderboardComponent)) {
+    const data = LeaderboardComponent.get(entity) as unknown as { weeklyPlayers?: LeaderboardEntry[] }
+    return data.weeklyPlayers ?? []
+  }
+  return []
+}
+
 export function getWinners(): WinnerEntry[] {
   for (const [entity] of engine.getEntitiesWith(WinnersComponent)) {
     return WinnersComponent.get(entity).winners as WinnerEntry[]

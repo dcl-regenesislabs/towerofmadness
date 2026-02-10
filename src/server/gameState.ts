@@ -39,7 +39,21 @@ const TOWER_Z = 40
 const TRIGGER_END_OFFSET = Vector3.create(0, 0, -37.25)
 const TRIGGER_END_SCALE = Vector3.create(23.6, 10.9, 19.6)
 const GLOBAL_LEADERBOARD_KEY = 'globalLeaderboard'
-const GLOBAL_LEADERBOARD_SIZE = 5
+const GLOBAL_LEADERBOARD_SIZE = 10
+const WEEKLY_LEADERBOARD_KEY = 'weeklyLeaderboard'
+const WEEKLY_LEADERBOARD_SIZE = 10
+
+function getWeekStartKeyUTC(now: number = Date.now()): string {
+  const d = new Date(now)
+  const day = d.getUTCDay() // 0 = Sunday
+  const start = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  start.setUTCDate(start.getUTCDate() - day)
+  const y = start.getUTCFullYear()
+  const m = String(start.getUTCMonth() + 1).padStart(2, '0')
+  const dd = String(start.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${dd}`
+}
+
 const WINNER_POINTS = [100, 90, 80]
 const ADDITIONAL_WINNER_POINTS = 30
 const NOWIN_START_POINTS = 5
@@ -61,6 +75,15 @@ interface PlayerData {
 
 // All-time best scores (persisted)
 interface AllTimeBest {
+  address: string
+  displayName: string
+  bestTime: number
+  bestHeight: number
+  finishCount: number
+  lastPlayed: number
+}
+
+interface WeeklyBest {
   address: string
   displayName: string
   bestTime: number
@@ -92,6 +115,10 @@ export class GameState {
 
   // All-time best scores (persisted)
   private allTimeBests = new Map<string, AllTimeBest>()
+  private weeklyBests = new Map<string, WeeklyBest>()
+  private weeklyMetaKey: string = getWeekStartKeyUTC()
+  private lastAllTimeKey: string = ''
+  private lastWeeklyKey: string = ''
 
   public static getInstance(): GameState {
     if (!GameState.instance) {
@@ -121,7 +148,8 @@ export class GameState {
     // Create leaderboard entity
     this.leaderboardEntity = engine.addEntity()
     LeaderboardComponent.create(this.leaderboardEntity, {
-      players: []
+      players: [],
+      weeklyPlayers: []
     })
     syncEntity(this.leaderboardEntity, [LeaderboardComponent.componentId])
 
@@ -190,6 +218,7 @@ export class GameState {
     console.log('[Server] Game state initialized')
 
     void this.loadGlobalLeaderboard()
+    void this.loadWeeklyLeaderboard()
   }
 
   // Player management (normalize address to lowercase for consistency)
@@ -212,6 +241,18 @@ export class GameState {
     )
     if (didUpdateAllTime) {
       this.maybePersistGlobalLeaderboard()
+    }
+
+    // Update weekly bests in real-time
+    const didUpdateWeekly = this.updateWeeklyBest(
+      normalizedAddress,
+      data.displayName,
+      data.bestTime,
+      data.maxHeight,
+      data.isFinished
+    )
+    if (didUpdateWeekly) {
+      this.maybePersistWeeklyLeaderboard()
     }
 
     this.updateLeaderboard()
@@ -258,8 +299,58 @@ export class GameState {
     return changed
   }
 
+  updateWeeklyBest(
+    address: string,
+    displayName: string,
+    time: number,
+    height: number,
+    finished: boolean
+  ): boolean {
+    this.ensureWeeklyCurrent()
+    const normalizedAddress = address.toLowerCase()
+    const existing = this.weeklyBests.get(normalizedAddress)
+    let changed = false
+
+    if (existing) {
+      if (finished && (time < existing.bestTime || existing.bestTime === 0)) {
+        existing.bestTime = time
+        existing.finishCount++
+        changed = true
+      }
+      if (height > existing.bestHeight) {
+        existing.bestHeight = height
+        changed = true
+      }
+      if (existing.displayName !== displayName) {
+        existing.displayName = displayName
+        changed = true
+      }
+      existing.lastPlayed = Date.now()
+    } else {
+      this.weeklyBests.set(normalizedAddress, {
+        address: normalizedAddress,
+        displayName: displayName,
+        bestTime: finished ? time : 0,
+        bestHeight: height,
+        finishCount: finished ? 1 : 0,
+        lastPlayed: Date.now()
+      })
+      changed = true
+    }
+    return changed
+  }
+
   getAllTimeBests(): AllTimeBest[] {
     return Array.from(this.allTimeBests.values()).sort((a, b) => {
+      if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
+      if (a.finishCount > 0) return -1
+      if (b.finishCount > 0) return 1
+      return b.bestHeight - a.bestHeight
+    })
+  }
+
+  getWeeklyBests(): WeeklyBest[] {
+    return Array.from(this.weeklyBests.values()).sort((a, b) => {
       if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
       if (a.finishCount > 0) return -1
       if (b.finishCount > 0) return 1
@@ -535,7 +626,8 @@ export class GameState {
   }
 
   private updateLeaderboard() {
-    // Get all-time bests sorted by: finishers first (by best time), then by best height
+    this.ensureWeeklyCurrent()
+
     const allTimeSorted = Array.from(this.allTimeBests.values()).sort((a, b) => {
       if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
       if (a.finishCount > 0) return -1
@@ -543,20 +635,62 @@ export class GameState {
       return b.bestHeight - a.bestHeight
     })
 
-    const leaderboard = LeaderboardComponent.getMutable(this.leaderboardEntity)
-    leaderboard.players = allTimeSorted.slice(0, 10).map((allTime) => {
-      const currentRound = this.players.get(allTime.address)
+    const weeklySorted = Array.from(this.weeklyBests.values()).sort((a, b) => {
+      if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
+      if (a.finishCount > 0) return -1
+      if (b.finishCount > 0) return 1
+      return b.bestHeight - a.bestHeight
+    })
+
+    const buildEntry = (
+      address: string,
+      displayName: string,
+      allTime: AllTimeBest | undefined,
+      weekly: WeeklyBest | undefined
+    ) => {
+      const currentRound = this.players.get(address)
       return {
-        address: allTime.address,
-        displayName: allTime.displayName,
+        address: address,
+        displayName: displayName,
         maxHeight: currentRound?.maxHeight || 0,
         bestTime: currentRound?.bestTime || 0,
         isFinished: currentRound?.isFinished || false,
         finishOrder: currentRound?.finishOrder || 0,
-        allTimeBestTime: allTime.bestTime,
-        allTimeBestHeight: allTime.bestHeight,
-        allTimeFinishCount: allTime.finishCount
+        allTimeBestTime: allTime?.bestTime || 0,
+        allTimeBestHeight: allTime?.bestHeight || 0,
+        allTimeFinishCount: allTime?.finishCount || 0,
+        weeklyBestTime: weekly?.bestTime || 0,
+        weeklyBestHeight: weekly?.bestHeight || 0,
+        weeklyFinishCount: weekly?.finishCount || 0
       }
+    }
+
+    const leaderboard = LeaderboardComponent.getMutable(this.leaderboardEntity)
+    const allTimeTop = allTimeSorted.slice(0, 10)
+    const weeklyTop = weeklySorted.slice(0, 10)
+
+    const allTimeKey = allTimeTop
+      .map((p) => `${p.address}:${p.displayName}:${p.bestTime}:${p.bestHeight}:${p.finishCount}`)
+      .join('|')
+    const weeklyKey = weeklyTop
+      .map((p) => `${p.address}:${p.displayName}:${p.bestTime}:${p.bestHeight}:${p.finishCount}`)
+      .join('|')
+
+    if (allTimeKey === this.lastAllTimeKey && weeklyKey === this.lastWeeklyKey) {
+      return
+    }
+    this.lastAllTimeKey = allTimeKey
+    this.lastWeeklyKey = weeklyKey
+
+    leaderboard.players = allTimeTop.map((allTime) => {
+      const weekly = this.weeklyBests.get(allTime.address)
+      return buildEntry(allTime.address, allTime.displayName, allTime, weekly)
+    })
+
+    leaderboard.weeklyPlayers = weeklyTop.map((weekly) => {
+      const allTime = this.allTimeBests.get(weekly.address)
+      const displayName = allTime?.displayName || weekly.displayName
+      return buildEntry(weekly.address, displayName, allTime, weekly)
     })
   }
 
@@ -588,6 +722,37 @@ export class GameState {
     }
   }
 
+  private async loadWeeklyLeaderboard() {
+    if (!isServer()) return
+
+    try {
+      const currentWeek = getWeekStartKeyUTC()
+      this.weeklyMetaKey = currentWeek
+
+      const stored = await Storage.get<string>(`${WEEKLY_LEADERBOARD_KEY}_${currentWeek}`)
+      if (!stored) return
+
+      const entries = JSON.parse(stored) as WeeklyBest[]
+      for (const entry of entries) {
+        if (!entry?.address) continue
+        const normalizedAddress = entry.address.toLowerCase()
+        this.weeklyBests.set(normalizedAddress, {
+          address: normalizedAddress,
+          displayName: entry.displayName || normalizedAddress.substring(0, 8),
+          bestTime: Number(entry.bestTime) || 0,
+          bestHeight: Number(entry.bestHeight) || 0,
+          finishCount: Number(entry.finishCount) || 0,
+          lastPlayed: Number(entry.lastPlayed) || 0
+        })
+      }
+
+      console.log(`[Server][Storage] Loaded weekly leaderboard: ${entries.length} entries`)
+      this.updateLeaderboard()
+    } catch (error) {
+      console.error('[Server][Storage] Failed to load weekly leaderboard:', error)
+    }
+  }
+
   private async persistGlobalLeaderboard() {
     if (!isServer()) return
 
@@ -600,8 +765,33 @@ export class GameState {
     }
   }
 
+  private async persistWeeklyLeaderboard() {
+    if (!isServer()) return
+    this.ensureWeeklyCurrent()
+
+    try {
+      const topEntries = this.getWeeklyBests().slice(0, WEEKLY_LEADERBOARD_SIZE)
+      await Storage.set(`${WEEKLY_LEADERBOARD_KEY}_${this.weeklyMetaKey}`, JSON.stringify(topEntries))
+      console.log(`[Server][Storage] Saved weekly leaderboard: ${topEntries.length} entries`)
+    } catch (error) {
+      console.error('[Server][Storage] Failed to save weekly leaderboard:', error)
+    }
+  }
+
   private maybePersistGlobalLeaderboard() {
     if (!isServer()) return
     void this.persistGlobalLeaderboard()
+  }
+
+  private maybePersistWeeklyLeaderboard() {
+    if (!isServer()) return
+    void this.persistWeeklyLeaderboard()
+  }
+
+  private ensureWeeklyCurrent() {
+    const currentWeek = getWeekStartKeyUTC()
+    if (this.weeklyMetaKey === currentWeek) return
+    this.weeklyMetaKey = currentWeek
+    this.weeklyBests.clear()
   }
 }
