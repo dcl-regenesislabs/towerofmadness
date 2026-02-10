@@ -47,9 +47,8 @@ import { TriggerEndComponent } from './shared/schemas'
 // ============================================
 // GAME STATE
 // ============================================
-
-;import { initTimeSync } from './shared/timeSync'
-(globalThis as any).DEBUG_NETWORK_MESSAGES = true
+import { initTimeSync } from './shared/timeSync'
+;(globalThis as any).DEBUG_NETWORK_MESSAGES = true
 
 // Player tracking
 export let playerHeight = 0
@@ -320,18 +319,22 @@ export async function main() {
   })
 
   const knownPlayerWallets = new Set<string>()
-  engine.addSystem(() => {
-    for (const [entity, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
-      const wallet = identity.address?.toLowerCase()
-      if (!wallet || knownPlayerWallets.has(wallet)) continue
+  engine.addSystem(
+    () => {
+      for (const [entity, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
+        const wallet = identity.address?.toLowerCase()
+        if (!wallet || knownPlayerWallets.has(wallet)) continue
 
-      knownPlayerWallets.add(wallet)
-      const avatarBase = AvatarBase.getOrNull(entity)
-      requestPlayerSnapshot(wallet, avatarBase?.name).then((ok) => {
-        if (!ok) knownPlayerWallets.delete(wallet)
-      })
-    }
-  }, undefined, 'snapshot-player-enter-system')
+        knownPlayerWallets.add(wallet)
+        const avatarBase = AvatarBase.getOrNull(entity)
+        requestPlayerSnapshot(wallet, avatarBase?.name).then((ok) => {
+          if (!ok) knownPlayerWallets.delete(wallet)
+        })
+      }
+    },
+    undefined,
+    'snapshot-player-enter-system'
+  )
 
   setupWorldLeaderboard(() => leaderboard)
 
@@ -352,9 +355,13 @@ export async function main() {
     TriggerArea.setBox(entity, ColliderLayer.CL_PLAYER)
   }
 
-  const triggerStart = engine.getEntityOrNullByName(EntityNames.TriggerStart)
-  const triggerDeath = engine.getEntityOrNullByName(EntityNames.TriggerDeath)
-
+  const triggerStart = engine.addEntity()
+  Transform.create(triggerStart, { position: Vector3.create(40.38, 10.01, 14.6), scale: Vector3.create(23.6, 5.6, 6) })
+  const triggerDeath = engine.addEntity()
+  Transform.create(triggerDeath, {
+    position: Vector3.create(40.35, 6.99, 38.44),
+    scale: Vector3.create(73.8, 0.8, 73.8)
+  })
   setupTrigger(triggerStart)
   setupTrigger(triggerDeath)
 
@@ -377,7 +384,6 @@ export async function main() {
     return null
   }
 
- 
   // ============================================
   // COOLBED CHARACTER: CLICK TO TALK (2x speed) + SMOOTH BLEND (Breath loop set in Creator Hub)
   // ============================================
@@ -413,22 +419,19 @@ export async function main() {
       ]
     })
 
-    pointerEventsSystem.onPointerDown(
-      { entity, opts: { button: InputAction.IA_POINTER } },
-      () => {
-        if (!Animator.has(entity)) return
-        const breathClip = Animator.getClipOrNull(entity, 'Breath')
-        const talkClip = Animator.getClipOrNull(entity, 'Talk')
-        if (!breathClip || !talkClip) return
-        if (coolBedPhase !== 'idle' && coolBedPhase !== 'talking') return
-        talkClip.playing = true
-        talkClip.speed = TALK_SPEED
-        talkClip.weight = 0
-        if (breathClip) breathClip.weight = 1
-        coolBedPhase = 'blendToTalk'
-        coolBedPhaseStartTime = Date.now()
-      }
-    )
+    pointerEventsSystem.onPointerDown({ entity, opts: { button: InputAction.IA_POINTER } }, () => {
+      if (!Animator.has(entity)) return
+      const breathClip = Animator.getClipOrNull(entity, 'Breath')
+      const talkClip = Animator.getClipOrNull(entity, 'Talk')
+      if (!breathClip || !talkClip) return
+      if (coolBedPhase !== 'idle' && coolBedPhase !== 'talking') return
+      talkClip.playing = true
+      talkClip.speed = TALK_SPEED
+      talkClip.weight = 0
+      if (breathClip) breathClip.weight = 1
+      coolBedPhase = 'blendToTalk'
+      coolBedPhaseStartTime = Date.now()
+    })
   }
 
   function findCoolBedEntity(): Entity | null {
@@ -441,51 +444,55 @@ export async function main() {
     return null
   }
 
-  engine.addSystem(() => {
-    if (!coolBedSetupDone) {
-      const entity = findCoolBedEntity()
-      if (entity) setupCoolBed(entity)
-      return
-    }
-
-    const entity = coolBedEntity
-    if (!entity || !Animator.has(entity)) return
-
-    const breathClip = Animator.getClipOrNull(entity, 'Breath')
-    const talkClip = Animator.getClipOrNull(entity, 'Talk')
-    if (!breathClip || !talkClip) return
-
-    const now = Date.now()
-    const elapsed = now - coolBedPhaseStartTime
-
-    if (coolBedPhase === 'blendToTalk') {
-      const t = Math.min(1, elapsed / BLEND_DURATION_MS)
-      talkClip.weight = t
-      breathClip.weight = 1 - t
-      if (t >= 1) {
-        coolBedPhase = 'talking'
-        coolBedPhaseStartTime = now
+  engine.addSystem(
+    () => {
+      if (!coolBedSetupDone) {
+        const entity = findCoolBedEntity()
+        if (entity) setupCoolBed(entity)
+        return
       }
-    } else if (coolBedPhase === 'talking') {
-      if (elapsed >= TALK_ANIMATION_DURATION_MS) {
-        coolBedPhase = 'blendToBreath'
-        coolBedPhaseStartTime = now
-      }
-    } else if (coolBedPhase === 'blendToBreath') {
-      const t = Math.min(1, elapsed / BLEND_DURATION_MS)
-      talkClip.weight = 1 - t
-      breathClip.weight = t
-      if (t >= 1) {
-        coolBedPhase = 'idle'
-        talkClip.playing = false
+
+      const entity = coolBedEntity
+      if (!entity || !Animator.has(entity)) return
+
+      const breathClip = Animator.getClipOrNull(entity, 'Breath')
+      const talkClip = Animator.getClipOrNull(entity, 'Talk')
+      if (!breathClip || !talkClip) return
+
+      const now = Date.now()
+      const elapsed = now - coolBedPhaseStartTime
+
+      if (coolBedPhase === 'blendToTalk') {
+        const t = Math.min(1, elapsed / BLEND_DURATION_MS)
+        talkClip.weight = t
+        breathClip.weight = 1 - t
+        if (t >= 1) {
+          coolBedPhase = 'talking'
+          coolBedPhaseStartTime = now
+        }
+      } else if (coolBedPhase === 'talking') {
+        if (elapsed >= TALK_ANIMATION_DURATION_MS) {
+          coolBedPhase = 'blendToBreath'
+          coolBedPhaseStartTime = now
+        }
+      } else if (coolBedPhase === 'blendToBreath') {
+        const t = Math.min(1, elapsed / BLEND_DURATION_MS)
+        talkClip.weight = 1 - t
+        breathClip.weight = t
+        if (t >= 1) {
+          coolBedPhase = 'idle'
+          talkClip.playing = false
+          breathClip.weight = 1
+          talkClip.weight = 0
+        }
+      } else if (coolBedPhase === 'idle') {
         breathClip.weight = 1
         talkClip.weight = 0
       }
-    } else if (coolBedPhase === 'idle') {
-      breathClip.weight = 1
-      talkClip.weight = 0
-    }
-  }, undefined, 'coolbed-animation-system')
+    },
+    undefined,
+    'coolbed-animation-system'
+  )
 
   // ============================================
   // TRIGGER DETECTION SYSTEM
@@ -504,44 +511,48 @@ export async function main() {
   ]
 
   let triggerEndWasInside = false
-  engine.addSystem(() => {
-    if (!Transform.has(engine.PlayerEntity)) return
-    const playerPos = Transform.get(engine.PlayerEntity).position
+  engine.addSystem(
+    () => {
+      if (!Transform.has(engine.PlayerEntity)) return
+      const playerPos = Transform.get(engine.PlayerEntity).position
 
-    for (const trigger of triggers) {
-      if (!trigger.entity || !Transform.has(trigger.entity)) continue
+      for (const trigger of triggers) {
+        if (!trigger.entity || !Transform.has(trigger.entity)) continue
 
-      const t = Transform.get(trigger.entity)
-      const pos = trigger.useWorldPos ? getWorldPosition(trigger.entity) : t.position
-      const inside = isInsideBox(playerPos, pos, t.scale)
+        const t = Transform.get(trigger.entity)
+        const pos = trigger.useWorldPos ? getWorldPosition(trigger.entity) : t.position
+        const inside = isInsideBox(playerPos, pos, t.scale)
 
-      if (inside && !trigger.wasInside) {
-        trigger.wasInside = true
-        trigger.onEnter()
-      } else if (!inside && trigger.wasInside) {
-        trigger.wasInside = false
+        if (inside && !trigger.wasInside) {
+          trigger.wasInside = true
+          trigger.onEnter()
+        } else if (!inside && trigger.wasInside) {
+          trigger.wasInside = false
+        }
       }
-    }
 
-    const triggerEnd = findTriggerEndEntity()
-    if (triggerEnd && Transform.has(triggerEnd)) {
-      if (!TriggerArea.has(triggerEnd)) {
-        setupTrigger(triggerEnd)
-      }
-      const t = Transform.get(triggerEnd)
-      const pos = getWorldPosition(triggerEnd)
-      const inside = isInsideBox(playerPos, pos, t.scale)
+      const triggerEnd = findTriggerEndEntity()
+      if (triggerEnd && Transform.has(triggerEnd)) {
+        if (!TriggerArea.has(triggerEnd)) {
+          setupTrigger(triggerEnd)
+        }
+        const t = Transform.get(triggerEnd)
+        const pos = getWorldPosition(triggerEnd)
+        const inside = isInsideBox(playerPos, pos, t.scale)
 
-      if (inside && !triggerEndWasInside) {
-        triggerEndWasInside = true
-        finishAttempt()
-      } else if (!inside && triggerEndWasInside) {
+        if (inside && !triggerEndWasInside) {
+          triggerEndWasInside = true
+          finishAttempt()
+        } else if (!inside && triggerEndWasInside) {
+          triggerEndWasInside = false
+        }
+      } else {
         triggerEndWasInside = false
       }
-    } else {
-      triggerEndWasInside = false
-    }
-  }, undefined, 'trigger-detection-system')
+    },
+    undefined,
+    'trigger-detection-system'
+  )
 
   // ============================================
   // ADD SYSTEMS
@@ -552,7 +563,7 @@ export async function main() {
 
   // ============================================
   // INITIALIZE UI
-  // ============================================ 
+  // ============================================
 
   setupUi()
 
@@ -586,16 +597,20 @@ function setupBackgroundMusic(audioPath: string) {
     volume: 1.0
   })
 
-  engine.addSystem(() => {
-    if (backgroundMusicEntity && AudioSource.has(backgroundMusicEntity)) {
-      const audio = AudioSource.get(backgroundMusicEntity)
-      if (!audio.playing && !audioStarted) {
-        AudioSource.getMutable(backgroundMusicEntity).playing = true
-      } else if (audio.playing && !audioStarted) {
-        audioStarted = true
+  engine.addSystem(
+    () => {
+      if (backgroundMusicEntity && AudioSource.has(backgroundMusicEntity)) {
+        const audio = AudioSource.get(backgroundMusicEntity)
+        if (!audio.playing && !audioStarted) {
+          AudioSource.getMutable(backgroundMusicEntity).playing = true
+        } else if (audio.playing && !audioStarted) {
+          audioStarted = true
+        }
       }
-    }
-  }, undefined, 'backg round-music-system')
+    },
+    undefined,
+    'backg round-music-system'
+  )
 
   return backgroundMusicEntity
 }

@@ -7,7 +7,11 @@ function getScaleUIFactor(): number {
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
   if (!uiCanvasInfo) return 1
 
-  return Math.min(uiCanvasInfo.width / 1920, uiCanvasInfo.height / 1080)
+  const baseScale = Math.min(uiCanvasInfo.width / 1920, uiCanvasInfo.height / 1080)
+  const minScreenSide = Math.min(uiCanvasInfo.width, uiCanvasInfo.height)
+  const isMobile = minScreenSide <= 800
+
+  return baseScale * (isMobile ? 3 : 1)
 }
 import {
   playerHeight,
