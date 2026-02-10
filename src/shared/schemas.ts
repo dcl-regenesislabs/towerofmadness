@@ -41,7 +41,26 @@ export const LeaderboardComponent = engine.defineComponent('tower:Leaderboard', 
       finishOrder: Schemas.Number,
       allTimeBestTime: Schemas.Number,
       allTimeBestHeight: Schemas.Number,
-      allTimeFinishCount: Schemas.Number
+      allTimeFinishCount: Schemas.Number,
+      weeklyBestTime: Schemas.Number,
+      weeklyBestHeight: Schemas.Number,
+      weeklyFinishCount: Schemas.Number
+    })
+  ),
+  weeklyPlayers: Schemas.Array(
+    Schemas.Map({
+      address: Schemas.String,
+      displayName: Schemas.String,
+      maxHeight: Schemas.Number,
+      bestTime: Schemas.Number,
+      isFinished: Schemas.Boolean,
+      finishOrder: Schemas.Number,
+      allTimeBestTime: Schemas.Number,
+      allTimeBestHeight: Schemas.Number,
+      allTimeFinishCount: Schemas.Number,
+      weeklyBestTime: Schemas.Number,
+      weeklyBestHeight: Schemas.Number,
+      weeklyFinishCount: Schemas.Number
     })
   )
 })
@@ -117,6 +136,9 @@ export type LeaderboardEntry = {
   allTimeBestTime: number
   allTimeBestHeight: number
   allTimeFinishCount: number
+  weeklyBestTime: number
+  weeklyBestHeight: number
+  weeklyFinishCount: number
 }
 
 export type WinnerEntry = {

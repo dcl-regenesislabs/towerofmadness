@@ -46,28 +46,7 @@ const DEFAULT_SIZE = Vector3.create(4, 6.0, 1)
 const DEFAULT_TABS = ['HISTORIC RANK', 'WEEKLY RANK']
 const DEFAULT_ROWS = 10
 
-const DEFAULT_TAB_DATA: LeaderboardPanelEntry[][] = [
-  [
-    { name: 'Nova', time: '42.18s' },
-    { name: 'Kaito', time: '43.02s' },
-    { name: 'Luna', time: '43.77s' },
-    { name: 'Orion', time: '44.11s' },
-    { name: 'Mira', time: '44.92s' },
-    { name: 'Solis', time: '45.10s' },
-    { name: 'Rhea', time: '45.38s' },
-    { name: 'Zed', time: '45.90s' }
-  ],
-  [
-    { name: 'Axel', time: '46.05s' },
-    { name: 'Nyx', time: '46.44s' },
-    { name: 'Iris', time: '46.92s' },
-    { name: 'Juno', time: '47.01s' },
-    { name: 'Echo', time: '47.33s' },
-    { name: 'Kira', time: '47.80s' },
-    { name: 'Taro', time: '48.12s' },
-    { name: 'Vega', time: '48.55s' }
-  ]
-]
+const DEFAULT_TAB_DATA: LeaderboardPanelEntry[][] = [[], []]
 
 export function createLeaderboardPanel(options: LeaderboardPanelOptions = {}) {
   const size = options.size ?? DEFAULT_SIZE
@@ -280,30 +259,15 @@ export function createLeaderboardPanel(options: LeaderboardPanelOptions = {}) {
     parent: root,
     position: Vector3.create(-size.x / 2 + 0.6, -size.y / 2 + 0.3, -0.03),
     rotation: Quaternion.Identity(),
-    scale: Vector3.create(1.2, 0.7, 1)
+    scale: Vector3.create(1.4, 0.85, 1)
   })
   MeshRenderer.setPlane(leftButton)
   MeshCollider.setPlane(leftButton, ColliderLayer.CL_POINTER)
   Material.setBasicMaterial(leftButton, {
-    texture: Material.Texture.Common({ src: 'assets/images/button.png' }),
-    alphaTexture: Material.Texture.Common({ src: 'assets/images/button.png' }),
+    texture: Material.Texture.Common({ src: 'assets/images/backButton.png' }),
+    alphaTexture: Material.Texture.Common({ src: 'assets/images/backButton.png' }),
+    diffuseColor: Color4.create(1, 1, 1, 1),
     alphaTest: MaterialTransparencyMode.MTM_ALPHA_BLEND
-  })
-
-  const leftButtonText = engine.addEntity()
-  Transform.createOrReplace(leftButtonText, {
-    parent: leftButton,
-    position: Vector3.create(0, 0, -0.01),
-    rotation: Quaternion.Identity(),
-    scale: Vector3.One()
-  })
-  TextShape.createOrReplace(leftButtonText, {
-    text: 'BACK',
-    fontSize: 1.6,
-    textColor: Color4.Black(),
-    outlineColor: Color4.Black(),
-    outlineWidth: 0.5,
-    textAlign: TextAlignMode.TAM_MIDDLE_CENTER
   })
 
   // Right button
@@ -312,30 +276,15 @@ export function createLeaderboardPanel(options: LeaderboardPanelOptions = {}) {
     parent: root,
     position: Vector3.create(size.x / 2 - 0.6, -size.y / 2 + 0.3, -0.03),
     rotation: Quaternion.Identity(),
-    scale: Vector3.create(1.2, 0.7, 1)
+    scale: Vector3.create(1.4, 0.85, 1)
   })
   MeshRenderer.setPlane(rightButton)
   MeshCollider.setPlane(rightButton, ColliderLayer.CL_POINTER)
   Material.setBasicMaterial(rightButton, {
-    texture: Material.Texture.Common({ src: 'assets/images/button.png' }),
-    alphaTexture: Material.Texture.Common({ src: 'assets/images/button.png' }),
+    texture: Material.Texture.Common({ src: 'assets/images/nextButton.png' }),
+    alphaTexture: Material.Texture.Common({ src: 'assets/images/nextButton.png' }),
+    diffuseColor: Color4.create(1, 1, 1, 1),
     alphaTest: MaterialTransparencyMode.MTM_ALPHA_BLEND
-  })
-
-  const rightButtonText = engine.addEntity()
-  Transform.createOrReplace(rightButtonText, {
-    parent: rightButton,
-    position: Vector3.create(0, 0, -0.01),
-    rotation: Quaternion.Identity(),
-    scale: Vector3.One()
-  })
-  TextShape.createOrReplace(rightButtonText, {
-    text: 'NEXT',
-    fontSize: 1.6,
-    textColor: Color4.Black(),
-    outlineColor: Color4.Black(),
-    outlineWidth: 0.5,
-    textAlign: TextAlignMode.TAM_MIDDLE_CENTER
   })
 
   const state: PanelState = {
@@ -412,6 +361,16 @@ export function setActiveTab(panel: PanelState, index: number) {
 export function setTabData(panel: PanelState, tabIndex: number, entries: LeaderboardPanelEntry[]) {
   const rowEntities = panel.tabRows[tabIndex]
   if (!rowEntities) return
+
+  if (entries.length === 0) {
+    for (let i = 0; i < DEFAULT_ROWS; i++) {
+      const nameEntity = rowEntities[i * 2]
+      const timeEntity = rowEntities[i * 2 + 1]
+      TextShape.getMutable(nameEntity).text = i === 0 ? 'No data' : ''
+      TextShape.getMutable(timeEntity).text = ''
+    }
+    return
+  }
 
   for (let i = 0; i < DEFAULT_ROWS; i++) {
     const entry = entries[i]
