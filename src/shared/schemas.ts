@@ -69,6 +69,29 @@ LeaderboardComponent.validateBeforeChange((value) => {
 })
 
 // ============================================
+// POINT LEADERBOARD COMPONENT (Server-authoritative)
+// ============================================
+export const PointLeaderboardComponent = engine.defineComponent('tower:PointLeaderboard', {
+  players: Schemas.Array(
+    Schemas.Map({
+      address: Schemas.String,
+      displayName: Schemas.String,
+      points: Schemas.Number
+    })
+  ),
+  weeklyPlayers: Schemas.Array(
+    Schemas.Map({
+      address: Schemas.String,
+      displayName: Schemas.String,
+      points: Schemas.Number
+    })
+  )
+})
+PointLeaderboardComponent.validateBeforeChange((value) => {
+  return value.senderAddress === AUTH_SERVER_PEER_ID
+})
+
+// ============================================
 // WINNERS COMPONENT (Server-authoritative)
 // ============================================
 export const WinnersComponent = engine.defineComponent('tower:Winners', {
@@ -147,6 +170,12 @@ export type WinnerEntry = {
   time: number
   height: number
   rank: number
+}
+
+export type PointLeaderboardEntry = {
+  address: string
+  displayName: string
+  points: number
 }
 
 export type TowerConfig = {

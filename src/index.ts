@@ -25,6 +25,7 @@ import { movePlayerTo } from '~system/RestrictedActions'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
 import { setupWorldLeaderboard } from './Leaderboard'
+import { setupWorldPointLeaderboard } from './PointLeaderboard'
 import { server } from './server/server'
 import {
   setupClient,
@@ -35,10 +36,13 @@ import {
   getRoundState,
   getLeaderboard,
   getWeeklyLeaderboard,
+  getPointLeaderboard,
+  getWeeklyPointLeaderboard,
   getWinners,
   getTowerConfig,
   RoundPhase,
   LeaderboardEntry,
+  PointLeaderboardEntry,
   WinnerEntry,
   TowerConfig
 } from './multiplayer'
@@ -101,6 +105,8 @@ export let roundSpeedMultiplier: number = 1.0
 export let roundPhase: RoundPhase = RoundPhase.ACTIVE
 export let leaderboard: LeaderboardEntry[] = []
 export let weeklyLeaderboard: LeaderboardEntry[] = []
+export let pointLeaderboard: PointLeaderboardEntry[] = []
+export let weeklyPointLeaderboard: PointLeaderboardEntry[] = []
 export let roundWinners: WinnerEntry[] = []
 export let towerConfig: TowerConfig | null = null
 
@@ -212,6 +218,8 @@ function syncRoundState() {
   // Update leaderboard
   leaderboard = getLeaderboard()
   weeklyLeaderboard = getWeeklyLeaderboard()
+  pointLeaderboard = getPointLeaderboard()
+  weeklyPointLeaderboard = getWeeklyPointLeaderboard()
 
   // Update tower config
   towerConfig = getTowerConfig()
@@ -340,6 +348,7 @@ export async function main() {
   )
 
   setupWorldLeaderboard(() => leaderboard, () => weeklyLeaderboard)
+  setupWorldPointLeaderboard(() => pointLeaderboard, () => weeklyPointLeaderboard)
 
   // ============================================
   // TRIGGER SETUP

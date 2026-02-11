@@ -12,18 +12,20 @@ import { room } from './shared/messages'
 import {
   RoundStateComponent,
   LeaderboardComponent,
+  PointLeaderboardComponent,
   WinnersComponent,
   TowerConfigComponent,
   ChunkComponent,
   RoundPhase,
   LeaderboardEntry,
+  PointLeaderboardEntry,
   WinnerEntry,
   TowerConfig
 } from './shared/schemas'
 import { getServerTime, isTimeSyncReady, getTimeSyncOffset } from './shared/timeSync'
 
 // Re-export types for compatibility
-export type { LeaderboardEntry, WinnerEntry, TowerConfig }
+export type { LeaderboardEntry, PointLeaderboardEntry, WinnerEntry, TowerConfig }
 export { RoundPhase }
 
 // Re-export time sync functions
@@ -158,6 +160,21 @@ export function getLeaderboard(): LeaderboardEntry[] {
 export function getWeeklyLeaderboard(): LeaderboardEntry[] {
   for (const [entity] of engine.getEntitiesWith(LeaderboardComponent)) {
     const data = LeaderboardComponent.get(entity) as unknown as { weeklyPlayers?: LeaderboardEntry[] }
+    return data.weeklyPlayers ?? []
+  }
+  return []
+}
+
+export function getPointLeaderboard(): PointLeaderboardEntry[] {
+  for (const [entity] of engine.getEntitiesWith(PointLeaderboardComponent)) {
+    return PointLeaderboardComponent.get(entity).players as PointLeaderboardEntry[]
+  }
+  return []
+}
+
+export function getWeeklyPointLeaderboard(): PointLeaderboardEntry[] {
+  for (const [entity] of engine.getEntitiesWith(PointLeaderboardComponent)) {
+    const data = PointLeaderboardComponent.get(entity) as unknown as { weeklyPlayers?: PointLeaderboardEntry[] }
     return data.weeklyPlayers ?? []
   }
   return []

@@ -156,15 +156,36 @@
         "516": {
           "json": {
             "position": {
-              "x": 38.25,
+              "x": 40.75,
               "y": 1.5,
               "z": 68.5
             },
             "rotation": {
               "x": 0,
-              "y": -0.9990482330322266,
+              "y": -0.9996573328971863,
               "z": 0,
-              "w": -0.04361938685178757
+              "w": 0.026176949962973595
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
+        "517": {
+          "json": {
+            "position": {
+              "x": 34.25,
+              "y": 1.5,
+              "z": 68.5
+            },
+            "rotation": {
+              "x": 0,
+              "y": -0.9902681112289429,
+              "z": 0,
+              "w": -0.13917310535907745
             },
             "scale": {
               "x": 1,
@@ -338,6 +359,13 @@
             "invisibleMeshesCollisionMask": 3
           }
         },
+        "517": {
+          "json": {
+            "src": "assets/scene/Models/LeaderBoard01/LeaderBoard01.glb",
+            "visibleMeshesCollisionMask": 0,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
         "586": {
           "json": {
             "src": "assets/asset-packs/trigger_area/trigger_area.glb",
@@ -399,6 +427,11 @@
         "516": {
           "json": {
             "value": "LeaderBoard01.glb"
+          }
+        },
+        "517": {
+          "json": {
+            "value": "LeaderBoard01.glb_2"
           }
         },
         "586": {
@@ -493,7 +526,7 @@
       "data": {
         "516": {
           "json": {
-            "gizmo": 1
+            "gizmo": 2
           }
         }
       }
@@ -1332,6 +1365,22 @@
                   "y": 4
                 },
                 {
+                  "x": 5,
+                  "y": 4
+                },
+                {
+                  "x": 6,
+                  "y": 4
+                },
+                {
+                  "x": 7,
+                  "y": 4
+                },
+                {
+                  "x": 8,
+                  "y": 4
+                },
+                {
                   "x": 0,
                   "y": 3
                 },
@@ -1352,6 +1401,22 @@
                   "y": 3
                 },
                 {
+                  "x": 5,
+                  "y": 3
+                },
+                {
+                  "x": 6,
+                  "y": 3
+                },
+                {
+                  "x": 7,
+                  "y": 3
+                },
+                {
+                  "x": 8,
+                  "y": 3
+                },
+                {
                   "x": 0,
                   "y": 2
                 },
@@ -1372,6 +1437,22 @@
                   "y": 2
                 },
                 {
+                  "x": 5,
+                  "y": 2
+                },
+                {
+                  "x": 6,
+                  "y": 2
+                },
+                {
+                  "x": 7,
+                  "y": 2
+                },
+                {
+                  "x": 8,
+                  "y": 2
+                },
+                {
                   "x": 0,
                   "y": 1
                 },
@@ -1392,6 +1473,22 @@
                   "y": 1
                 },
                 {
+                  "x": 5,
+                  "y": 1
+                },
+                {
+                  "x": 6,
+                  "y": 1
+                },
+                {
+                  "x": 7,
+                  "y": 1
+                },
+                {
+                  "x": 8,
+                  "y": 1
+                },
+                {
                   "x": 0,
                   "y": 0
                 },
@@ -1409,6 +1506,22 @@
                 },
                 {
                   "x": 4,
+                  "y": 0
+                },
+                {
+                  "x": 5,
+                  "y": 0
+                },
+                {
+                  "x": 6,
+                  "y": 0
+                },
+                {
+                  "x": 7,
+                  "y": 0
+                },
+                {
+                  "x": 8,
                   "y": 0
                 }
               ],
@@ -1418,7 +1531,7 @@
               }
             },
             "silenceVoiceChat": false,
-            "disablePortableExperiences": false,
+            "disablePortableExperiences": true,
             "spawnPoints": [
               {
                 "name": "Spawn Point 1",
@@ -1514,7 +1627,8 @@
                   514,
                   512,
                   515,
-                  516
+                  516,
+                  517
                 ]
               },
               {
@@ -1556,6 +1670,10 @@
               {
                 "entity": 516,
                 "children": []
+              },
+              {
+                "entity": 517,
+                "children": []
               }
             ]
           }
@@ -1593,32 +1711,8 @@
           "json": {
             "value": [
               {
-                "type": "player_face_item",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "freeze_player",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "unfreeze_player",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "change_collisions",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"visibleCollisions\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"invisibleCollisions\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}}},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "change_skybox",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"time\":{\"type\":\"integer\",\"serializationType\":\"int32\"},\"direction\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}}},\"serializationType\":\"map\"}"
-              },
-              {
-                "type": "reset_skybox",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
-              },
-              {
                 "type": "play_animation",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"animation\":{\"type\":\"string\",\"serializationType\":\"utf8-string\"},\"loop\":{\"type\":\"boolean\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"boolean\",\"serializationType\":\"boolean\"}}},\"serializationType\":\"map\"}"
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"animation\":{\"type\":\"string\",\"serializationType\":\"utf8-string\"},\"loop\":{\"type\":\"boolean\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"boolean\",\"serializationType\":\"boolean\"}},\"shouldReset\":{\"type\":\"boolean\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"boolean\",\"serializationType\":\"boolean\"}}},\"serializationType\":\"map\"}"
               },
               {
                 "type": "stop_animation",
@@ -1682,7 +1776,7 @@
               },
               {
                 "type": "teleport_player",
-                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"integer\",\"serializationType\":\"int32\"},\"y\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"serializationType\":\"map\"}"
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"to_coordinates\",\"to_world\"],\"default\":\"to_coordinates\",\"serializationType\":\"enum-string\",\"enumObject\":{\"TO_COORDINATES\":\"to_coordinates\",\"TO_WORLD\":\"to_world\"}},\"x\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"y\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"realm\":{\"type\":\"string\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"string\",\"serializationType\":\"utf8-string\"}}},\"serializationType\":\"map\"}"
               },
               {
                 "type": "move_player",
@@ -1746,6 +1840,10 @@
               },
               {
                 "type": "move_player_here",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "player_face_item",
                 "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
               },
               {
@@ -1827,6 +1925,30 @@
               {
                 "type": "slide_texture",
                 "jsonSchema": "{\"type\":\"object\",\"properties\":{\"direction\":{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\",\"serializationType\":\"float32\"},\"y\":{\"type\":\"number\",\"serializationType\":\"float32\"}},\"serializationType\":\"map\"},\"speed\":{\"type\":\"number\",\"serializationType\":\"float32\"},\"movementType\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"enum\":[0,1],\"default\":0,\"serializationType\":\"enum-int\",\"enumObject\":{\"0\":\"TMT_OFFSET\",\"1\":\"TMT_TILING\",\"TMT_OFFSET\":0,\"TMT_TILING\":1}}},\"duration\":{\"type\":\"number\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"number\",\"serializationType\":\"float32\"}}},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "freeze_player",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "unfreeze_player",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "change_collisions",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"visibleCollisions\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}},\"invisibleCollisions\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}}},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "change_skybox",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"time\":{\"type\":\"integer\",\"serializationType\":\"int32\"},\"direction\":{\"type\":\"integer\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"integer\",\"serializationType\":\"int32\"}}},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "reset_skybox",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}"
+              },
+              {
+                "type": "call_script_method",
+                "jsonSchema": "{\"type\":\"object\",\"properties\":{\"scriptPath\":{\"type\":\"string\",\"serializationType\":\"utf8-string\"},\"methodName\":{\"type\":\"string\",\"serializationType\":\"utf8-string\"},\"params\":{\"type\":\"object\",\"serializationType\":\"optional\",\"optionalJsonSchema\":{\"type\":\"object\",\"properties\":{},\"serializationType\":\"map\"}}},\"serializationType\":\"map\"}"
               }
             ]
           }
@@ -2198,6 +2320,9 @@
         "516": {
           "json": {}
         },
+        "517": {
+          "json": {}
+        },
         "586": {
           "json": {}
         },
@@ -2283,6 +2408,7 @@
                     "core::VisibilityComponent",
                     "core::LightSource",
                     "core::GltfNodeModifiers",
+                    "core::VirtualCamera",
                     "inspector::Selection",
                     "inspector::SceneMetadata-v2",
                     "inspector::Nodes",
@@ -2329,6 +2455,7 @@
                     "VISIBILITY_COMPONENT": "core::VisibilityComponent",
                     "LIGHT_SOURCE": "core::LightSource",
                     "GLTF_NODE_MODIFIERS": "core::GltfNodeModifiers",
+                    "VIRTUAL_CAMERA": "core::VirtualCamera",
                     "Selection": "inspector::Selection",
                     "Scene": "inspector::SceneMetadata-v2",
                     "Nodes": "inspector::Nodes",
