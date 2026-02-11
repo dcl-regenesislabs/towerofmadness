@@ -6,6 +6,7 @@ import { Storage } from '@dcl/sdk/server'
 import {
   RoundStateComponent,
   LeaderboardComponent,
+  PointLeaderboardComponent,
   WinnersComponent,
   TowerConfigComponent,
   ChunkComponent,
@@ -42,6 +43,10 @@ const GLOBAL_LEADERBOARD_KEY = 'globalLeaderboard'
 const GLOBAL_LEADERBOARD_SIZE = 10
 const WEEKLY_LEADERBOARD_KEY = 'weeklyLeaderboard'
 const WEEKLY_LEADERBOARD_SIZE = 10
+const POINTS_GLOBAL_LEADERBOARD_KEY = 'globalPointLeaderboard'
+const POINTS_GLOBAL_LEADERBOARD_SIZE = 10
+const POINTS_WEEKLY_LEADERBOARD_KEY = 'weeklyPointLeaderboard'
+const POINTS_WEEKLY_LEADERBOARD_SIZE = 10
 
 function getWeekStartKeyUTC(now: number = Date.now()): string {
   const d = new Date(now)
@@ -92,6 +97,20 @@ interface WeeklyBest {
   lastPlayed: number
 }
 
+interface AllTimePoints {
+  address: string
+  displayName: string
+  points: number
+  lastPlayed: number
+}
+
+interface WeeklyPoints {
+  address: string
+  displayName: string
+  points: number
+  lastPlayed: number
+}
+
 
 export class GameState {
   private static instance: GameState
@@ -99,6 +118,7 @@ export class GameState {
   // Synced state entities
   public roundStateEntity!: Entity
   public leaderboardEntity!: Entity
+  public pointLeaderboardEntity!: Entity
   public winnersEntity!: Entity
   public towerConfigEntity!: Entity
   public triggerEndEntity!: Entity
@@ -119,6 +139,11 @@ export class GameState {
   private weeklyMetaKey: string = getWeekStartKeyUTC()
   private lastAllTimeKey: string = ''
   private lastWeeklyKey: string = ''
+  private allTimePoints = new Map<string, AllTimePoints>()
+  private weeklyPoints = new Map<string, WeeklyPoints>()
+  private weeklyPointsMetaKey: string = getWeekStartKeyUTC()
+  private lastAllTimePointsKey: string = ''
+  private lastWeeklyPointsKey: string = ''
 
   public static getInstance(): GameState {
     if (!GameState.instance) {
@@ -159,6 +184,14 @@ export class GameState {
       winners: []
     })
     syncEntity(this.winnersEntity, [WinnersComponent.componentId])
+
+    // Create point leaderboard entity
+    this.pointLeaderboardEntity = engine.addEntity()
+    PointLeaderboardComponent.create(this.pointLeaderboardEntity, {
+      players: [],
+      weeklyPlayers: []
+    })
+    syncEntity(this.pointLeaderboardEntity, [PointLeaderboardComponent.componentId])
 
     // Create tower config entity
     this.towerConfigEntity = engine.addEntity()
@@ -219,6 +252,8 @@ export class GameState {
 
     void this.loadGlobalLeaderboard()
     void this.loadWeeklyLeaderboard()
+    void this.loadGlobalPointLeaderboard()
+    void this.loadWeeklyPointLeaderboard()
   }
 
   // Player management (normalize address to lowercase for consistency)
@@ -556,9 +591,13 @@ export class GameState {
 
     console.log('[Server] Winners:', top3.map((p) => p.displayName).join(', '))
 
-    this.calculateRoundPoints(playerArray)
+    const pointsChanged = this.calculateRoundPoints(playerArray)
 
     void this.persistGlobalLeaderboard()
+    if (pointsChanged) {
+      void this.persistGlobalPointLeaderboard()
+      void this.persistWeeklyPointLeaderboard()
+    }
   }
 
   setPhase(phase: RoundPhase) {
@@ -578,11 +617,21 @@ export class GameState {
     }
   }
 
-  // TODO: Replace these logs with persistent points storage and leaderboard updates. (NEXT PR)
-  private calculateRoundPoints(players: PlayerData[]) {
+  private calculateRoundPoints(players: PlayerData[]): boolean {
     if (players.length === 0) {
       console.log('[Server][Points] No players this round')
-      return
+      return false
+    }
+
+    const pointsToAward = new Map<string, { displayName: string; points: number }>()
+    const queuePoints = (player: PlayerData, points: number) => {
+      const existing = pointsToAward.get(player.address)
+      if (existing) {
+        existing.points += points
+        existing.displayName = player.displayName
+      } else {
+        pointsToAward.set(player.address, { displayName: player.displayName, points })
+      }
     }
 
     const finishers = players.filter((player) => player.isFinished)
@@ -597,11 +646,12 @@ export class GameState {
       sortedFinishers.forEach((player, index) => {
         const points = index < 3 ? WINNER_POINTS[index] : ADDITIONAL_WINNER_POINTS
         const label = index < 3 ? `winner #${index + 1}` : 'additional winner'
+        queuePoints(player, points)
         console.log(
           `[Server][Points] ${player.displayName} (${player.address}) +${points} pts (${label})`
         )
       })
-      return
+      return this.applyPoints(pointsToAward)
     }
 
     console.log(
@@ -617,12 +667,14 @@ export class GameState {
     let rank = 1
     for (const player of sortedByHeight) {
       if (points < NOWIN_MIN_POINTS) break
+      queuePoints(player, points)
       console.log(
         `[Server][Points] ${player.displayName} (${player.address}) +${points} pts (highest #${rank})`
       )
       points--
       rank++
     }
+    return this.applyPoints(pointsToAward)
   }
 
   private updateLeaderboard() {
@@ -692,6 +744,88 @@ export class GameState {
       const displayName = allTime?.displayName || weekly.displayName
       return buildEntry(weekly.address, displayName, allTime, weekly)
     })
+  }
+
+  private applyPoints(pointsToAward: Map<string, { displayName: string; points: number }>): boolean {
+    if (pointsToAward.size === 0) return false
+    this.ensureWeeklyPointsCurrent()
+
+    let changed = false
+    const now = Date.now()
+    for (const [address, award] of pointsToAward.entries()) {
+      if (award.points <= 0) continue
+
+      const allTime = this.allTimePoints.get(address)
+      if (allTime) {
+        allTime.points += award.points
+        allTime.displayName = award.displayName
+        allTime.lastPlayed = now
+      } else {
+        this.allTimePoints.set(address, {
+          address,
+          displayName: award.displayName,
+          points: award.points,
+          lastPlayed: now
+        })
+      }
+
+      const weekly = this.weeklyPoints.get(address)
+      if (weekly) {
+        weekly.points += award.points
+        weekly.displayName = award.displayName
+        weekly.lastPlayed = now
+      } else {
+        this.weeklyPoints.set(address, {
+          address,
+          displayName: award.displayName,
+          points: award.points,
+          lastPlayed: now
+        })
+      }
+
+      changed = true
+    }
+
+    if (changed) {
+      this.updatePointLeaderboard()
+    }
+
+    return changed
+  }
+
+  private updatePointLeaderboard() {
+    this.ensureWeeklyPointsCurrent()
+
+    const sortByPoints = (a: { points: number; address: string }, b: { points: number; address: string }) => {
+      if (a.points !== b.points) return b.points - a.points
+      return a.address.localeCompare(b.address)
+    }
+
+    const allTimeSorted = Array.from(this.allTimePoints.values()).sort(sortByPoints)
+    const weeklySorted = Array.from(this.weeklyPoints.values()).sort(sortByPoints)
+    const allTimeTop = allTimeSorted.slice(0, POINTS_GLOBAL_LEADERBOARD_SIZE)
+    const weeklyTop = weeklySorted.slice(0, POINTS_WEEKLY_LEADERBOARD_SIZE)
+
+    const allTimeKey = allTimeTop.map((p) => `${p.address}:${p.displayName}:${p.points}`).join('|')
+    const weeklyKey = weeklyTop.map((p) => `${p.address}:${p.displayName}:${p.points}`).join('|')
+
+    if (allTimeKey === this.lastAllTimePointsKey && weeklyKey === this.lastWeeklyPointsKey) {
+      return
+    }
+    this.lastAllTimePointsKey = allTimeKey
+    this.lastWeeklyPointsKey = weeklyKey
+
+    const pointLeaderboard = PointLeaderboardComponent.getMutable(this.pointLeaderboardEntity)
+    pointLeaderboard.players = allTimeTop.map((entry) => ({
+      address: entry.address,
+      displayName: entry.displayName,
+      points: entry.points
+    }))
+    pointLeaderboard.weeklyPlayers = weeklyTop.map((entry) => ({
+      address: entry.address,
+      displayName: entry.displayName,
+      points: entry.points
+    }))
   }
 
   private async loadGlobalLeaderboard() {
@@ -778,6 +912,96 @@ export class GameState {
     }
   }
 
+  private async loadGlobalPointLeaderboard() {
+    if (!isServer()) return
+
+    try {
+      const stored = await Storage.get<string>(POINTS_GLOBAL_LEADERBOARD_KEY)
+      if (!stored) return
+
+      const entries = JSON.parse(stored) as AllTimePoints[]
+      for (const entry of entries) {
+        if (!entry?.address) continue
+        const normalizedAddress = entry.address.toLowerCase()
+        this.allTimePoints.set(normalizedAddress, {
+          address: normalizedAddress,
+          displayName: entry.displayName || normalizedAddress.substring(0, 8),
+          points: Number(entry.points) || 0,
+          lastPlayed: Number(entry.lastPlayed) || 0
+        })
+      }
+
+      console.log(`[Server][Storage] Loaded global point leaderboard: ${entries.length} entries`)
+      this.updatePointLeaderboard()
+    } catch (error) {
+      console.error('[Server][Storage] Failed to load global point leaderboard:', error)
+    }
+  }
+
+  private async loadWeeklyPointLeaderboard() {
+    if (!isServer()) return
+
+    try {
+      const currentWeek = getWeekStartKeyUTC()
+      this.weeklyPointsMetaKey = currentWeek
+
+      const stored = await Storage.get<string>(`${POINTS_WEEKLY_LEADERBOARD_KEY}_${currentWeek}`)
+      if (!stored) return
+
+      const entries = JSON.parse(stored) as WeeklyPoints[]
+      for (const entry of entries) {
+        if (!entry?.address) continue
+        const normalizedAddress = entry.address.toLowerCase()
+        this.weeklyPoints.set(normalizedAddress, {
+          address: normalizedAddress,
+          displayName: entry.displayName || normalizedAddress.substring(0, 8),
+          points: Number(entry.points) || 0,
+          lastPlayed: Number(entry.lastPlayed) || 0
+        })
+      }
+
+      console.log(`[Server][Storage] Loaded weekly point leaderboard: ${entries.length} entries`)
+      this.updatePointLeaderboard()
+    } catch (error) {
+      console.error('[Server][Storage] Failed to load weekly point leaderboard:', error)
+    }
+  }
+
+  private async persistGlobalPointLeaderboard() {
+    if (!isServer()) return
+
+    try {
+      const topEntries = Array.from(this.allTimePoints.values())
+        .sort((a, b) => {
+          if (a.points !== b.points) return b.points - a.points
+          return a.address.localeCompare(b.address)
+        })
+        .slice(0, POINTS_GLOBAL_LEADERBOARD_SIZE)
+      await Storage.set(POINTS_GLOBAL_LEADERBOARD_KEY, JSON.stringify(topEntries))
+      console.log(`[Server][Storage] Saved global point leaderboard: ${topEntries.length} entries`)
+    } catch (error) {
+      console.error('[Server][Storage] Failed to save global point leaderboard:', error)
+    }
+  }
+
+  private async persistWeeklyPointLeaderboard() {
+    if (!isServer()) return
+    this.ensureWeeklyPointsCurrent()
+
+    try {
+      const topEntries = Array.from(this.weeklyPoints.values())
+        .sort((a, b) => {
+          if (a.points !== b.points) return b.points - a.points
+          return a.address.localeCompare(b.address)
+        })
+        .slice(0, POINTS_WEEKLY_LEADERBOARD_SIZE)
+      await Storage.set(`${POINTS_WEEKLY_LEADERBOARD_KEY}_${this.weeklyPointsMetaKey}`, JSON.stringify(topEntries))
+      console.log(`[Server][Storage] Saved weekly point leaderboard: ${topEntries.length} entries`)
+    } catch (error) {
+      console.error('[Server][Storage] Failed to save weekly point leaderboard:', error)
+    }
+  }
+
   private maybePersistGlobalLeaderboard() {
     if (!isServer()) return
     void this.persistGlobalLeaderboard()
@@ -793,5 +1017,13 @@ export class GameState {
     if (this.weeklyMetaKey === currentWeek) return
     this.weeklyMetaKey = currentWeek
     this.weeklyBests.clear()
+  }
+
+  private ensureWeeklyPointsCurrent() {
+    const currentWeek = getWeekStartKeyUTC()
+    if (this.weeklyPointsMetaKey === currentWeek) return
+    this.weeklyPointsMetaKey = currentWeek
+    this.weeklyPoints.clear()
+    this.lastWeeklyPointsKey = ''
   }
 }
