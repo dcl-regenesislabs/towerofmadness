@@ -160,16 +160,16 @@
               "y": 1.5,
               "z": 68.5
             },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
             "rotation": {
               "x": 0,
               "y": -0.9996573328971863,
               "z": 0,
               "w": 0.026176949962973595
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
             },
             "parent": 0
           }
@@ -181,16 +181,16 @@
               "y": 1.5,
               "z": 68.5
             },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
             "rotation": {
               "x": 0,
               "y": -0.9902681112289429,
               "z": 0,
               "w": -0.13917310535907745
-            },
-            "scale": {
-              "x": 1,
-              "y": 1,
-              "z": 1
             },
             "parent": 0
           }
@@ -355,14 +355,14 @@
         "516": {
           "json": {
             "src": "assets/scene/Models/LeaderBoard01/LeaderBoard01.glb",
-            "visibleMeshesCollisionMask": 0,
+            "visibleMeshesCollisionMask": 2,
             "invisibleMeshesCollisionMask": 3
           }
         },
         "517": {
           "json": {
             "src": "assets/scene/Models/LeaderBoard01/LeaderBoard01.glb",
-            "visibleMeshesCollisionMask": 0,
+            "visibleMeshesCollisionMask": 2,
             "invisibleMeshesCollisionMask": 3
           }
         },
@@ -524,9 +524,9 @@
         "serializationType": "map"
       },
       "data": {
-        "516": {
+        "517": {
           "json": {
-            "gizmo": 2
+            "gizmo": 0
           }
         }
       }
