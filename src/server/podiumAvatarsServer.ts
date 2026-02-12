@@ -1,4 +1,4 @@
-import { engine, Entity, Transform, AvatarShape, VisibilityComponent, TextShape } from '@dcl/sdk/ecs'
+import { engine, Entity, Transform, AvatarShape, VisibilityComponent, TextShape, PlayerIdentityData } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { syncEntity } from '@dcl/sdk/network'
 import { getPlayer } from '@dcl/sdk/players'
@@ -19,6 +19,9 @@ const PODIUM_EMOTE_REPLAY_SECONDS = 4
 const PODIUM_TEXT_OFFSET = Vector3.create(0, 2.2, 0)
 const PODIUM_TEXT_SCALE = Vector3.create(-1, 1, 1)
 const DEFAULT_BODY_SHAPE = 'urn:decentraland:off-chain:base-avatars:BaseMale'
+const APPEARANCE_CACHE_SYNC_SECONDS = 1
+const PROFILE_ENDPOINT = 'https://asset-bundle-registry.decentraland.org/profiles'
+const PROFILE_RETRY_SECONDS = 8
 type PodiumSlot = {
   index: number
   entity: Entity
@@ -43,7 +46,11 @@ export class PodiumAvatarsServer {
   private slots: PodiumSlot[] = []
   private active: boolean = false
   private elapsedSeconds: number = 0
+  private cacheElapsedSeconds: number = 0
   private debugLogged = new Set<string>()
+  private appearanceCache = new Map<string, AvatarAppearance>()
+  private profileRequestsInFlight = new Set<string>()
+  private profileLastAttempt = new Map<string, number>()
 
   constructor() {
     this.initEntities()
@@ -67,6 +74,10 @@ export class PodiumAvatarsServer {
       VisibilityComponent.getMutable(slot.textEntity).visible = false
       Transform.getMutable(slot.textEntity).scale = Vector3.Zero()
       TextShape.getMutable(slot.textEntity).text = winner ? `${winner.height.toFixed(1)}m` : ''
+
+      if (slot.address && !this.appearanceCache.has(slot.address)) {
+        void this.maybeFetchAppearanceFromProfiles(slot.address)
+      }
     }
   }
 
@@ -139,17 +150,16 @@ export class PodiumAvatarsServer {
 
         if (!needsSync) continue
 
-        const player = getPlayer({ userId: slot.address })
-        const wearables = player?.wearables ?? []
-        const avatar = player?.avatar
-        const hasServerAppearance = !!(wearables.length || avatar?.bodyShapeUrn)
+        const liveAppearance = this.getLiveAppearance(slot.address)
+        const cachedAppearance = this.appearanceCache.get(slot.address)
+        const appearance = liveAppearance ?? cachedAppearance
 
         if (!this.debugLogged.has(slot.address)) {
           this.debugLogged.add(slot.address)
           let payload = ''
           try {
             payload = JSON.stringify(
-              player,
+              getPlayer({ userId: slot.address }),
               (_key, value) => (typeof value === 'bigint' ? value.toString() : value),
               2
             )
@@ -165,12 +175,9 @@ export class PodiumAvatarsServer {
           })
         }
 
-        const appearance: AvatarAppearance = {
-          wearables,
-          bodyShape: avatar?.bodyShapeUrn || DEFAULT_BODY_SHAPE,
-          eyeColor: avatar?.eyesColor ?? { r: 0, g: 0, b: 0 },
-          skinColor: avatar?.skinColor ?? { r: 0, g: 0, b: 0 },
-          hairColor: avatar?.hairColor ?? { r: 0, g: 0, b: 0 }
+        if (!appearance) {
+          void this.maybeFetchAppearanceFromProfiles(slot.address)
+          continue
         }
 
         const avatarShape = AvatarShape.getMutable(slot.entity)
@@ -196,9 +203,141 @@ export class PodiumAvatarsServer {
         slot.lastSyncTime = this.elapsedSeconds
       }
     }, undefined, 'server-podium-avatar-sync-system')
+
+    engine.addSystem((dt: number) => {
+      this.cacheElapsedSeconds += dt
+      if (this.cacheElapsedSeconds < APPEARANCE_CACHE_SYNC_SECONDS) return
+      this.cacheElapsedSeconds = 0
+
+      for (const [_entity, identity] of engine.getEntitiesWith(PlayerIdentityData)) {
+        const address = identity.address.toLowerCase()
+        const appearance = this.getLiveAppearance(address)
+        if (appearance) {
+          this.appearanceCache.set(address, appearance)
+        }
+      }
+    }, undefined, 'server-podium-appearance-cache-system')
   }
 
   private bindMessages() {
     // no-op: server-side getPlayer is the source of truth
+  }
+
+  private getLiveAppearance(address: string): AvatarAppearance | null {
+    const player = getPlayer({ userId: address })
+    const wearables = player?.wearables ?? []
+    const avatar = player?.avatar
+    if (!avatar && wearables.length === 0) return null
+
+    const appearance: AvatarAppearance = {
+      wearables,
+      bodyShape: avatar?.bodyShapeUrn || DEFAULT_BODY_SHAPE,
+      eyeColor: avatar?.eyesColor ?? { r: 0, g: 0, b: 0 },
+      skinColor: avatar?.skinColor ?? { r: 0, g: 0, b: 0 },
+      hairColor: avatar?.hairColor ?? { r: 0, g: 0, b: 0 }
+    }
+
+    this.appearanceCache.set(address, appearance)
+    return appearance
+  }
+
+  private async maybeFetchAppearanceFromProfiles(address: string): Promise<void> {
+    if (this.appearanceCache.has(address)) return
+
+    const lastAttempt = this.profileLastAttempt.get(address) ?? -Infinity
+    if (this.elapsedSeconds - lastAttempt < PROFILE_RETRY_SECONDS) return
+
+    this.profileLastAttempt.set(address, this.elapsedSeconds)
+    await this.fetchAppearanceFromProfiles(address)
+  }
+
+  private async fetchAppearanceFromProfiles(address: string): Promise<void> {
+    if (this.appearanceCache.has(address)) return
+    if (this.profileRequestsInFlight.has(address)) return
+
+    this.profileRequestsInFlight.add(address)
+    try {
+      const fetchFn = (globalThis as unknown as {
+        fetch?: (input: string, init?: { method?: string; headers?: Record<string, string>; body?: string }) => Promise<any>
+      }).fetch
+
+      if (!fetchFn) return
+
+      const response = await fetchFn(PROFILE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [address] })
+      })
+      if (!response?.ok) return
+
+      const payload = await response.json()
+      const profileList = this.extractProfiles(payload)
+      const match = profileList.find((entry) => this.getProfileAddress(entry) === address)
+      const avatar = match?.avatar ?? match?.avatars?.[0]?.avatar
+      if (!avatar) return
+
+      const wearables = Array.isArray(avatar.wearables)
+        ? avatar.wearables.filter((urn: unknown) => typeof urn === 'string')
+        : []
+
+      const parsedAppearance: AvatarAppearance = {
+        wearables,
+        bodyShape:
+          (typeof avatar.bodyShape === 'string' && avatar.bodyShape) ||
+          (typeof avatar.bodyShapeUrn === 'string' && avatar.bodyShapeUrn) ||
+          DEFAULT_BODY_SHAPE,
+        eyeColor: this.parseColor(avatar.eyes?.color ?? avatar.eyeColor) ?? { r: 0, g: 0, b: 0 },
+        skinColor: this.parseColor(avatar.skin?.color ?? avatar.skinColor) ?? { r: 0, g: 0, b: 0 },
+        hairColor: this.parseColor(avatar.hair?.color ?? avatar.hairColor) ?? { r: 0, g: 0, b: 0 }
+      }
+
+      this.appearanceCache.set(address, parsedAppearance)
+    } catch (_err) {
+      // Keep podium system resilient; live data/cache remain primary path.
+    } finally {
+      this.profileRequestsInFlight.delete(address)
+    }
+  }
+
+  private extractProfiles(payload: any): any[] {
+    if (Array.isArray(payload)) return payload
+    if (Array.isArray(payload?.avatars)) return payload.avatars
+    if (Array.isArray(payload?.profiles)) return payload.profiles
+    return []
+  }
+
+  private getProfileAddress(entry: any): string {
+    const fromUserId = typeof entry?.userId === 'string' ? entry.userId : ''
+    const fromEthAddress = typeof entry?.ethAddress === 'string' ? entry.ethAddress : ''
+    const fromId = typeof entry?.id === 'string' ? entry.id : ''
+    const value = fromUserId || fromEthAddress || fromId
+    return value.toLowerCase()
+  }
+
+  private parseColor(value: unknown): AvatarColor | null {
+    if (!value) return null
+
+    if (typeof value === 'string') {
+      const hex = value.startsWith('#') ? value.slice(1) : value
+      if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null
+      const r = parseInt(hex.slice(0, 2), 16) / 255
+      const g = parseInt(hex.slice(2, 4), 16) / 255
+      const b = parseInt(hex.slice(4, 6), 16) / 255
+      return { r, g, b }
+    }
+
+    if (typeof value === 'object') {
+      const candidate = value as { r?: unknown; g?: unknown; b?: unknown; a?: unknown }
+      if (typeof candidate.r === 'number' && typeof candidate.g === 'number' && typeof candidate.b === 'number') {
+        return {
+          r: candidate.r,
+          g: candidate.g,
+          b: candidate.b,
+          a: typeof candidate.a === 'number' ? candidate.a : undefined
+        }
+      }
+    }
+
+    return null
   }
 }
