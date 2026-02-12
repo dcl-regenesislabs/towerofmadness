@@ -368,8 +368,7 @@ export async function main() {
   }
 
   const triggerStart = engine.addEntity()
-  Transform.create(triggerStart, { position: Vector3.create(40.38, 10.01, 14.6), scale: Vector3.create(23.6, 5.6, 6) })
-
+  Transform.create(triggerStart, { position: Vector3.create(40.38, 11.10, 21.6), scale: Vector3.create(23.6, 4, 15) })
   const triggerDeath = engine.addEntity()
   Transform.create(triggerDeath, {
     position: Vector3.create(40.35, 6.99, 38.44),
