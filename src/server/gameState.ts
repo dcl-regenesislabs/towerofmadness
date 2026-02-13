@@ -568,16 +568,24 @@ export class GameState {
     const roundState = RoundStateComponent.getMutable(this.roundStateEntity)
     roundState.phase = RoundPhase.ENDING
 
-    // Calculate winners
+    // Calculate podium winners:
+    // - If at least one player finished, rank only finishers by best time.
+    // - If nobody finished, rank all players by max height reached.
     const playerArray = Array.from(this.players.values())
-    playerArray.sort((a, b) => {
-      if (a.isFinished && b.isFinished) return a.bestTime - b.bestTime
-      if (a.isFinished) return -1
-      if (b.isFinished) return 1
-      return b.maxHeight - a.maxHeight
-    })
+    const finishers = playerArray.filter((player) => player.isFinished)
+    const podiumCandidates =
+      finishers.length > 0
+        ? [...finishers].sort((a, b) => {
+            if (a.bestTime !== b.bestTime) return a.bestTime - b.bestTime
+            if (a.finishOrder !== b.finishOrder) return a.finishOrder - b.finishOrder
+            return a.address.localeCompare(b.address)
+          })
+        : [...playerArray].sort((a, b) => {
+            if (a.maxHeight !== b.maxHeight) return b.maxHeight - a.maxHeight
+            return a.address.localeCompare(b.address)
+          })
 
-    const top3 = playerArray.slice(0, 3)
+    const top3 = podiumCandidates.slice(0, 3)
     const winners = WinnersComponent.getMutable(this.winnersEntity)
     winners.winners = top3.map((p, i) => ({
       address: p.address,
