@@ -111,6 +111,39 @@ interface WeeklyPoints {
   lastPlayed: number
 }
 
+function orderByFinishTime<T extends { bestTime: number; finishOrder: number; address: string }>(entries: T[]): T[] {
+  return [...entries].sort((a, b) => {
+    if (a.bestTime !== b.bestTime) return a.bestTime - b.bestTime
+    if (a.finishOrder !== b.finishOrder) return a.finishOrder - b.finishOrder
+    return a.address.localeCompare(b.address)
+  })
+}
+
+function orderByHeight<T extends { maxHeight: number; address: string; lastHeightTime?: number }>(
+  entries: T[],
+  useLastHeightTimeTieBreaker: boolean = false
+): T[] {
+  return [...entries].sort((a, b) => {
+    if (a.maxHeight !== b.maxHeight) return b.maxHeight - a.maxHeight
+    if (useLastHeightTimeTieBreaker && a.lastHeightTime !== undefined && b.lastHeightTime !== undefined) {
+      if (a.lastHeightTime !== b.lastHeightTime) return a.lastHeightTime - b.lastHeightTime
+    }
+    return a.address.localeCompare(b.address)
+  })
+}
+
+function orderByBestResult<T extends { finishCount: number; bestTime: number; bestHeight: number; address: string }>(
+  entries: T[]
+): T[] {
+  return [...entries].sort((a, b) => {
+    if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
+    if (a.finishCount > 0) return -1
+    if (b.finishCount > 0) return 1
+    if (a.bestHeight !== b.bestHeight) return b.bestHeight - a.bestHeight
+    return a.address.localeCompare(b.address)
+  })
+}
+
 
 export class GameState {
   private static instance: GameState
@@ -376,21 +409,11 @@ export class GameState {
   }
 
   getAllTimeBests(): AllTimeBest[] {
-    return Array.from(this.allTimeBests.values()).sort((a, b) => {
-      if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
-      if (a.finishCount > 0) return -1
-      if (b.finishCount > 0) return 1
-      return b.bestHeight - a.bestHeight
-    })
+    return orderByBestResult(Array.from(this.allTimeBests.values()))
   }
 
   getWeeklyBests(): WeeklyBest[] {
-    return Array.from(this.weeklyBests.values()).sort((a, b) => {
-      if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
-      if (a.finishCount > 0) return -1
-      if (b.finishCount > 0) return 1
-      return b.bestHeight - a.bestHeight
-    })
+    return orderByBestResult(Array.from(this.weeklyBests.values()))
   }
 
   // Tower management
@@ -574,16 +597,7 @@ export class GameState {
     const playerArray = Array.from(this.players.values())
     const finishers = playerArray.filter((player) => player.isFinished)
     const podiumCandidates =
-      finishers.length > 0
-        ? [...finishers].sort((a, b) => {
-            if (a.bestTime !== b.bestTime) return a.bestTime - b.bestTime
-            if (a.finishOrder !== b.finishOrder) return a.finishOrder - b.finishOrder
-            return a.address.localeCompare(b.address)
-          })
-        : [...playerArray].sort((a, b) => {
-            if (a.maxHeight !== b.maxHeight) return b.maxHeight - a.maxHeight
-            return a.address.localeCompare(b.address)
-          })
+      finishers.length > 0 ? orderByFinishTime(finishers) : orderByHeight(playerArray)
 
     const top3 = podiumCandidates.slice(0, 3)
     const winners = WinnersComponent.getMutable(this.winnersEntity)
@@ -645,11 +659,7 @@ export class GameState {
     const finishers = players.filter((player) => player.isFinished)
     if (finishers.length > 0) {
       console.log('[Server][Points] Winners detected. Awarding finish points.')
-      const sortedFinishers = [...finishers].sort((a, b) => {
-        if (a.bestTime !== b.bestTime) return a.bestTime - b.bestTime
-        if (a.finishOrder !== b.finishOrder) return a.finishOrder - b.finishOrder
-        return a.address.localeCompare(b.address)
-      })
+      const sortedFinishers = orderByFinishTime(finishers)
 
       sortedFinishers.forEach((player, index) => {
         const points = index < 3 ? WINNER_POINTS[index] : ADDITIONAL_WINNER_POINTS
@@ -665,11 +675,7 @@ export class GameState {
     console.log(
       `[Server][Points] No winners this round. Awarding points to highest climbers (${NOWIN_START_POINTS}..${NOWIN_MIN_POINTS}).`
     )
-    const sortedByHeight = [...players].sort((a, b) => {
-      if (a.maxHeight !== b.maxHeight) return b.maxHeight - a.maxHeight
-      if (a.lastHeightTime !== b.lastHeightTime) return a.lastHeightTime - b.lastHeightTime
-      return a.address.localeCompare(b.address)
-    })
+    const sortedByHeight = orderByHeight(players, true)
 
     let points = NOWIN_START_POINTS
     let rank = 1
@@ -688,19 +694,8 @@ export class GameState {
   private updateLeaderboard() {
     this.ensureWeeklyCurrent()
 
-    const allTimeSorted = Array.from(this.allTimeBests.values()).sort((a, b) => {
-      if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
-      if (a.finishCount > 0) return -1
-      if (b.finishCount > 0) return 1
-      return b.bestHeight - a.bestHeight
-    })
-
-    const weeklySorted = Array.from(this.weeklyBests.values()).sort((a, b) => {
-      if (a.finishCount > 0 && b.finishCount > 0) return a.bestTime - b.bestTime
-      if (a.finishCount > 0) return -1
-      if (b.finishCount > 0) return 1
-      return b.bestHeight - a.bestHeight
-    })
+    const allTimeSorted = orderByBestResult(Array.from(this.allTimeBests.values()))
+    const weeklySorted = orderByBestResult(Array.from(this.weeklyBests.values()))
 
     const buildEntry = (
       address: string,
