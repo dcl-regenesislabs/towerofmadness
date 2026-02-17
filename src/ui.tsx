@@ -75,10 +75,6 @@ function getWinnerFontSize(index: number): number {
   return 22
 }
 
-function truncateWinnerName(name: string): string {
-  return name.length > 8 ? `${name.slice(0, 8)}...` : name
-}
-
 function getWinnerTextColor(index: number, hasEntry: boolean, fallbackColor: Color4): Color4 {
   if (!hasEntry) return Color4.create(0.72, 0.76, 0.85, 1)
   if (index === 0) return Color4.create(1, 0.84, 0, 1) // Gold
@@ -126,7 +122,7 @@ const TowerProgressBar = () => {
     <UiEntity
       uiTransform={{
         width: BAR_WIDTH,
-        height: BAR_HEIGHT, 
+        height: BAR_HEIGHT,
         positionType: 'absolute',
         position: { top: 130 * s, left: (screenWidth - BAR_WIDTH) / 2 },
         flexDirection: 'column',
@@ -802,7 +798,7 @@ const GameUI = () => {
             const display = hasEntry
               ? (winner.time > 0 ? formatTimeMs(winner.time) : `${winner.height.toFixed(2)}m`)
               : '--:--.--'
-            const name = hasEntry ? truncateWinnerName(winner.displayName) : 'No entries'
+            const name = hasEntry ? winner.displayName : 'No entries'
 
             return (
               <UiEntity
