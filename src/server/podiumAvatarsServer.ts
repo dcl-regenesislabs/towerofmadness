@@ -75,8 +75,8 @@ export class PodiumAvatarsServer {
       Transform.getMutable(slot.textEntity).scale = Vector3.Zero()
       TextShape.getMutable(slot.textEntity).text = winner ? `${winner.height.toFixed(1)}m` : ''
 
-      if (slot.address && !this.appearanceCache.has(slot.address)) {
-        void this.maybeFetchAppearanceFromProfiles(slot.address)
+      if (slot.address) {
+        this.getAvatar(slot.address)
       }
     }
   }
@@ -150,9 +150,7 @@ export class PodiumAvatarsServer {
 
         if (!needsSync) continue
 
-        const liveAppearance = this.getLiveAppearance(slot.address)
-        const cachedAppearance = this.appearanceCache.get(slot.address)
-        const appearance = liveAppearance ?? cachedAppearance
+        const appearance = this.getAvatar(slot.address)
 
         if (!this.debugLogged.has(slot.address)) {
           this.debugLogged.add(slot.address)
@@ -175,10 +173,7 @@ export class PodiumAvatarsServer {
           })
         }
 
-        if (!appearance) {
-          void this.maybeFetchAppearanceFromProfiles(slot.address)
-          continue
-        }
+        if (!appearance) continue
 
         const avatarShape = AvatarShape.getMutable(slot.entity)
         avatarShape.wearables = appearance.wearables.slice()
@@ -239,6 +234,17 @@ export class PodiumAvatarsServer {
 
     this.appearanceCache.set(address, appearance)
     return appearance
+  }
+
+  private getAvatar(address: string): AvatarAppearance | null {
+    const liveAppearance = this.getLiveAppearance(address)
+    if (liveAppearance) return liveAppearance
+
+    const cachedAppearance = this.appearanceCache.get(address)
+    if (cachedAppearance) return cachedAppearance
+
+    void this.maybeFetchAppearanceFromProfiles(address)
+    return null
   }
 
   private async maybeFetchAppearanceFromProfiles(address: string): Promise<void> {
