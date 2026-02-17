@@ -317,66 +317,9 @@ const GameUI = () => {
   const nextRoundSeconds = Math.max(0, Math.ceil(roundTimer))
 
   // Show loading screen while connecting
-  if (!isConnectedToServer) {
-    const syncStatus = isSynced()
-    const statusText = !syncStatus
-      ? 'Synchronizing state...'
-      : 'Waiting for server...'
-
-    return (
-      <UiEntity
-        uiTransform={{
-          width: '100%',
-          height: '100%',
-          positionType: 'absolute',
-          alignItems: 'center',
-          justifyContent: 'center'
-        }}
-      >
-        <UiEntity
-          uiTransform={{
-            width: 400 * s,
-            height: 150 * s,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: 'column'
-          }}
-          uiBackground={{
-            color: Color4.create(0.1, 0.1, 0.15, 0.95)
-          }}
-        >
-          <UiEntity
-            uiTransform={{
-              width: '100%',
-              height: 50 * s,
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            uiText={{
-              value: 'TOWER OF MADNESS',
-              fontSize: 32 * s,
-              color: Color4.Yellow(),
-              textAlign: 'middle-center'
-            }}
-          />
-          <UiEntity
-            uiTransform={{
-              width: '100%',
-              height: 40 * s,
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            uiText={{
-              value: statusText,
-              fontSize: 20 * s,
-              color: Color4.White(),
-              textAlign: 'middle-center'
-            }}
-          />
-        </UiEntity>
-      </UiEntity>
-    )
-  }
+    if (!isConnectedToServer) {
+      return null
+    }
 
   return (
     <UiEntity
