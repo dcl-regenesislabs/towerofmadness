@@ -177,6 +177,7 @@ export class GameState {
   private weeklyPointsMetaKey: string = getWeekStartKeyUTC()
   private lastAllTimePointsKey: string = ''
   private lastWeeklyPointsKey: string = ''
+  private leaderboardDirty: boolean = false
 
   public static getInstance(): GameState {
     if (!GameState.instance) {
@@ -323,6 +324,12 @@ export class GameState {
       this.maybePersistWeeklyLeaderboard()
     }
 
+    this.leaderboardDirty = true
+  }
+
+  flushLeaderboardIfDirty() {
+    if (!this.leaderboardDirty) return
+    this.leaderboardDirty = false
     this.updateLeaderboard()
   }
 

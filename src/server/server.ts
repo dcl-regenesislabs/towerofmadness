@@ -11,6 +11,7 @@ const HEIGHT_TOLERANCE = 0.5 // m of extra leeway per sample
 const HARD_MAX_DELTA = 20 // m allowed upward jump regardless of sample time
 const TELEPORT_BASE = { x: 45, y: 2.5, z: 59 }
 const END_TRIGGER_OFFSET = 11
+const LEADERBOARD_FLUSH_INTERVAL_SECONDS = 0.5
 
 export function server() {
   console.log('[Server] Tower of Madness starting...')
@@ -129,6 +130,15 @@ export function server() {
       }
     }
   }, undefined, 'player-height-system')
+
+  // Flush leaderboard updates at a fixed cadence to avoid network bursts
+  let leaderboardFlushTimer = 0
+  engine.addSystem((dt: number) => {
+    leaderboardFlushTimer += dt
+    if (leaderboardFlushTimer < LEADERBOARD_FLUSH_INTERVAL_SECONDS) return
+    leaderboardFlushTimer = 0
+    gameState.flushLeaderboardIfDirty()
+  }, undefined, 'leaderboard-flush-system')
 
   console.log('[Server] Ready')
 }
