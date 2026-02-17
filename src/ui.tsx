@@ -37,7 +37,15 @@ import {
   isSynced,
   towerConfig
 } from "./index"
-import { RoundPhase, getTimeSyncOffset, isTimeSyncReady, getLocalPlayerHeights, formatTime, getTowerChunksFromEntities } from "./multiplayer"
+import {
+  RoundPhase,
+  WinnerEntry,
+  getTimeSyncOffset,
+  isTimeSyncReady,
+  getLocalPlayerHeights,
+  formatTime,
+  getTowerChunksFromEntities
+} from "./multiplayer"
 import { getSnapshots } from "./snapshots"
 import { OutlinedText, OUTLINE_OFFSETS_16, OUTLINE_OFFSETS_8 } from "./outlinedTextComponent"
 
@@ -52,6 +60,27 @@ const CHUNK_COLORS: Record<string, Color4> = {
   'Chunk02': Color4.create(0.85, 0.75, 0.4, 1),  // Yellow/Tan
   'Chunk03': Color4.create(0.9, 0.9, 0.9, 1),  // White
   'ChunkEnd': Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish) 
+}
+
+function getTrophyUvsByRank(index: number): number[] {
+  // UV order: bottom-left, top-left, top-right, bottom-right
+  if (index === 0) return [0.0, 0.0, 0.0, 1.0, 0.31, 1.0, 0.31, 0.0] // Gold
+  if (index === 1) return [0.335, 0.0, 0.335, 1.0, 0.665, 1.0, 0.665, 0.0] // Silver
+  return [0.69, 0.0, 0.69, 1.0, 1.0, 1.0, 1.0, 0.0] // Bronze
+}
+
+function getWinnerFontSize(index: number): number {
+  if (index === 0) return 25
+  if (index === 1) return 23
+  return 22
+}
+
+function getWinnerTextColor(index: number, hasEntry: boolean, fallbackColor: Color4): Color4 {
+  if (!hasEntry) return Color4.create(0.72, 0.76, 0.85, 1)
+  if (index === 0) return Color4.create(1, 0.84, 0, 1) // Gold
+  if (index === 1) return Color4.create(0.85, 0.88, 0.94, 1) // Silver
+  if (index === 2) return Color4.create(0.8, 0.55, 0.35, 1) // Bronze
+  return fallbackColor
 }
 
 // Tower Progress Bar Component
@@ -244,6 +273,7 @@ const GameUI = () => {
   const startMessageScale = isMobile ? 3 : 1
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
   const screenWidth = uiCanvasInfo?.width ?? 1920 * s
+  const localPlayerAddress = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
   const playerInfoWidth = 260 * s
   const startMessageWidth = 260 * s
   const startMessageGap = 96 * s
@@ -272,8 +302,19 @@ const GameUI = () => {
   const timeSinceStartMessage = startMessageTimestamp > 0 ? (Date.now() - startMessageTimestamp) / 1000 : 999
   const showStartMessage = attemptState === AttemptState.IN_PROGRESS && timeSinceStartMessage < 4
 
+  const winnersToDisplay = roundWinners
+
   // Show winners display
-  const showWinners = (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && roundWinners.length > 0
+  const showWinners = (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && winnersToDisplay.length > 0
+  const topWinnerSlots: Array<WinnerEntry | null> = [0, 1, 2].map((index) => winnersToDisplay[index] ?? null)
+  const localWinner = winnersToDisplay.find((winner) => winner.address?.toLowerCase() === localPlayerAddress)
+  const localBoardEntry = leaderboard.find((entry) => entry.address?.toLowerCase() === localPlayerAddress)
+  const localPlacementText = localWinner
+    ? `You placed #${localWinner.rank > 0 ? localWinner.rank : winnersToDisplay.findIndex((w) => w.address === localWinner.address) + 1} - ${localWinner.time > 0 ? formatTimeMs(localWinner.time) : `${localWinner.height.toFixed(2)}m`}`
+    : localBoardEntry && localBoardEntry.finishOrder > 0
+      ? `You placed #${localBoardEntry.finishOrder} - ${localBoardEntry.bestTime > 0 ? formatTimeMs(localBoardEntry.bestTime) : `${localBoardEntry.maxHeight.toFixed(2)}m`}`
+      : 'You did not finish this round'
+  const nextRoundSeconds = Math.max(0, Math.ceil(roundTimer))
 
   // Show loading screen while connecting
   if (!isConnectedToServer) {
@@ -718,86 +759,148 @@ const GameUI = () => {
         </UiEntity>
       )}
 
-      {/* WINNERS DISPLAY - Center (When round ends) */}
+      {/* WINNERS DISPLAY - Left/top aligned near progress bar */}
       {showWinners && (
         <UiEntity
           uiTransform={{
-            width: '100%',
-            height: '100%', 
+            width: 360 * s,
+            height: 430 * s,
             positionType: 'absolute',
-            position: { top: 0, left: 0 },
+            position: { top: 206 * s, left: ((screenWidth - 980 * s) / 2) - 12 * s },
             alignItems: 'center',
-            justifyContent: 'center'
+            justifyContent: 'flex-start',
+            flexDirection: 'column'
+          }}
+          uiBackground={{
+            color: Color4.White(),
+            texture: { src: 'assets/images/ui_vertical_background.png' },
+            textureMode: 'stretch'
           }}
         >
           <UiEntity
             uiTransform={{
-              width: 400 * s,
-              height: (60 + roundWinners.length * 45 + 50) * s,
+              width: '100%',
+              height: 50 * s,
               alignItems: 'center',
-              justifyContent: 'flex-start',
-              flexDirection: 'column'
+              justifyContent: 'center',
+              margin: { top: 20 * s }
             }}
-            uiBackground={{
-              color: Color4.create(0.05, 0.05, 0.2, 0.95)
+            uiText={{
+              value: 'Results',
+              fontSize: 34 * s,
+              color: Color4.White(),
+              textAlign: 'middle-center'
             }}
-          >
-            <UiEntity
-              uiTransform={{
-                width: '100%',
-                height: 50 * s,
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              uiText={{
-                value: 'ROUND COMPLETE!',
-                fontSize: 32 * s,
-                color: Color4.Yellow(),
-                textAlign: 'middle-center'
-              }}
-            />
+          />
 
-            {roundWinners.map((winner, i) => {
-              const medal = ['1st', '2nd', '3rd'][i] || `${i + 1}.`
-              const display = winner.time > 0
-                ? `${winner.time.toFixed(2)}s`
-                : `${winner.height.toFixed(0)}m`
- 
-              return (
+          {topWinnerSlots.map((winner, i) => {
+            const hasEntry = winner !== null
+            const display = hasEntry
+              ? (winner.time > 0 ? formatTimeMs(winner.time) : `${winner.height.toFixed(2)}m`)
+              : '--:--.--'
+            const name = hasEntry ? winner.displayName : 'No entries'
+
+            return (
+              <UiEntity
+                key={`winner-${i}`}
+                uiBackground={{
+                  color: Color4.create(0.03, 0.05, 0.18, 0.68),
+                  textureMode: 'stretch'
+                }}
+                uiTransform={{
+                  width: 300 * s,
+                  height: 62 * s,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  margin: { top: i === 0 ? 10 * s : 6 * s },
+                  borderRadius: 8 * s,
+                  borderWidth: i === 0 && hasEntry ? 2 * s : 0,
+                  borderColor: i === 0 && hasEntry ? Color4.create(1, 0.84, 0, 1) : Color4.create(0, 0, 0, 0)
+                }}
+              >
                 <UiEntity
-                  key={`winner-${i}`}
                   uiTransform={{
-                    width: '100%',
-                    height: 40 * s,
+                    width: 30 * s,
+                    height: 52 * s,
                     alignItems: 'center',
+                    justifyContent: 'center',
+                    margin: { left: 2 * s, right: 4 * s }
+                  }}
+                  uiBackground={{
+                    color: hasEntry ? Color4.White() : Color4.create(1, 1, 1, 0.35),
+                    texture: { src: 'assets/images/trophys.png' },
+                    textureMode: 'stretch',
+                    uvs: getTrophyUvsByRank(i)
+                  }}
+                />
+                <UiEntity
+                  uiTransform={{
+                    width: 162 * s,
+                    height: '100%',
+                    alignItems: 'flex-start',
                     justifyContent: 'center'
                   }}
                   uiText={{
-                    value: `${medal} ${winner.displayName} - ${display}`, 
-                    fontSize: 22 * s,
-                    color: i === 0 ? Color4.create(1, 0.84, 0, 1) : Color4.White(),
-                    textAlign: 'middle-center'
+                    value: name,
+                    fontSize: getWinnerFontSize(i) * s,
+                    color: getWinnerTextColor(i, hasEntry, Color4.White()),
+                    textAlign: 'middle-left'
                   }}
                 />
-              )
-            })}
+                <UiEntity
+                  uiTransform={{
+                    width: 98 * s,
+                    height: '100%',
+                    alignItems: 'flex-end',
+                    justifyContent: 'center'
+                  }}
+                  uiText={{
+                    value: display,
+                    fontSize: getWinnerFontSize(i) * s,
+                    color: getWinnerTextColor(i, hasEntry, Color4.create(0.92, 0.94, 1, 1)),
+                    textAlign: 'middle-right'
+                  }}
+                />
+              </UiEntity>
+            )
+          })}
 
-            <UiEntity
-              uiTransform={{
-                width: '100%',
-                height: 40 * s,
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: { top: 10 * s }
-              }}
-              uiText={{
-                value: 'Next round starting soon...',
-                fontSize: 16 * s,
-                color: Color4.create(0.6, 0.6, 0.6, 1),
-                textAlign: 'middle-center'
-              }}
-            />
-          </UiEntity>
+          <UiEntity
+            uiTransform={{
+              width: 318 * s,
+              height: 52 * s,
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: { top: 16 * s }
+            }}
+            uiBackground={{
+              color: Color4.create(0.05, 0.07, 0.24, 0.75)
+            }}
+            uiText={{
+              value: localPlacementText,
+              fontSize: 21 * s,
+              color: Color4.create(0.86, 0.91, 1, 1),
+              textAlign: 'middle-center'
+            }}
+          />
+
+          <UiEntity
+            uiTransform={{
+              width: 330 * s,
+              height: 42 * s,
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: { top: 8 * s }
+            }}
+            uiText={{
+              value: `Next round in ${nextRoundSeconds}s`,
+              fontSize: 15 * s,
+              color: Color4.create(0.86, 0.91, 1, 1),
+              textAlign: 'middle-center'
+            }}
+          />
+
         </UiEntity>
       )}
 
