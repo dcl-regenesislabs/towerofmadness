@@ -34,7 +34,6 @@ import {
   leaderboard,
   roundWinners,
   isConnectedToServer,
-  isSynced,
   towerConfig
 } from "./index"
 import {
@@ -61,6 +60,12 @@ const CHUNK_COLORS: Record<string, Color4> = {
   'Chunk03': Color4.create(0.9, 0.9, 0.9, 1),  // White
   'ChunkEnd': Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish) 
 }
+
+const CONNECT_FLOOR_COUNT = 8
+const CONNECT_FLOOR_STEP_SECONDS = 0.16
+const CONNECT_MIN_VISIBLE_MS = CONNECT_FLOOR_COUNT * CONNECT_FLOOR_STEP_SECONDS * 1000
+let connectUiCycleStartedAtMs = 0
+let connectUiMinVisibleUntilMs = 0
 
 function getTrophyUvsByRank(index: number): number[] {
   // UV order: bottom-left, top-left, top-right, bottom-right
@@ -320,12 +325,35 @@ const GameUI = () => {
       : 'You did not finish this round'
   const nextRoundSeconds = Math.max(0, Math.ceil(roundTimer))
 
-  // Show loading screen while connecting
+  const nowMs = Date.now()
   if (!isConnectedToServer) {
-    const syncStatus = isSynced()
-    const statusText = !syncStatus
-      ? 'Synchronizing state...'
-      : 'Waiting for server...'
+    if (connectUiCycleStartedAtMs === 0) {
+      connectUiCycleStartedAtMs = nowMs
+      connectUiMinVisibleUntilMs = nowMs + CONNECT_MIN_VISIBLE_MS
+    }
+  } else if (connectUiCycleStartedAtMs !== 0 && nowMs >= connectUiMinVisibleUntilMs) {
+    connectUiCycleStartedAtMs = 0
+    connectUiMinVisibleUntilMs = 0
+  }
+  const shouldShowConnectingUi = !isConnectedToServer || (connectUiCycleStartedAtMs !== 0 && nowMs < connectUiMinVisibleUntilMs)
+
+  // Show loading screen while connecting
+  if (shouldShowConnectingUi) {
+    const syncUiScale = 3
+    const nowSeconds = nowMs / 1000
+    const dotCount = (Math.floor(nowSeconds * 2.5) % 3) + 1
+    const movingDots = '.'.repeat(dotCount)
+    const floorCount = CONNECT_FLOOR_COUNT
+    const floorStepDuration = CONNECT_FLOOR_STEP_SECONDS
+    const activeFloor = Math.floor((nowSeconds / floorStepDuration) % floorCount)
+    const loaderFloorPalette = [
+      CHUNK_COLORS.ChunkStart,
+      CHUNK_COLORS.Chunk01,
+      CHUNK_COLORS.Chunk02,
+      CHUNK_COLORS.Chunk03,
+      CHUNK_COLORS.ChunkEnd
+    ]
+    const statusText = `CONNECTING TO SERVER${movingDots}`
 
     return (
       <UiEntity
@@ -339,40 +367,82 @@ const GameUI = () => {
       >
         <UiEntity
           uiTransform={{
-            width: 400 * s,
-            height: 150 * s,
+            width: 400 * s * syncUiScale,
+            height: 150 * s * syncUiScale,
             alignItems: 'center',
             justifyContent: 'center',
             flexDirection: 'column'
-          }}
-          uiBackground={{
-            color: Color4.create(0.1, 0.1, 0.15, 0.95)
           }}
         >
           <UiEntity
             uiTransform={{
               width: '100%',
-              height: 50 * s,
+              height: 96 * s * syncUiScale,
               alignItems: 'center',
               justifyContent: 'center'
             }}
-            uiText={{
-              value: 'TOWER OF MADNESS',
-              fontSize: 32 * s,
-              color: Color4.Yellow(),
-              textAlign: 'middle-center'
-            }}
-          />
-          <UiEntity
+          >
+            <UiEntity
+              uiTransform={{
+                width: 36 * s * syncUiScale,
+                height: 86 * s * syncUiScale,
+                flexDirection: 'column-reverse',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                borderRadius: 8 * s * syncUiScale,
+                padding: {
+                  top: 4 * s * syncUiScale,
+                  bottom: 4 * s * syncUiScale,
+                  left: 7 * s * syncUiScale,
+                  right: 7 * s * syncUiScale
+                }
+              }}
+              uiBackground={{
+                color: Color4.create(0.05, 0.05, 0.08, 0.95)
+              }}
+            >
+              {Array.from({ length: floorCount }, (_, floorIndex) => {
+                const floorIsLit = floorIndex <= activeFloor
+                const floorIsActive = floorIndex === activeFloor
+                const floorBaseColor = loaderFloorPalette[floorIndex % loaderFloorPalette.length] ?? Color4.White()
+                return (
+                  <UiEntity
+                    key={`sync-floor-${floorIndex}`}
+                    uiTransform={{
+                      width: 20 * s * syncUiScale,
+                      height: 7 * s * syncUiScale,
+                      borderRadius: 3 * s * syncUiScale
+                    }}
+                    uiBackground={{
+                      color: floorIsActive
+                        ? Color4.create(
+                          Math.min(1, floorBaseColor.r + 0.12),
+                          Math.min(1, floorBaseColor.g + 0.12),
+                          Math.min(1, floorBaseColor.b + 0.12),
+                          1
+                        )
+                        : floorIsLit
+                          ? Color4.create(floorBaseColor.r, floorBaseColor.g, floorBaseColor.b, 0.92)
+                          : Color4.create(floorBaseColor.r * 0.28, floorBaseColor.g * 0.28, floorBaseColor.b * 0.28, 0.55)
+                    }}
+                  />
+                )
+              })}
+            </UiEntity>
+          </UiEntity>
+          <OutlinedText
+            outlineKeyPrefix="connect-status-outline"
+            outlineOffsets={OUTLINE_OFFSETS_8}
+            outlineScale={s}
             uiTransform={{
               width: '100%',
-              height: 40 * s,
+              height: 40 * s * syncUiScale,
               alignItems: 'center',
               justifyContent: 'center'
             }}
             uiText={{
               value: statusText,
-              fontSize: 20 * s,
+              fontSize: 10 * s * syncUiScale,
               color: Color4.White(),
               textAlign: 'middle-center'
             }}
