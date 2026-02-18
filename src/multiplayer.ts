@@ -40,6 +40,9 @@ export { isServer } from '@dcl/sdk/network'
 
 // Callback for when any player finishes (includes server-authoritative time)
 let onPlayerFinishedCallback: ((displayName: string, time: number, finishOrder: number) => void) | null = null
+let onStorageDebugResultCallback:
+  | ((payload: { key: string; ok: boolean; value: string; error: string }) => void)
+  | null = null
 
 export function setupClient() {
   // Listen for player finished broadcasts
@@ -68,10 +71,27 @@ export function setupClient() {
       cameraTarget: { x: data.x, y: data.y + 1, z: data.z }
     })
   })
+
+  room.onMessage('storageDebugResult', (data) => {
+    if (onStorageDebugResultCallback) {
+      onStorageDebugResultCallback({
+        key: data.key,
+        ok: data.ok,
+        value: data.value,
+        error: data.error
+      })
+    }
+  })
 }
 
 export function onPlayerFinished(callback: (displayName: string, time: number, finishOrder: number) => void) {
   onPlayerFinishedCallback = callback
+}
+
+export function onStorageDebugResult(
+  callback: (payload: { key: string; ok: boolean; value: string; error: string }) => void
+) {
+  onStorageDebugResultCallback = callback
 }
 
 
@@ -89,6 +109,10 @@ export function sendPlayerStarted() {
 
 export function sendPlayerFinished() {
   room.send('playerFinished', { time: 0 }) // Time is calculated server-side
+}
+
+export function sendStorageDebugQuery(key: string) {
+  room.send('storageDebugQuery', { key })
 }
 
 // ============================================

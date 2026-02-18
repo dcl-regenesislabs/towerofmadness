@@ -1,4 +1,4 @@
-import ReactEcs, { UiEntity, ReactEcsRenderer } from "@dcl/sdk/react-ecs"
+import ReactEcs, { UiEntity, ReactEcsRenderer, Input, Button } from "@dcl/sdk/react-ecs"
 import { Color4 } from "@dcl/sdk/math"
 import { engine, UiCanvasInformation, PlayerIdentityData } from "@dcl/sdk/ecs"
 
@@ -34,7 +34,13 @@ import {
   leaderboard,
   roundWinners,
   isConnectedToServer,
-  towerConfig
+  towerConfig,
+  storageDebugInput,
+  setStorageDebugInput,
+  storageDebugLogs,
+  requestStorageDebugQuery,
+  showStorageDebugUi,
+  toggleStorageDebugUi
 } from "./index"
 import {
   RoundPhase,
@@ -562,6 +568,100 @@ const GameUI = () => {
           )}
         </UiEntity>
       </UiEntity>
+
+      {/* STORAGE DEBUG TOGGLE */}
+      <UiEntity
+        uiTransform={{
+          width: 84 * s,
+          height: 28 * s,
+          positionType: 'absolute',
+          position: { left: (screenWidth - 84 * s) / 2, bottom: 16 * s }
+        }}
+      >
+        <Button
+          value={showStorageDebugUi ? 'Hide dbg' : 'Show dbg'}
+          variant="secondary"
+          onMouseDown={() => toggleStorageDebugUi()}
+          uiTransform={{ width: 84 * s, height: 28 * s }}
+        />
+      </UiEntity>
+
+      {/* STORAGE DEBUG TOOL */}
+      {showStorageDebugUi && (
+      <UiEntity
+        uiTransform={{
+          width: 360 * s,
+          height: 210 * s,
+          positionType: 'absolute',
+          position: { left: (screenWidth - 360 * s) / 2, bottom: 50 * s },
+          padding: { left: 8 * s, right: 8 * s, top: 8 * s, bottom: 8 * s },
+          flexDirection: 'column',
+          alignItems: 'stretch'
+        }}
+        uiBackground={{ color: Color4.create(0, 0, 0, 0.65) }}
+      >
+        <UiEntity
+          uiTransform={{
+            width: '100%',
+            height: 20 * s
+          }}
+          uiText={{
+            value: 'Storage Debug',
+            fontSize: 14 * s,
+            color: Color4.Yellow(),
+            textAlign: 'middle-left'
+          }}
+        />
+
+        <UiEntity
+          uiTransform={{
+            width: '100%',
+            height: 34 * s,
+            flexDirection: 'row',
+            alignItems: 'center'
+          }}
+        >
+          <Input
+            value={storageDebugInput}
+            placeholder="Enter storage key..."
+            onChange={(value) => setStorageDebugInput(value)}
+            onSubmit={() => requestStorageDebugQuery()}
+            uiTransform={{ width: 250 * s, height: 30 * s }}
+            uiBackground={{ color: Color4.create(0.1, 0.1, 0.1, 1) }}
+            color={Color4.White()}
+            placeholderColor={Color4.create(0.7, 0.7, 0.7, 1)}
+            fontSize={14 * s}
+          />
+          <UiEntity uiTransform={{ width: 8 * s, height: 1 }} />
+          <Button
+            value="Query"
+            variant="primary"
+            onMouseDown={() => requestStorageDebugQuery()}
+            uiTransform={{ width: 78 * s, height: 30 * s }}
+          />
+        </UiEntity>
+
+        <UiEntity
+          uiTransform={{
+            width: '100%',
+            height: 136 * s,
+            margin: { top: 6 * s },
+            padding: { left: 6 * s, right: 6 * s, top: 6 * s, bottom: 6 * s }
+          }}
+          uiBackground={{ color: Color4.create(0.05, 0.05, 0.05, 0.9) }}
+        >
+          <UiEntity
+            uiTransform={{ width: '100%', height: '100%' }}
+            uiText={{
+              value: storageDebugLogs.length > 0 ? storageDebugLogs.join('\n') : 'No queries yet',
+              fontSize: 11 * s,
+              color: Color4.White(),
+              textAlign: 'top-left'
+            }}
+          />
+        </UiEntity>
+      </UiEntity>
+      )}
 
       {/* PLAYER INFO - Below Round Timer */}
       {showPlayerHeightUi && (

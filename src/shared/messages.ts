@@ -38,6 +38,19 @@ export const Messages = {
     x: Schemas.Number,
     y: Schemas.Number,
     z: Schemas.Number
+  }),
+
+  // Client -> Server: Storage debug query by key (scene storage)
+  storageDebugQuery: Schemas.Map({
+    key: Schemas.String
+  }),
+
+  // Server -> Client: Storage debug query result
+  storageDebugResult: Schemas.Map({
+    key: Schemas.String,
+    ok: Schemas.Boolean,
+    value: Schemas.String,
+    error: Schemas.String
   })
 }
 

@@ -33,6 +33,8 @@ import {
   sendPlayerFinished,
   sendPlayerJoined,
   onPlayerFinished,
+  onStorageDebugResult,
+  sendStorageDebugQuery,
   getRoundState,
   getLeaderboard,
   getWeeklyLeaderboard,
@@ -109,6 +111,30 @@ export let pointLeaderboard: PointLeaderboardEntry[] = []
 export let weeklyPointLeaderboard: PointLeaderboardEntry[] = []
 export let roundWinners: WinnerEntry[] = []
 export let towerConfig: TowerConfig | null = null
+
+// Storage debug tool UI state
+export let storageDebugInput: string = ''
+export let storageDebugLogs: string[] = []
+export let showStorageDebugUi: boolean = false
+const MAX_STORAGE_DEBUG_LOGS = 12
+
+export function setStorageDebugInput(value: string) {
+  storageDebugInput = value
+}
+
+export function requestStorageDebugQuery() {
+  const key = storageDebugInput.trim()
+  if (!key) return
+  sendStorageDebugQuery(key)
+}
+
+export function toggleStorageDebugUi() {
+  showStorageDebugUi = !showStorageDebugUi
+}
+
+export function appendStorageDebugLog(line: string) {
+  storageDebugLogs = [...storageDebugLogs, line].slice(-MAX_STORAGE_DEBUG_LOGS)
+}
 
 // ============================================
 // HELPER FUNCTIONS
@@ -326,6 +352,16 @@ export async function main() {
       // Update result message with server-authoritative time
       resultMessage = `🏆 FINISHED! Time: ${time.toFixed(2)}s`
       resultTimestamp = Date.now()
+    }
+  })
+
+  onStorageDebugResult((payload) => {
+    const prefix = payload.ok ? '[Storage][OK]' : '[Storage][ERR]'
+    const body = payload.ok ? payload.value : payload.error
+    appendStorageDebugLog(`${prefix} ${payload.key}`)
+    if (body) {
+      const trimmed = body.length > 220 ? `${body.slice(0, 220)}...` : body
+      appendStorageDebugLog(trimmed)
     }
   })
 
@@ -570,6 +606,12 @@ export async function main() {
   // ============================================
   // ADD SYSTEMS
   // ============================================
+
+  engine.addSystem(() => {
+    if (inputSystem.isTriggered(InputAction.IA_SECONDARY, PointerEventType.PET_DOWN)) {
+      toggleStorageDebugUi()
+    }
+  }, undefined, 'storage-debug-toggle-system')
 
   engine.addSystem(trackPlayerHeight, undefined, 'player-height-system')
   engine.addSystem(syncRoundState, undefined, 'round-sync-system')

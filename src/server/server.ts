@@ -1,5 +1,6 @@
 import { engine, PlayerIdentityData, AvatarBase } from '@dcl/sdk/ecs'
 import { getPlayer } from '@dcl/sdk/players'
+import { Storage } from '@dcl/sdk/server'
 import { GameState } from './gameState'
 import { room } from '../shared/messages'
 import { RoundPhase } from '../shared/schemas'
@@ -255,5 +256,40 @@ function setupMessageHandlers(gameState: GameState) {
       speedMultiplier: gameState.getSpeedMultiplier(),
       time: serverTime
     })
+  })
+
+  room.onMessage('storageDebugQuery', async (data) => {
+    const key = data.key.trim()
+    if (!key) {
+      room.send('storageDebugResult', {
+        key: '',
+        ok: false,
+        value: '',
+        error: 'Empty key'
+      })
+      return
+    }
+
+    try {
+      const value = await Storage.get<unknown>(key)
+      const serialized =
+        value === null
+          ? 'null'
+          : JSON.stringify(value, (_k, v) => (typeof v === 'bigint' ? v.toString() : v), 2)
+
+      room.send('storageDebugResult', {
+        key,
+        ok: true,
+        value: serialized,
+        error: ''
+      })
+    } catch (error) {
+      room.send('storageDebugResult', {
+        key,
+        ok: false,
+        value: '',
+        error: error instanceof Error ? error.message : 'Unknown storage error'
+      })
+    }
   })
 }
