@@ -19,7 +19,7 @@ export const RoundStateComponent = engine.defineComponent('tower:RoundState', {
   phase: Schemas.EnumString<RoundPhase>(RoundPhase, RoundPhase.ACTIVE),
   baseTimer: Schemas.Number,              // Total round time (420 seconds)
   speedMultiplier: Schemas.Number,
-  lastSpeedChangeTime: Schemas.Number,    // Server timestamp when multiplier changed
+  lastSpeedChangeTime: Schemas.Int64,     // Server timestamp when multiplier changed
   remainingAtSpeedChange: Schemas.Number, // Remaining seconds at that moment
   finisherCount: Schemas.Number
 })
