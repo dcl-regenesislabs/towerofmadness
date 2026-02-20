@@ -58,6 +58,13 @@ const CHUNK_COLORS: Record<string, Color4> = {
   'Chunk01': Color4.create(0.2, 0.8, 0.2, 1),  // Green
   'Chunk02': Color4.create(0.85, 0.75, 0.4, 1),  // Yellow/Tan
   'Chunk03': Color4.create(0.9, 0.9, 0.9, 1),  // White
+  'Chunk04': Color4.create(120 / 255, 136 / 255, 167 / 255, 1),  // #7888A7
+  'Chunk05': Color4.create(245 / 255, 175 / 255, 197 / 255, 1),  // #F5AFC5
+  'Chunk06': Color4.create(121 / 255, 69 / 255, 148 / 255, 1),  // #794594
+  'Chunk07': Color4.create(109 / 255, 102 / 255, 171 / 255, 1),  // #6D66AB
+  'Chunk08': Color4.create(244 / 255, 242 / 255, 219 / 255, 1),  // #F4F2DB
+  'Chunk09': Color4.create(200 / 255, 51 / 255, 92 / 255, 1),  // #C8335C
+  'Chunk10': Color4.create(122 / 255, 68 / 255, 148 / 255, 1),  // #7A4494
   'ChunkEnd': Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish) 
 }
 
@@ -348,9 +355,7 @@ const GameUI = () => {
     const activeFloor = Math.floor((nowSeconds / floorStepDuration) % floorCount)
     const loaderFloorPalette = [
       CHUNK_COLORS.ChunkStart,
-      CHUNK_COLORS.Chunk01,
-      CHUNK_COLORS.Chunk02,
-      CHUNK_COLORS.Chunk03,
+      ...Array.from({ length: 10 }, (_, i) => CHUNK_COLORS[`Chunk${String(i + 1).padStart(2, '0')}`] || Color4.Gray()),
       CHUNK_COLORS.ChunkEnd
     ]
     const statusText = `CONNECTING TO SERVER${movingDots}`
