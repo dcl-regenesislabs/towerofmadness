@@ -302,30 +302,23 @@ export class GameState {
     this.players.set(normalizedAddress, data)
 
     // Update all-time bests in real-time
-    const didUpdateAllTime = this.updateAllTimeBest(
+    this.updateAllTimeBest(
       normalizedAddress,
       data.displayName,
       data.bestTime,
       data.maxHeight,
       data.isFinished
     )
-    if (didUpdateAllTime) {
-      this.maybePersistGlobalLeaderboard()
-    }
 
     // Update weekly bests in real-time
-    const didUpdateWeekly = this.updateWeeklyBest(
+    this.updateWeeklyBest(
       normalizedAddress,
       data.displayName,
       data.bestTime,
       data.maxHeight,
       data.isFinished
     )
-    if (didUpdateWeekly) {
-      this.maybePersistWeeklyLeaderboard()
-    }
 
-    this.updateLeaderboard()
   }
 
   // All-time best management
@@ -545,7 +538,6 @@ export class GameState {
 
     this.podiumServer?.clear()
 
-    this.updateLeaderboard()
   }
 
   incrementFinisherCount(): number {
@@ -616,8 +608,10 @@ export class GameState {
     console.log('[Server] Winners:', top3.map((p) => p.displayName).join(', '))
 
     const pointsChanged = this.calculateRoundPoints(playerArray)
+    this.updateLeaderboard()
 
     void this.persistGlobalLeaderboard()
+    void this.persistWeeklyLeaderboard()
     if (pointsChanged) {
       void this.persistGlobalPointLeaderboard()
       void this.persistWeeklyPointLeaderboard()
@@ -1005,16 +999,6 @@ export class GameState {
     } catch (error) {
       console.error('[Server][Storage] Failed to save weekly point leaderboard:', error)
     }
-  }
-
-  private maybePersistGlobalLeaderboard() {
-    if (!isServer()) return
-    void this.persistGlobalLeaderboard()
-  }
-
-  private maybePersistWeeklyLeaderboard() {
-    if (!isServer()) return
-    void this.persistWeeklyLeaderboard()
   }
 
   private ensureWeeklyCurrent() {
