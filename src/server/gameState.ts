@@ -30,7 +30,9 @@ function protectServerEntity(entity: Entity, components: ComponentWithValidation
 }
 
 // Constants
-const CHUNK_OPTIONS = ['Chunk01', 'Chunk02', 'Chunk03']
+const CHUNK_OPTIONS = Array.from({ length: 10 }, (_, i) =>
+  `Chunk${String(i + 1).padStart(2, '0')}`
+)
 const MIN_CHUNKS = 3
 const MAX_CHUNKS = 8
 const BASE_TIMER = 420 // 7 minutes

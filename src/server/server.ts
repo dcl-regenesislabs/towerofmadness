@@ -11,6 +11,7 @@ const HEIGHT_TOLERANCE = 0.5 // m of extra leeway per sample
 const HARD_MAX_DELTA = 20 // m allowed upward jump regardless of sample time
 const TELEPORT_BASE = { x: 45, y: 2.5, z: 59 }
 const END_TRIGGER_OFFSET = 11
+const ROUND_TIMER_CHECK_INTERVAL = 0.25 // seconds
 
 export function server() {
   console.log('[Server] Tower of Madness starting...')
@@ -28,7 +29,7 @@ export function server() {
 
   engine.addSystem((dt: number) => {
     lastUpdate += dt
-    if (lastUpdate < 1) return
+    if (lastUpdate < ROUND_TIMER_CHECK_INTERVAL) return
     lastUpdate = 0
 
     const phase = gameState.getPhase()
