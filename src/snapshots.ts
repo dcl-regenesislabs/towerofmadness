@@ -8,6 +8,11 @@ export type SnapshotEntry = {
 
 const snapshots: SnapshotEntry[] = []
 const snapshotByWallet = new Map<string, SnapshotEntry>()
+const pendingSnapshotRequests = new Map<string, Promise<boolean>>()
+const pendingSnapshotResolvers = new Map<string, (ok: boolean) => void>()
+const snapshotQueue: string[] = []
+const snapshotQueueSet = new Set<string>()
+let isProcessingSnapshotQueue = false
 
 const CATALYST_URL = 'https://peer.decentraland.org'
 const CATALYST_FALLBACKS = [
@@ -21,8 +26,10 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
   if (!wallet) return false
 
   const normalized = wallet.toLowerCase()
+  const existingRequest = pendingSnapshotRequests.get(normalized)
+  if (existingRequest) return existingRequest
+
   let entry = snapshotByWallet.get(normalized)
-  const isNew = !entry
 
   if (!entry) {
     entry = {
@@ -34,21 +41,54 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
     }
     snapshotByWallet.set(normalized, entry)
     snapshots.unshift(entry)
-
-    if (snapshots.length > 12) {
-      snapshots.length = 12
-    }
   } else if (displayName && entry.displayName.startsWith('0x')) {
     entry.displayName = displayName
   }
 
-  if (!isNew && entry.status === 'loading') return false
-
   entry.status = 'loading'
   entry.lastUpdated = Date.now()
 
+  const requestPromise = new Promise<boolean>((resolve) => {
+    pendingSnapshotResolvers.set(normalized, resolve)
+  })
+  pendingSnapshotRequests.set(normalized, requestPromise)
+
+  if (!snapshotQueueSet.has(normalized)) {
+    snapshotQueueSet.add(normalized)
+    snapshotQueue.push(normalized)
+  }
+
+  processSnapshotQueue()
+  return requestPromise
+}
+
+async function processSnapshotQueue() {
+  if (isProcessingSnapshotQueue) return
+  isProcessingSnapshotQueue = true
+
   try {
-    const snapshotUrl = await getPlayerSnapshot(normalized)
+    while (snapshotQueue.length > 0) {
+      const wallet = snapshotQueue.shift()
+      if (!wallet) continue
+
+      snapshotQueueSet.delete(wallet)
+      const result = await fetchAndStoreSnapshot(wallet)
+      const resolve = pendingSnapshotResolvers.get(wallet)
+      if (resolve) resolve(result)
+      pendingSnapshotResolvers.delete(wallet)
+      pendingSnapshotRequests.delete(wallet)
+    }
+  } finally {
+    isProcessingSnapshotQueue = false
+  }
+}
+
+async function fetchAndStoreSnapshot(wallet: string): Promise<boolean> {
+  const entry = snapshotByWallet.get(wallet)
+  if (!entry) return false
+
+  try {
+    const snapshotUrl = await getPlayerSnapshot(wallet)
     entry.snapshotUrl = snapshotUrl
     entry.status = snapshotUrl ? 'ok' : 'missing'
     entry.lastUpdated = Date.now()

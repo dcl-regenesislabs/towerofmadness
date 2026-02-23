@@ -201,7 +201,7 @@ const TowerProgressBar = () => {
       />
 
       {/* Player indicators inside bar */}
-      {getLocalPlayerHeights(false).slice(0, 12).map((player, index) => {
+      {getLocalPlayerHeights(false).map((player, index) => {
         const xPos = getPlayerXPosition(player.height)
         const wallet = player.address?.toLowerCase() ?? ''
         const snapshotUrl = snapshotByWallet.get(wallet) ?? null
