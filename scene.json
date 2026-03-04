@@ -5,7 +5,7 @@
     "title": "Tower of Madness",
     "description": "Multiplayer Tower Climbing Challenge - Race to the top!",
     "favicon": "favicon_asset",
-    "navmapThumbnail": ""
+    "navmapThumbnail": "assets/images/TOM-Thumbnail.png"
   },
   "owner": "",
   "contact": {
