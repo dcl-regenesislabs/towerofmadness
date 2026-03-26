@@ -34,7 +34,9 @@ import {
   leaderboard,
   roundWinners,
   isConnectedToServer,
-  towerConfig
+  towerConfig,
+  roundFinishOrder,
+  roundFinishTime
 } from "./index"
 import {
   RoundPhase,
@@ -89,6 +91,14 @@ function getWinnerFontSize(index: number): number {
 
 function truncateWinnerName(name: string): string {
   return name.length > 8 ? `${name.slice(0, 8)}...` : name
+}
+
+function formatRoundResultLabel(
+  formatTimeMs: (seconds: number) => string,
+  time: number,
+  height: number
+): string {
+  return time > 0 ? formatTimeMs(time) : `${height.toFixed(2)}m`
 }
 
 function getWinnerTextColor(index: number, hasEntry: boolean, fallbackColor: Color4): Color4 {
@@ -324,12 +334,13 @@ const GameUI = () => {
   const showWinners = (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && winnersToDisplay.length > 0
   const topWinnerSlots: Array<WinnerEntry | null> = [0, 1, 2].map((index) => winnersToDisplay[index] ?? null)
   const localWinner = winnersToDisplay.find((winner) => winner.address?.toLowerCase() === localPlayerAddress)
-  const localBoardEntry = leaderboard.find((entry) => entry.address?.toLowerCase() === localPlayerAddress)
   const localPlacementText = localWinner
-    ? `You placed #${localWinner.rank > 0 ? localWinner.rank : winnersToDisplay.findIndex((w) => w.address === localWinner.address) + 1} - ${localWinner.time > 0 ? formatTimeMs(localWinner.time) : `${localWinner.height.toFixed(2)}m`}`
-    : localBoardEntry && localBoardEntry.finishOrder > 0
-      ? `You placed #${localBoardEntry.finishOrder} - ${localBoardEntry.bestTime > 0 ? formatTimeMs(localBoardEntry.bestTime) : `${localBoardEntry.maxHeight.toFixed(2)}m`}`
-      : 'You did not finish this round'
+    ? `You placed #${localWinner.rank > 0 ? localWinner.rank : winnersToDisplay.findIndex((w) => w.address === localWinner.address) + 1} - ${formatRoundResultLabel(formatTimeMs, localWinner.time, localWinner.height)}`
+    : roundFinishOrder > 0
+      ? `You placed #${roundFinishOrder} - ${formatRoundResultLabel(formatTimeMs, roundFinishTime, playerMaxHeight)}`
+      : playerMaxHeight > 0
+        ? `You reached ${playerMaxHeight.toFixed(2)}m this round`
+        : 'You did not finish this round'
   const nextRoundSeconds = Math.max(0, Math.ceil(roundTimer))
 
   const nowMs = Date.now()
@@ -875,7 +886,7 @@ const GameUI = () => {
           {topWinnerSlots.map((winner, i) => {
             const hasEntry = winner !== null
             const display = hasEntry
-              ? (winner.time > 0 ? formatTimeMs(winner.time) : `${winner.height.toFixed(2)}m`)
+              ? formatRoundResultLabel(formatTimeMs, winner.time, winner.height)
               : '--:--.--'
             const name = hasEntry ? truncateWinnerName(winner.displayName) : 'No entries'
 

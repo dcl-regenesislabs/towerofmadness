@@ -71,6 +71,8 @@ export let attemptState: AttemptState = AttemptState.NOT_STARTED
 export let attemptStartTime: number = 0
 export let attemptTimer: number = 0
 export let attemptFinishTime: number = 0
+export let roundFinishOrder: number = 0
+export let roundFinishTime: number = 0
 
 // Personal best
 export let bestAttemptTime: number = 0
@@ -85,6 +87,10 @@ export function updateBestTime(time: number) {
   if (time > 0 && (bestAttemptTime === 0 || time < bestAttemptTime)) {
     bestAttemptTime = time
   }
+}
+export function resetRoundPlacement() {
+  roundFinishOrder = 0
+  roundFinishTime = 0
 }
 
 // Result display
@@ -201,7 +207,9 @@ function syncRoundState() {
       // New round started - reset attempt
       attemptState = AttemptState.NOT_STARTED
       attemptTimer = 0
+      attemptFinishTime = 0
       playerMaxHeight = 0
+      resetRoundPlacement()
       attemptResult = null
       resultMessage = '🎮 New round! Go to TriggerStart to begin'
       resultTimestamp = Date.now()
@@ -319,10 +327,12 @@ export async function main() {
   setupClient()
 
   // Set up callback for when players finish - update our best time if it's us
-  onPlayerFinished((displayName, time, _finishOrder) => {
+  onPlayerFinished((displayName, time, finishOrder) => {
     if (localPlayerName && displayName === localPlayerName) {
       console.log(`[Game] Our finish confirmed by server: ${time.toFixed(2)}s`)
       updateBestTime(time)
+      roundFinishOrder = finishOrder
+      roundFinishTime = time
       // Update result message with server-authoritative time
       resultMessage = `🏆 FINISHED! Time: ${time.toFixed(2)}s`
       resultTimestamp = Date.now()

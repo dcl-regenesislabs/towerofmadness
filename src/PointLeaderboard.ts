@@ -8,6 +8,7 @@ import {
   VisibilityComponent
 } from '@dcl/sdk/ecs'
 import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
+import { EntityNames } from '../assets/scene/entity-names'
 import { PointLeaderboardEntry } from './multiplayer'
 import { createPointLeaderboardPanel, setPointTabData } from './PointLeaderboardPanel'
 
@@ -34,7 +35,7 @@ export function setupWorldPointLeaderboard(
     const byName = engine.getEntityOrNullByName('LeaderBoard02.glb')
     if (byName) return byName
 
-    const byNameDuplicate = engine.getEntityOrNullByName('LeaderBoard01.glb_2')
+    const byNameDuplicate = engine.getEntityOrNullByName(EntityNames.LeaderBoard01_glb_2)
     if (byNameDuplicate) return byNameDuplicate
 
     for (const [entity] of engine.getEntitiesWith(GltfContainer)) {

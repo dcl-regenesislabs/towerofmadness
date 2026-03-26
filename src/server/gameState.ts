@@ -319,6 +319,8 @@ export class GameState {
       data.isFinished
     )
 
+    this.updateLeaderboard()
+
   }
 
   // All-time best management
@@ -591,7 +593,7 @@ export class GameState {
     const playerArray = Array.from(this.players.values())
     const finishers = playerArray.filter((player) => player.isFinished)
     const podiumCandidates =
-      finishers.length > 0 ? orderByFinishTime(finishers) : orderByHeight(playerArray)
+      finishers.length > 0 ? orderByFinishTime(finishers) : orderByHeight(playerArray, true)
 
     const top3 = podiumCandidates.slice(0, 3)
     const winners = WinnersComponent.getMutable(this.winnersEntity)
