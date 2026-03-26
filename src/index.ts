@@ -23,7 +23,7 @@ import { Vector3 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { EntityNames } from '../assets/scene/entity-names'
-import { setupUi } from './ui'
+import { setupUi, toggleDebugConsole } from './ui'
 import { setupWorldLeaderboard } from './Leaderboard'
 import { setupWorldPointLeaderboard } from './PointLeaderboard'
 import { server } from './server/server'
@@ -413,6 +413,16 @@ export async function main() {
     },
     undefined,
     'snapshot-player-enter-system'
+  )
+
+  engine.addSystem(
+    () => {
+      if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) {
+        toggleDebugConsole()
+      }
+    },
+    undefined,
+    'debug-console-toggle-system'
   )
 
   setupWorldLeaderboard(() => leaderboard, () => weeklyLeaderboard)

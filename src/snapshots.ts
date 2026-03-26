@@ -34,10 +34,6 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
     }
     snapshotByWallet.set(normalized, entry)
     snapshots.unshift(entry)
-
-    if (snapshots.length > 12) {
-      snapshots.length = 12
-    }
   } else if (displayName && entry.displayName.startsWith('0x')) {
     entry.displayName = displayName
   }
@@ -73,7 +69,7 @@ async function getPlayerSnapshot(wallet: string): Promise<string | null> {
   const rawFace = snapshots?.face ?? null
   const normalizedFace256 = normalizeSnapshotUrl(rawFace256)
   const normalizedFace = normalizeSnapshotUrl(rawFace)
-  const chosen = normalizedFace256 ?? normalizedFace ?? DEFAULT_AVATAR_IMAGE
+  const chosen = normalizedFace ?? normalizedFace256 ?? DEFAULT_AVATAR_IMAGE
   const chosenCid = chosen ? extractCidFromUrl(chosen) : null
 
   console.log(
