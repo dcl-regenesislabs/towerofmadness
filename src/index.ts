@@ -33,6 +33,7 @@ import {
   sendPlayerFinished,
   sendPlayerJoined,
   onPlayerFinished,
+  onAttemptRejected,
   getRoundState,
   getLeaderboard,
   getWeeklyLeaderboard,
@@ -63,6 +64,7 @@ export let playerMaxHeight = 0
 export enum AttemptState {
   NOT_STARTED = 'NOT_STARTED',
   IN_PROGRESS = 'IN_PROGRESS',
+  VALIDATING = 'VALIDATING',
   FINISHED = 'FINISHED',
   DIED = 'DIED'
 }
@@ -94,10 +96,13 @@ export function resetRoundPlacement() {
 }
 
 // Result display
-export let attemptResult: 'WIN' | 'DEATH' | null = null
+export let attemptResult: 'WIN' | 'DEATH' | 'ERROR' | 'PENDING' | null = null
+export let resultTitle: string = ''
 export let resultMessage: string = ''
 export let resultTimestamp: number = 0
 export let startMessageTimestamp: number = 0
+export let suppressStartUntil: number = 0
+export let finishValidationStartedAt: number = 0
 
 // Connection state
 export let isConnectedToServer: boolean = false
@@ -115,6 +120,10 @@ export let pointLeaderboard: PointLeaderboardEntry[] = []
 export let weeklyPointLeaderboard: PointLeaderboardEntry[] = []
 export let roundWinners: WinnerEntry[] = []
 export let towerConfig: TowerConfig | null = null
+
+const BASE_TELEPORT_POSITION = { x: 40.38, y: 11.5, z: 10.5 }
+const START_TRIGGER_SUPPRESS_MS = 2000
+const FINISH_VALIDATION_TIMEOUT_MS = 4000
 
 // ============================================
 // HELPER FUNCTIONS
@@ -244,6 +253,10 @@ function startAttempt() {
     return
   }
 
+  if (Date.now() < suppressStartUntil) {
+    return
+  }
+
   if (attemptState === AttemptState.FINISHED) {
     resultMessage = '✅ You already finished! Wait for next round.'
     resultTimestamp = Date.now()
@@ -256,9 +269,11 @@ function startAttempt() {
   attemptTimer = 0
   playerMaxHeight = playerHeight
   attemptResult = null
+  resultTitle = ''
   resultMessage = '🏃 GO! Climb to the top!'
   resultTimestamp = Date.now()
   startMessageTimestamp = Date.now()
+  finishValidationStartedAt = 0
 
   // Notify server (server tracks authoritative start time)
   sendPlayerStarted()
@@ -266,15 +281,21 @@ function startAttempt() {
 
 function finishAttempt() {
   if (!isConnectedToServer) return
-  if (attemptState !== AttemptState.IN_PROGRESS) return
   if (roundPhase !== RoundPhase.ACTIVE) return
 
-  console.log('[Game] Attempt finished')
-  attemptState = AttemptState.FINISHED
+  if (attemptState !== AttemptState.IN_PROGRESS) {
+    rejectAttempt('No active attempt detected. You likely skipped or missed the start trigger.')
+    return
+  }
+
+  console.log('[Game] Attempt reached finish trigger, waiting for server validation')
+  attemptState = AttemptState.VALIDATING
   attemptFinishTime = attemptTimer
-  attemptResult = 'WIN'
-  resultMessage = `🏆 FINISHED! Waiting for server...`
+  attemptResult = 'PENDING'
+  resultTitle = 'VALIDATING ATTEMPT'
+  resultMessage = 'Please wait while the server confirms your finish.'
   resultTimestamp = Date.now()
+  finishValidationStartedAt = Date.now()
 
   // Update personal best height (time will come from server)
   if (playerMaxHeight > bestAttemptHeight) {
@@ -291,13 +312,40 @@ function dieAttempt() {
   console.log('[Game] Player died')
   attemptState = AttemptState.DIED
   attemptResult = 'DEATH'
+  resultTitle = 'OOPS TRY AGAIN'
   resultMessage = `☠️ DEATH at ${playerMaxHeight.toFixed(1)}m - Go to TriggerStart to retry!`
   resultTimestamp = Date.now()
+  finishValidationStartedAt = 0
 
   // Update personal best height even on death
   if (playerMaxHeight > bestAttemptHeight) {
     bestAttemptHeight = playerMaxHeight
   }
+}
+
+function rejectAttempt(reason: string, title: string = 'OOPS TRY AGAIN') {
+  console.log(`[Game] Attempt rejected: ${reason}`)
+
+  attemptState = AttemptState.NOT_STARTED
+  attemptStartTime = 0
+  attemptTimer = 0
+  attemptFinishTime = 0
+  attemptResult = 'ERROR'
+  resultTitle = title
+  resultMessage = reason
+  resultTimestamp = Date.now()
+  finishValidationStartedAt = 0
+  startMessageTimestamp = 0
+  suppressStartUntil = Date.now() + START_TRIGGER_SUPPRESS_MS
+
+  movePlayerTo({
+    newRelativePosition: BASE_TELEPORT_POSITION,
+    cameraTarget: {
+      x: BASE_TELEPORT_POSITION.x,
+      y: BASE_TELEPORT_POSITION.y + 1,
+      z: BASE_TELEPORT_POSITION.z
+    }
+  })
 }
 
 // ============================================
@@ -331,12 +379,22 @@ export async function main() {
     if (localPlayerName && displayName === localPlayerName) {
       console.log(`[Game] Our finish confirmed by server: ${time.toFixed(2)}s`)
       updateBestTime(time)
+      attemptState = AttemptState.FINISHED
+      attemptResult = 'WIN'
+      resultTitle = 'CONGRATS'
+      finishValidationStartedAt = 0
       roundFinishOrder = finishOrder
       roundFinishTime = time
       // Update result message with server-authoritative time
       resultMessage = `🏆 FINISHED! Time: ${time.toFixed(2)}s`
       resultTimestamp = Date.now()
     }
+  })
+
+  onAttemptRejected((stage, reason) => {
+    const title = stage === 'finish' ? 'ATTEMPT NOT COUNTED' : 'OOPS TRY AGAIN'
+    const message = stage === 'finish' ? `Your attempt did not count. ${reason}` : reason
+    rejectAttempt(message, title)
   })
 
   const knownPlayerWallets = new Set<string>()
@@ -583,6 +641,20 @@ export async function main() {
 
   engine.addSystem(trackPlayerHeight, undefined, 'player-height-system')
   engine.addSystem(syncRoundState, undefined, 'round-sync-system')
+  engine.addSystem(
+    () => {
+      if (attemptState !== AttemptState.VALIDATING) return
+      if (finishValidationStartedAt === 0) return
+      if (Date.now() - finishValidationStartedAt < FINISH_VALIDATION_TIMEOUT_MS) return
+
+      rejectAttempt(
+        'Your attempt did not count. The server could not validate your finish.',
+        'ATTEMPT NOT COUNTED'
+      )
+    },
+    undefined,
+    'finish-validation-timeout-system'
+  )
 
   // ============================================
   // INITIALIZE UI

@@ -193,6 +193,11 @@ function setupMessageHandlers(gameState: GameState) {
 
     if (currentHeight > maxStartHeight) {
       console.log(`[Server] Rejected start from ${player.displayName}: height ${currentHeight.toFixed(1)}m > max ${maxStartHeight}m`)
+      room.send('attemptRejected', {
+        address: player.address,
+        stage: 'start',
+        reason: `Start trigger missed. Server detected height ${currentHeight.toFixed(1)}m, so the attempt was not registered.`
+      })
       return
     }
 
@@ -218,12 +223,22 @@ function setupMessageHandlers(gameState: GameState) {
     // Validate: player must have started an attempt
     if (player.attemptStartTime === 0) {
       console.log(`[Server] Rejected finish from ${player.displayName}: no active attempt`)
+      room.send('attemptRejected', {
+        address: player.address,
+        stage: 'finish',
+        reason: 'No active attempt on server. You likely skipped or missed the start trigger.'
+      })
       return
     }
 
     // Validate: no teleporting detected during attempt
     if (player.teleportStrikes > 1) {
       console.log(`[Server] Rejected finish from ${player.displayName}: teleport detected (${player.teleportStrikes})`)
+      room.send('attemptRejected', {
+        address: player.address,
+        stage: 'finish',
+        reason: `Attempt invalidated by movement validation (${player.teleportStrikes} teleport flags).`
+      })
       return
     }
 
@@ -237,6 +252,11 @@ function setupMessageHandlers(gameState: GameState) {
 
     if (currentHeight < minFinishHeight) {
       console.log(`[Server] Rejected finish from ${player.displayName}: height ${currentHeight.toFixed(1)}m < required ${minFinishHeight.toFixed(1)}m`)
+      room.send('attemptRejected', {
+        address: player.address,
+        stage: 'finish',
+        reason: `Finish trigger reached too low at ${currentHeight.toFixed(1)}m.`
+      })
       return
     }
 
