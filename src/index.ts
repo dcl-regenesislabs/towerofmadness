@@ -594,7 +594,6 @@ export async function main() {
 // ============================================
 let backgroundMusicEntity: Entity | null = null
 let audioStarted = false
-let audioUnlocked = false
 
 function setupBackgroundMusic(audioPath: string) {
   backgroundMusicEntity = engine.addEntity()
@@ -618,6 +617,11 @@ function setupBackgroundMusic(audioPath: string) {
     () => {
       if (backgroundMusicEntity && AudioSource.has(backgroundMusicEntity)) {
         const audio = AudioSource.getMutable(backgroundMusicEntity)
+
+        if (!audio.playing) {
+          audio.playing = true
+          console.log(`[Audio] Retrying background music playback: ${audio.audioClipUrl}`)
+        }
 
         if (audio.playing && !audioStarted) {
           audioStarted = true
