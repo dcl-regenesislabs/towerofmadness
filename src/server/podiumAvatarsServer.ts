@@ -42,6 +42,10 @@ type AvatarAppearance = {
   hairColor: AvatarColor
 }
 
+function formatPodiumResult(winner: WinnerEntry): string {
+  return winner.time > 0 ? `${winner.time.toFixed(2)}s` : `${winner.height.toFixed(1)}m`
+}
+
 export class PodiumAvatarsServer {
   private slots: PodiumSlot[] = []
   private active: boolean = false
@@ -73,7 +77,7 @@ export class PodiumAvatarsServer {
       Transform.getMutable(slot.entity).scale = Vector3.Zero()
       VisibilityComponent.getMutable(slot.textEntity).visible = false
       Transform.getMutable(slot.textEntity).scale = Vector3.Zero()
-      TextShape.getMutable(slot.textEntity).text = winner ? `${winner.height.toFixed(1)}m` : ''
+      TextShape.getMutable(slot.textEntity).text = winner ? formatPodiumResult(winner) : ''
 
       if (slot.address) {
         this.getAvatar(slot.address)
