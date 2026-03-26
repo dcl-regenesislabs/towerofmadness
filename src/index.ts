@@ -294,9 +294,7 @@ function finishAttempt() {
   attemptResult = 'PENDING'
   resultTitle = 'VALIDATING ATTEMPT'
   resultMessage = 'Please wait while the server confirms your finish.'
-  resultMessage = `🏆 FINISHED! Waiting for server...`
   resultTimestamp = Date.now()
-  resultMessage = 'Please wait while the server confirms your finish.'
   finishValidationStartedAt = Date.now()
 
   // Update personal best height (time will come from server)
