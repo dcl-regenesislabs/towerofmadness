@@ -584,7 +584,7 @@ export async function main() {
   // BACKGROUND MUSIC
   // ============================================
 
-  setupBackgroundMusic('sounds/PixelSodaBar.mp3')
+  setupBackgroundMusic('assets/sounds/Lobby Drift.mp3')
 
   console.log('[Game] Setup complete')
 }
@@ -599,7 +599,7 @@ function setupBackgroundMusic(audioPath: string) {
   backgroundMusicEntity = engine.addEntity()
 
   Transform.create(backgroundMusicEntity, {
-    position: Vector3.create(40, 0, 40),
+    position: Vector3.create(28, 1, 53),
     scale: Vector3.One()
   })
 
@@ -607,22 +607,30 @@ function setupBackgroundMusic(audioPath: string) {
     audioClipUrl: audioPath,
     playing: true,
     loop: true,
-    volume: 1.0
+    volume: 1,
+    pitch: 1,
+    currentTime: 0,
+    global: true
   })
 
   engine.addSystem(
     () => {
       if (backgroundMusicEntity && AudioSource.has(backgroundMusicEntity)) {
-        const audio = AudioSource.get(backgroundMusicEntity)
-        if (!audio.playing && !audioStarted) {
-          AudioSource.getMutable(backgroundMusicEntity).playing = true
-        } else if (audio.playing && !audioStarted) {
+        const audio = AudioSource.getMutable(backgroundMusicEntity)
+
+        if (!audio.playing) {
+          audio.playing = true
+          console.log(`[Audio] Retrying background music playback: ${audio.audioClipUrl}`)
+        }
+
+        if (audio.playing && !audioStarted) {
           audioStarted = true
+          console.log(`[Audio] Background music started: ${audio.audioClipUrl}`)
         }
       }
     },
     undefined,
-    'backg round-music-system'
+    'background-music-system'
   )
 
   return backgroundMusicEntity

@@ -19,7 +19,8 @@
   "devDependencies": {
     "@dcl/asset-packs": "latest",
     "@dcl/hammurabi-server": "^1.0.0-21726116521.commit-148f55a",
-    "@dcl/sdk": "https://sdk-team-cdn.decentraland.org/@dcl/js-sdk-toolchain/branch/auth-server/dcl-sdk-7.20.2-22113680223.commit-ecbd96c.tgz"
+    "@dcl/sdk": "7.20.2-22169778016.commit-030cbfe",
+    "@dcl/js-runtime": "7.20.2-22169778016.commit-030cbfe"
   },
   "engines": {
     "node": ">=20.0.0",
