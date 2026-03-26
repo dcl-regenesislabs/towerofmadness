@@ -25,6 +25,7 @@ import {
   bestAttemptTime,
   bestAttemptHeight,
   attemptResult,
+  resultTitle,
   resultMessage,
   resultTimestamp,
   startMessageTimestamp,
@@ -320,9 +321,12 @@ const GameUI = () => {
 
   // Show result for 5 seconds
   const timeSinceResult = resultTimestamp > 0 ? (Date.now() - resultTimestamp) / 1000 : 999
-  const showResult = attemptResult && timeSinceResult < 5
+  const isPendingResult = attemptResult === 'PENDING'
   const isDeathResult = attemptResult === 'DEATH'
-  const deathShakeActive = isDeathResult && timeSinceResult < 5
+  const isErrorResult = attemptResult === 'ERROR'
+  const resultDuration = isErrorResult ? 8 : isPendingResult ? 6 : 5
+  const showResult = attemptResult && timeSinceResult < resultDuration
+  const deathShakeActive = isDeathResult && timeSinceResult < resultDuration
   const deathShakeX = deathShakeActive ? Math.sin(timeSinceResult * 24) * 6 * mobileBoostScale : 0
   const deathShakeY = deathShakeActive ? Math.cos(timeSinceResult * 28) * 6 * mobileBoostScale : 0
   const timeSinceStartMessage = startMessageTimestamp > 0 ? (Date.now() - startMessageTimestamp) / 1000 : 999
@@ -1063,6 +1067,59 @@ const GameUI = () => {
             </UiEntity>
           )}
 
+          {isPendingResult && (
+            <UiEntity
+              uiTransform={{
+                width: 420 * mobileBoostScale,
+                height: 180 * mobileBoostScale,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column'
+              }}
+            >
+              <OutlinedText
+                outlineKeyPrefix="attempt-pending-title-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={mobileBoostScale}
+                uiTransform={{
+                  width: 360 * mobileBoostScale,
+                  height: 42 * mobileBoostScale,
+                  positionType: 'absolute',
+                  position: { top: 38 * mobileBoostScale, left: 30 * mobileBoostScale },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultTitle || 'VALIDATING ATTEMPT',
+                  fontSize: 24 * mobileBoostScale,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+              <OutlinedText
+                outlineKeyPrefix="attempt-pending-body-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={mobileBoostScale}
+                uiTransform={{
+                  width: 390 * mobileBoostScale,
+                  height: 80 * mobileBoostScale,
+                  positionType: 'absolute',
+                  position: { top: 88 * mobileBoostScale, left: 15 * mobileBoostScale },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultMessage,
+                  fontSize: 16 * mobileBoostScale,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+            </UiEntity>
+          )}
+
           {attemptResult === 'DEATH' && (
             <UiEntity
               uiTransform={{
@@ -1110,7 +1167,7 @@ const GameUI = () => {
                   justifyContent: 'center'
                 }}
                 uiText={{
-                  value: 'OOPS TRY AGAIN',
+                  value: resultTitle || 'OOPS TRY AGAIN',
                   fontSize: 28 * mobileBoostScale,
                   color: Color4.White(),
                   textAlign: 'middle-center',
@@ -1179,6 +1236,59 @@ const GameUI = () => {
                   />
                 </UiEntity>
               </UiEntity>
+            </UiEntity>
+          )}
+
+          {isErrorResult && (
+            <UiEntity
+              uiTransform={{
+                width: 420 * mobileBoostScale,
+                height: 180 * mobileBoostScale,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column'
+              }}
+            >
+              <OutlinedText
+                outlineKeyPrefix="attempt-error-title-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={mobileBoostScale}
+                uiTransform={{
+                  width: 360 * mobileBoostScale,
+                  height: 42 * mobileBoostScale,
+                  positionType: 'absolute',
+                  position: { top: 38 * mobileBoostScale, left: 30 * mobileBoostScale },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultTitle || 'OOPS TRY AGAIN',
+                  fontSize: 28 * mobileBoostScale,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+              <OutlinedText
+                outlineKeyPrefix="attempt-error-body-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={mobileBoostScale}
+                uiTransform={{
+                  width: 390 * mobileBoostScale,
+                  height: 80 * mobileBoostScale,
+                  positionType: 'absolute',
+                  position: { top: 88 * mobileBoostScale, left: 15 * mobileBoostScale },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultMessage,
+                  fontSize: 16 * mobileBoostScale,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
             </UiEntity>
           )}
         </UiEntity>

@@ -21,6 +21,13 @@ export const Messages = {
     time: Schemas.Number // Server-calculated finish time
   }),
 
+  // Server -> Client: Attempt was rejected by server validation
+  attemptRejected: Schemas.Map({
+    address: Schemas.String,
+    stage: Schemas.String,
+    reason: Schemas.String
+  }),
+
   // Server -> Client: Teleport warning (client filters by address)
   teleportWarning: Schemas.Map({
     address: Schemas.String,

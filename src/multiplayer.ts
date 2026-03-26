@@ -40,6 +40,7 @@ export { isServer } from '@dcl/sdk/network'
 
 // Callback for when any player finishes (includes server-authoritative time)
 let onPlayerFinishedCallback: ((displayName: string, time: number, finishOrder: number) => void) | null = null
+let onAttemptRejectedCallback: ((stage: string, reason: string) => void) | null = null
 
 export function setupClient() {
   // Listen for player finished broadcasts
@@ -68,10 +69,25 @@ export function setupClient() {
       cameraTarget: { x: data.x, y: data.y + 1, z: data.z }
     })
   })
+
+  room.onMessage('attemptRejected', (data) => {
+    const localIdentity = PlayerIdentityData.getOrNull(engine.PlayerEntity)
+    if (!localIdentity?.address) return
+    if (localIdentity.address.toLowerCase() !== data.address.toLowerCase()) return
+
+    console.log(`[Game] Attempt rejected during ${data.stage}: ${data.reason}`)
+    if (onAttemptRejectedCallback) {
+      onAttemptRejectedCallback(data.stage, data.reason)
+    }
+  })
 }
 
 export function onPlayerFinished(callback: (displayName: string, time: number, finishOrder: number) => void) {
   onPlayerFinishedCallback = callback
+}
+
+export function onAttemptRejected(callback: (stage: string, reason: string) => void) {
+  onAttemptRejectedCallback = callback
 }
 
 
