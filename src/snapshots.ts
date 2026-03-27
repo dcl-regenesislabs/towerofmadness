@@ -15,7 +15,9 @@ const CATALYST_FALLBACKS = [
   'https://interconnected.online',
   'https://peer.decentral.io'
 ]
+const CATALYSTS = [CATALYST_URL, ...CATALYST_FALLBACKS]
 const DEFAULT_AVATAR_IMAGE = 'https://decentraland.org/images/male.png'
+const MIN_SNAPSHOT_IMAGE_BYTES = 512
 
 export async function requestPlayerSnapshot(wallet: string, displayName?: string): Promise<boolean> {
   if (!wallet) return false
@@ -67,19 +69,21 @@ async function getPlayerSnapshot(wallet: string): Promise<string | null> {
   const snapshots = avatar?.snapshots ?? {}
   const rawFace256 = snapshots?.face256 ?? null
   const rawFace = snapshots?.face ?? null
-  const normalizedFace256 = normalizeSnapshotUrl(rawFace256)
-  const normalizedFace = normalizeSnapshotUrl(rawFace)
-  const chosen = normalizedFace ?? normalizedFace256 ?? DEFAULT_AVATAR_IMAGE
-  const chosenCid = chosen ? extractCidFromUrl(chosen) : null
+  const faceCandidates = buildSnapshotCandidates(rawFace)
+  const face256Candidates = buildSnapshotCandidates(rawFace256)
+  const chosen =
+    (await resolveReachableSnapshotUrl([...faceCandidates, ...face256Candidates])) ?? DEFAULT_AVATAR_IMAGE
+  const chosenCid = extractCidFromUrl(chosen)
 
   console.log(
     '[Snapshots] snapshot details',
     wallet,
     JSON.stringify({
       raw: { face256: rawFace256, face: rawFace },
-      normalized: { face256: normalizedFace256, face: normalizedFace },
+      candidates: { face: faceCandidates, face256: face256Candidates },
       chosen,
-      cid: chosenCid
+      cid: chosenCid,
+      usedDefault: chosen === DEFAULT_AVATAR_IMAGE
     })
   )
 
@@ -93,11 +97,11 @@ function normalizeSnapshotUrl(url: string | null): string | null {
 
   if (trimmed.startsWith('ipfs://')) {
     const cid = trimmed.replace('ipfs://', '')
-    return cid ? `https://peer.decentraland.org/content/contents/${cid}` : null
+    return cid ? `${CATALYST_URL}/content/contents/${cid}` : null
   }
 
   if (trimmed.startsWith('baf') || trimmed.startsWith('Qm')) {
-    return `https://peer.decentraland.org/content/contents/${trimmed}`
+    return `${CATALYST_URL}/content/contents/${trimmed}`
   }
 
   if (!/^https?:\/\//i.test(trimmed)) return null
@@ -108,6 +112,59 @@ function normalizeSnapshotUrl(url: string | null): string | null {
 function extractCidFromUrl(url: string): string | null {
   const match = url.match(/\/content\/contents\/([^/?#]+)/i)
   return match?.[1] ?? null
+}
+
+function buildSnapshotCandidates(url: string | null): string[] {
+  const normalized = normalizeSnapshotUrl(url)
+  if (!normalized) return []
+
+  const cid = extractCidFromUrl(normalized)
+  if (!cid) return [normalized]
+
+  return CATALYSTS.map((base) => `${base}/content/contents/${cid}`)
+}
+
+async function resolveReachableSnapshotUrl(urls: string[]): Promise<string | null> {
+  const seen = new Set<string>()
+
+  for (const url of urls) {
+    if (!url || seen.has(url)) continue
+    seen.add(url)
+
+    if (await isReachableSnapshotUrl(url)) {
+      return url
+    }
+  }
+
+  return null
+}
+
+async function isReachableSnapshotUrl(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url)
+    if (!res.ok) {
+      console.log('[Snapshots] Snapshot probe failed', url, res.status)
+      return false
+    }
+
+    const contentType = res.headers.get('content-type')?.toLowerCase() ?? ''
+    if (contentType && !contentType.startsWith('image/')) {
+      console.log('[Snapshots] Snapshot probe returned non-image content', url, contentType)
+      return false
+    }
+
+    const contentLengthHeader = res.headers.get('content-length')
+    const contentLength = contentLengthHeader ? Number(contentLengthHeader) : NaN
+    if (Number.isFinite(contentLength) && contentLength > 0 && contentLength < MIN_SNAPSHOT_IMAGE_BYTES) {
+      console.log('[Snapshots] Snapshot probe returned tiny image', url, contentLength)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.log('[Snapshots] Snapshot probe error', url, err)
+    return false
+  }
 }
 
 async function fetchProfilesFrom(base: string, wallet: string) {
