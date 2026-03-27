@@ -503,12 +503,12 @@ export async function main() {
         }
       },
       () => {
-        triggerCoolBedDialog()
         if (!Animator.has(entity)) return
         const breathClip = Animator.getClipOrNull(entity, 'Breath')
         const talkClip = Animator.getClipOrNull(entity, 'Talk')
         if (!breathClip || !talkClip) return
         if (coolBedPhase !== 'idle' && coolBedPhase !== 'talking') return
+        triggerCoolBedDialog()
         talkClip.playing = true
         talkClip.speed = TALK_SPEED
         talkClip.weight = 0
