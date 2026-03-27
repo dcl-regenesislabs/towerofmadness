@@ -37,7 +37,9 @@ import {
   isConnectedToServer,
   towerConfig,
   roundFinishOrder,
-  roundFinishTime
+  roundFinishTime,
+  coolBedDialogText,
+  coolBedDialogTimestamp
 } from "./index"
 import {
   RoundPhase,
@@ -75,8 +77,46 @@ const CHUNK_COLORS: Record<string, Color4> = {
 const CONNECT_FLOOR_COUNT = 8
 const CONNECT_FLOOR_STEP_SECONDS = 0.16
 const CONNECT_MIN_VISIBLE_MS = CONNECT_FLOOR_COUNT * CONNECT_FLOOR_STEP_SECONDS * 1000
+const COOLBED_CHAR_STEP_SECONDS = 0.032
+const COOLBED_PUNCTUATION_PAUSE_SECONDS = 0.16
+const COOLBED_LINE_BREAK_PAUSE_SECONDS = 0.24
+const COOLBED_DIALOG_HOLD_SECONDS = 3.5
+const COOLBED_DIALOG_FADE_SECONDS = 1.2
 let connectUiCycleStartedAtMs = 0
 let connectUiMinVisibleUntilMs = 0
+
+function withAlpha(color: Color4, alpha: number): Color4 {
+  return Color4.create(color.r, color.g, color.b, color.a * alpha)
+}
+
+function getCoolBedCharCost(char: string): number {
+  if (char === '\n') return COOLBED_CHAR_STEP_SECONDS + COOLBED_LINE_BREAK_PAUSE_SECONDS
+  if (char === '.' || char === '!' || char === '?') return COOLBED_CHAR_STEP_SECONDS + COOLBED_PUNCTUATION_PAUSE_SECONDS
+  if (char === ',' || char === ';' || char === ':') return COOLBED_CHAR_STEP_SECONDS + COOLBED_PUNCTUATION_PAUSE_SECONDS * 0.75
+  return COOLBED_CHAR_STEP_SECONDS
+}
+
+function getCoolBedTypingDurationSeconds(text: string): number {
+  let total = 0
+  for (const char of text) {
+    total += getCoolBedCharCost(char)
+  }
+  return total
+}
+
+function getCoolBedTypedText(text: string, elapsedSeconds: number): string {
+  let elapsedBudget = Math.max(0, elapsedSeconds)
+  let visibleChars = 0
+
+  for (let i = 0; i < text.length; i++) {
+    const charCost = getCoolBedCharCost(text[i])
+    if (elapsedBudget < charCost) break
+    elapsedBudget -= charCost
+    visibleChars = i + 1
+  }
+
+  return text.slice(0, visibleChars)
+}
 
 function getTrophyUvsByRank(index: number): number[] {
   // UV order: bottom-left, top-left, top-right, bottom-right
@@ -296,6 +336,177 @@ const TowerProgressBar = () => {
   )
 }
 
+const CoolBedDialogBubble = ({
+  screenWidth,
+  screenHeight,
+  isMobile
+}: {
+  screenWidth: number
+  screenHeight: number
+  isMobile: boolean
+}) => {
+  if (coolBedDialogTimestamp <= 0) return null
+
+  const timeSinceDialog = (Date.now() - coolBedDialogTimestamp) / 1000
+  const typingDuration = getCoolBedTypingDurationSeconds(coolBedDialogText)
+  const dialogDuration = typingDuration + COOLBED_DIALOG_HOLD_SECONDS + COOLBED_DIALOG_FADE_SECONDS
+  if (timeSinceDialog >= dialogDuration) return null
+
+  const fadeStart = dialogDuration - COOLBED_DIALOG_FADE_SECONDS
+  const alpha = timeSinceDialog < fadeStart
+    ? 1
+    : Math.max(0, 1 - (timeSinceDialog - fadeStart) / COOLBED_DIALOG_FADE_SECONDS)
+  const typedText = getCoolBedTypedText(coolBedDialogText, timeSinceDialog)
+  const isTyping = typedText.length < coolBedDialogText.length
+  const showCursor = isTyping && Math.floor(timeSinceDialog * 4) % 2 === 0
+  const visibleDialogText = `${typedText}${showCursor ? '|' : ''}`
+  const isLandscapeMobile = isMobile && screenWidth > screenHeight
+
+  const bubbleWidth = isLandscapeMobile
+    ? Math.max(420, Math.min(screenWidth * 0.46, 680))
+    : isMobile
+      ? Math.max(310, Math.min(screenWidth - 28, 430))
+    : Math.min(620, Math.max(480, screenWidth * 0.34))
+  const bubbleHeight = isLandscapeMobile ? 214 : isMobile ? 292 : 216
+  const bubbleBottom = isLandscapeMobile ? Math.max(68, screenHeight * 0.08) : isMobile ? 32 : 42
+  const bubbleLeft = Math.max(10, (screenWidth - bubbleWidth) / 2)
+  const shadowOffset = isMobile ? 10 : 8
+  const tailWidth = isLandscapeMobile ? 34 : isMobile ? 40 : 34
+  const tailHeight = isLandscapeMobile ? 18 : isMobile ? 22 : 18
+  const tailLeft = bubbleWidth / 2 - tailWidth / 2
+  const titleFontSize = isLandscapeMobile ? 14 : isMobile ? 15 : 13
+  const bodyFontSize = isLandscapeMobile ? 17 : isMobile ? 18 : 15
+  const bodyTop = isLandscapeMobile ? 58 : 64
+  const bodyHorizontalPadding = isLandscapeMobile ? 22 : 19
+  const bodyHeight = isLandscapeMobile ? bubbleHeight - 72 : bubbleHeight - 82
+
+  return (
+    <UiEntity
+      uiTransform={{
+        width: bubbleWidth + shadowOffset,
+        height: bubbleHeight + tailHeight + shadowOffset,
+        positionType: 'absolute',
+        position: { bottom: bubbleBottom, left: bubbleLeft }
+      }}
+    >
+      <UiEntity
+        uiTransform={{
+          width: bubbleWidth,
+          height: bubbleHeight,
+          positionType: 'absolute',
+          position: { top: shadowOffset, left: shadowOffset },
+          borderRadius: 30
+        }}
+        uiBackground={{
+          color: withAlpha(Color4.create(0.19, 0.1, 0.06, 0.34), alpha)
+        }}
+      />
+
+      <UiEntity
+        uiTransform={{
+          width: bubbleWidth,
+          height: bubbleHeight,
+          positionType: 'absolute',
+          position: { top: 0, left: 0 },
+          borderRadius: 30,
+          borderColor: withAlpha(Color4.create(0.2, 0.12, 0.07, 1), alpha),
+          borderWidth: 3,
+          padding: { top: 18, right: 18, bottom: 18, left: 18 }
+        }}
+        uiBackground={{
+          color: withAlpha(Color4.create(0.97, 0.94, 0.86, 0.98), alpha)
+        }}
+      >
+        <UiEntity
+          uiTransform={{
+            width: 118,
+            height: 34,
+            positionType: 'absolute',
+            position: { top: 16, left: 18 },
+            borderRadius: 18,
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          uiBackground={{
+            color: withAlpha(Color4.create(49 / 255, 150 / 255, 143 / 255, 1), alpha)
+          }}
+        >
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              height: '100%',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            uiText={{
+              value: 'COOLBED NPC',
+              fontSize: titleFontSize,
+              color: withAlpha(Color4.White(), alpha),
+              textAlign: 'middle-center',
+              font: 'sans-serif'
+            }}
+          />
+        </UiEntity>
+
+        <UiEntity
+          uiTransform={{
+            width: bubbleWidth - bodyHorizontalPadding * 2,
+            height: bodyHeight,
+            positionType: 'absolute',
+            position: { top: bodyTop, left: bodyHorizontalPadding },
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start'
+          }}
+        >
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              height: '100%',
+              alignItems: 'flex-start',
+              justifyContent: 'flex-start'
+            }}
+            uiText={{
+              value: visibleDialogText,
+              fontSize: bodyFontSize,
+              color: withAlpha(Color4.create(0.18, 0.11, 0.06, 1), alpha),
+              textAlign: 'top-left',
+              font: 'sans-serif'
+            }}
+          />
+        </UiEntity>
+      </UiEntity>
+
+      <UiEntity
+        uiTransform={{
+          width: tailWidth,
+          height: tailHeight,
+          positionType: 'absolute',
+          position: { top: bubbleHeight - 2 + shadowOffset, left: tailLeft + shadowOffset },
+          borderRadius: 12
+        }}
+        uiBackground={{
+          color: withAlpha(Color4.create(0.19, 0.1, 0.06, 0.28), alpha)
+        }}
+      />
+
+      <UiEntity
+        uiTransform={{
+          width: tailWidth,
+          height: tailHeight,
+          positionType: 'absolute',
+          position: { top: bubbleHeight - 2, left: tailLeft },
+          borderRadius: 12,
+          borderColor: withAlpha(Color4.create(0.2, 0.12, 0.07, 1), alpha),
+          borderWidth: 3
+        }}
+        uiBackground={{
+          color: withAlpha(Color4.create(0.97, 0.94, 0.86, 0.98), alpha)
+        }}
+      />
+    </UiEntity>
+  )
+}
+
 const GameUI = () => {
   const s = getScaleUIFactor()
   const isMobile = isMobileScreen()
@@ -303,6 +514,7 @@ const GameUI = () => {
   const startMessageScale = isMobile ? 3 : 1
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
   const screenWidth = uiCanvasInfo?.width ?? 1920 * s
+  const screenHeight = uiCanvasInfo?.height ?? 1080 * s
   const localPlayerAddress = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
   const playerInfoWidth = 260 * s
   const startMessageWidth = 260 * s
@@ -483,6 +695,8 @@ const GameUI = () => {
         positionType: 'absolute'
       }}
     >
+      <CoolBedDialogBubble screenWidth={screenWidth} screenHeight={screenHeight} isMobile={isMobile} />
+
       {/* ROUND TIMER - Top Center */}
       <UiEntity
         uiTransform={{

@@ -13,8 +13,6 @@ import {
   MeshCollider,
   MeshRenderer,
   Material,
-  PointerEvents,
-  PointerEventType,
   InputAction,
   pointerEventsSystem
 } from '@dcl/sdk/ecs'
@@ -102,6 +100,14 @@ export let resultTimestamp: number = 0
 export let startMessageTimestamp: number = 0
 export let suppressStartUntil: number = 0
 export let finishValidationStartedAt: number = 0
+export let coolBedDialogTimestamp: number = 0
+export const coolBedDialogText = `YO SUP welcome to Tower of madness
+JUMP to the top to become to Tower master and beat you friends
+You dont have friends? don't worry I can be your friend, just start jumping to the top I will catch you, after I take a nap`
+
+export function triggerCoolBedDialog() {
+  coolBedDialogTimestamp = Date.now()
+}
 
 // Connection state
 export let isConnectedToServer: boolean = false
@@ -481,37 +487,36 @@ export async function main() {
     if (coolBedSetupDone) return
     coolBedSetupDone = true
     coolBedEntity = entity
-    console.log('[Game] CoolBed found, adding click-to-Talk (MeshCollider + PointerEvents)')
+    console.log('[Game] CoolBed found, adding click-to-Talk')
 
     MeshCollider.setBox(entity, ColliderLayer.CL_POINTER)
 
-    PointerEvents.create(entity, {
-      pointerEvents: [
-        {
-          eventType: PointerEventType.PET_DOWN,
-          eventInfo: {
-            button: InputAction.IA_POINTER,
-            hoverText: 'Talk',
-            showFeedback: true,
-            maxDistance: 10
-          }
+    pointerEventsSystem.onPointerDown(
+      {
+        entity,
+        opts: {
+          button: InputAction.IA_POINTER,
+          hoverText: 'Talk',
+          showFeedback: true,
+          showHighlight: true,
+          maxDistance: 10
         }
-      ]
-    })
-
-    pointerEventsSystem.onPointerDown({ entity, opts: { button: InputAction.IA_POINTER } }, () => {
-      if (!Animator.has(entity)) return
-      const breathClip = Animator.getClipOrNull(entity, 'Breath')
-      const talkClip = Animator.getClipOrNull(entity, 'Talk')
-      if (!breathClip || !talkClip) return
-      if (coolBedPhase !== 'idle' && coolBedPhase !== 'talking') return
-      talkClip.playing = true
-      talkClip.speed = TALK_SPEED
-      talkClip.weight = 0
-      if (breathClip) breathClip.weight = 1
-      coolBedPhase = 'blendToTalk'
-      coolBedPhaseStartTime = Date.now()
-    })
+      },
+      () => {
+        triggerCoolBedDialog()
+        if (!Animator.has(entity)) return
+        const breathClip = Animator.getClipOrNull(entity, 'Breath')
+        const talkClip = Animator.getClipOrNull(entity, 'Talk')
+        if (!breathClip || !talkClip) return
+        if (coolBedPhase !== 'idle' && coolBedPhase !== 'talking') return
+        talkClip.playing = true
+        talkClip.speed = TALK_SPEED
+        talkClip.weight = 0
+        if (breathClip) breathClip.weight = 1
+        coolBedPhase = 'blendToTalk'
+        coolBedPhaseStartTime = Date.now()
+      }
+    )
   }
 
   function findCoolBedEntity(): Entity | null {
