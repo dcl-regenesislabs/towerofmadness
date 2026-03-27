@@ -313,7 +313,7 @@
         "512": {
           "json": {
             "src": "assets/scene/Models/CoolBed/CoolBed.glb",
-            "visibleMeshesCollisionMask": 0,
+            "visibleMeshesCollisionMask": 3,
             "invisibleMeshesCollisionMask": 3
           }
         },
@@ -486,7 +486,7 @@
         "serializationType": "map"
       },
       "data": {
-        "0": {
+        "512": {
           "json": {
             "gizmo": 0
           }
