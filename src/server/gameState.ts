@@ -14,6 +14,14 @@ import {
   TriggerEndComponent,
   RoundPhase
 } from '../shared/schemas'
+import {
+  CHUNK_END_ID,
+  CHUNK_START_ID,
+  MAX_TOWER_MIDDLE_CHUNKS,
+  MIDDLE_CHUNK_IDS,
+  MIN_TOWER_MIDDLE_CHUNKS,
+  getChunkAssetPath
+} from '../shared/chunks'
 import { PodiumAvatarsServer } from './podiumAvatarsServer'
 
 // Helper to protect synced components on an entity
@@ -30,11 +38,6 @@ function protectServerEntity(entity: Entity, components: ComponentWithValidation
 }
 
 // Constants
-const CHUNK_OPTIONS = Array.from({ length: 10 }, (_, i) =>
-  `Chunk${String(i + 1).padStart(2, '0')}`
-)
-const MIN_CHUNKS = 3
-const MAX_CHUNKS = 8
 const BASE_TIMER = 420 // 7 minutes
 const CHUNK_HEIGHT = 10.821
 const TOWER_X = 40
@@ -260,8 +263,8 @@ export class GameState {
       TriggerEndComponent.componentId
     ])
 
-    // Create entity pool for tower chunks (MAX_CHUNKS + 1 for ChunkEnd)
-    for (let i = 0; i < MAX_CHUNKS + 1; i++) {
+    // Create entity pool for tower chunks (max middle chunks + 1 for ChunkEnd)
+    for (let i = 0; i < MAX_TOWER_MIDDLE_CHUNKS + 1; i++) {
       const entity = engine.addEntity()
       Transform.create(entity, {
         position: Vector3.create(TOWER_X, 0, TOWER_Z),
@@ -437,7 +440,7 @@ export class GameState {
       transform.rotation = Quaternion.fromEulerDegrees(0, rotationY, 0)
       transform.scale = Vector3.One()
 
-      GltfContainer.getMutable(entity).src = `assets/chunks/${chunkIds[i]}.glb`
+      GltfContainer.getMutable(entity).src = getChunkAssetPath(chunkIds[i])
       VisibilityComponent.getMutable(entity).visible = true
 
       this.towerEntities.push(entity)
@@ -453,7 +456,7 @@ export class GameState {
     endTransform.rotation = Quaternion.fromEulerDegrees(0, endRotationY, 0)
     endTransform.scale = Vector3.One()
 
-    GltfContainer.getMutable(endEntity).src = 'assets/custom/chunkend01.glb/ChunkEnd.glb'
+    GltfContainer.getMutable(endEntity).src = getChunkAssetPath(CHUNK_END_ID)
     VisibilityComponent.getMutable(endEntity).visible = true
     // Ensure only the current end entity has the ChunkEnd tag
     for (const entity of this.towerEntityPool) {
@@ -481,7 +484,7 @@ export class GameState {
     }
 
     // Update tower config for UI (include ChunkStart at the beginning)
-    const allChunks = ['ChunkStart', ...chunkIds, 'ChunkEnd']
+    const allChunks = [CHUNK_START_ID, ...chunkIds, CHUNK_END_ID]
     const totalHeight = CHUNK_HEIGHT * (chunkIds.length + 2) // +1 for ChunkEnd, +1 for base
     const towerConfig = TowerConfigComponent.getMutable(this.towerConfigEntity)
     towerConfig.chunkIds = allChunks
@@ -498,9 +501,11 @@ export class GameState {
     this.destroyTower()
 
     // Generate random chunks
-    const numChunks = Math.floor(Math.random() * (MAX_CHUNKS - MIN_CHUNKS + 1)) + MIN_CHUNKS
+    const numChunks =
+      Math.floor(Math.random() * (MAX_TOWER_MIDDLE_CHUNKS - MIN_TOWER_MIDDLE_CHUNKS + 1)) +
+      MIN_TOWER_MIDDLE_CHUNKS
     const chunkIds = Array.from({ length: numChunks }, () =>
-      CHUNK_OPTIONS[Math.floor(Math.random() * CHUNK_OPTIONS.length)]
+      MIDDLE_CHUNK_IDS[Math.floor(Math.random() * MIDDLE_CHUNK_IDS.length)]
     )
 
     console.log(`[Server] New round: ${roundId}, chunks: [${chunkIds.join(' -> ')}]`)

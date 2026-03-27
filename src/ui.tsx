@@ -48,6 +48,7 @@ import {
   formatTime,
   getTowerChunksFromEntities
 } from "./multiplayer"
+import { CHUNK_END_ID, CHUNK_START_ID, MIDDLE_CHUNK_IDS } from "./shared/chunks"
 import { getSnapshots } from "./snapshots"
 import { OutlinedText, OUTLINE_OFFSETS_16, OUTLINE_OFFSETS_8 } from "./outlinedTextComponent"
 
@@ -57,7 +58,7 @@ export function setupUi() {
 
 // Chunk colors for tower progress bar
 const CHUNK_COLORS: Record<string, Color4> = {
-  'ChunkStart': Color4.create(0.7, 0.5, 0.8, 1),  // Purple (base)
+  [CHUNK_START_ID]: Color4.create(0.7, 0.5, 0.8, 1),  // Purple (base)
   'Chunk01': Color4.create(0.2, 0.8, 0.2, 1),  // Green
   'Chunk02': Color4.create(0.85, 0.75, 0.4, 1),  // Yellow/Tan
   'Chunk03': Color4.create(0.9, 0.9, 0.9, 1),  // White
@@ -68,7 +69,7 @@ const CHUNK_COLORS: Record<string, Color4> = {
   'Chunk08': Color4.create(244 / 255, 242 / 255, 219 / 255, 1),  // #F4F2DB
   'Chunk09': Color4.create(200 / 255, 51 / 255, 92 / 255, 1),  // #C8335C
   'Chunk10': Color4.create(122 / 255, 68 / 255, 148 / 255, 1),  // #7A4494
-  'ChunkEnd': Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish) 
+  [CHUNK_END_ID]: Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish)
 }
 
 const CONNECT_FLOOR_COUNT = 8
@@ -371,9 +372,9 @@ const GameUI = () => {
     const floorStepDuration = CONNECT_FLOOR_STEP_SECONDS
     const activeFloor = Math.floor((nowSeconds / floorStepDuration) % floorCount)
     const loaderFloorPalette = [
-      CHUNK_COLORS.ChunkStart,
-      ...Array.from({ length: 10 }, (_, i) => CHUNK_COLORS[`Chunk${String(i + 1).padStart(2, '0')}`] || Color4.Gray()),
-      CHUNK_COLORS.ChunkEnd
+      CHUNK_COLORS[CHUNK_START_ID],
+      ...MIDDLE_CHUNK_IDS.map((chunkId) => CHUNK_COLORS[chunkId] || Color4.Gray()),
+      CHUNK_COLORS[CHUNK_END_ID]
     ]
     const statusText = `CONNECTING TO SERVER${movingDots}`
 
