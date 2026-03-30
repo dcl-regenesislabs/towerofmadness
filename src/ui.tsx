@@ -157,9 +157,7 @@ const TowerProgressBar = () => {
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
   const screenWidth = uiCanvasInfo?.width ?? 1920 * s
   const snapshots = getSnapshots()
-  const snapshotByWallet = new Map(
-    snapshots.map((entry) => [entry.wallet.toLowerCase(), entry.snapshotUrl])
-  )
+  const snapshotEntryByWallet = new Map(snapshots.map((entry) => [entry.wallet.toLowerCase(), entry]))
   const localWallet = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
 
   // Get chunks directly from synced entities for accurate colors
@@ -265,7 +263,9 @@ const TowerProgressBar = () => {
       {displayedPlayers.map((player, index) => {
         const xPos = getPlayerXPosition(player.height)
         const wallet = player.address?.toLowerCase() ?? ''
-        const snapshotUrl = snapshotByWallet.get(wallet) ?? null
+        const snapshotEntry = snapshotEntryByWallet.get(wallet)
+        const snapshotReady = snapshotEntry?.status === 'ok' && !!snapshotEntry.snapshotUrl
+        const snapshotUrl = snapshotReady ? snapshotEntry?.snapshotUrl ?? null : null
         const isLocal = wallet && wallet === localWallet
 
         return (
@@ -292,9 +292,8 @@ const TowerProgressBar = () => {
                 position: { left: 2 * s, top: 2 * s }
               }}
               uiBackground={
-                snapshotUrl
+                snapshotReady && snapshotUrl
                   ? {
-                      color: Color4.White(),
                       texture: { src: snapshotUrl },
                       textureMode: 'stretch'
                     }

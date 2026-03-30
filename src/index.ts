@@ -44,7 +44,7 @@ import {
   WinnerEntry,
   TowerConfig
 } from './multiplayer'
-import { requestPlayerSnapshot } from './snapshots'
+import { initSnapshotQueue, requestPlayerSnapshot } from './snapshots'
 import { TriggerEndComponent } from './shared/schemas'
 
 // ============================================
@@ -378,6 +378,7 @@ export async function main() {
   // ============================================
 
   setupClient()
+  initSnapshotQueue()
 
   // Set up callback for when players finish - update our best time if it's us
   onPlayerFinished((displayName, time, finishOrder) => {
@@ -411,9 +412,7 @@ export async function main() {
 
         knownPlayerWallets.add(wallet)
         const avatarBase = AvatarBase.getOrNull(entity)
-        requestPlayerSnapshot(wallet, avatarBase?.name).then((ok) => {
-          if (!ok) knownPlayerWallets.delete(wallet)
-        })
+        void requestPlayerSnapshot(wallet, avatarBase?.name)
       }
     },
     undefined,
