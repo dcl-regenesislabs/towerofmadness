@@ -25,6 +25,7 @@ import {
   bestAttemptTime,
   bestAttemptHeight,
   attemptResult,
+  resultTitle,
   resultMessage,
   resultTimestamp,
   startMessageTimestamp,
@@ -34,7 +35,11 @@ import {
   leaderboard,
   roundWinners,
   isConnectedToServer,
-  towerConfig
+  towerConfig,
+  roundFinishOrder,
+  roundFinishTime,
+  coolBedDialogText,
+  coolBedDialogTimestamp
 } from "./index"
 import {
   RoundPhase,
@@ -45,6 +50,7 @@ import {
   formatTime,
   getTowerChunksFromEntities
 } from "./multiplayer"
+import { CHUNK_END_ID, CHUNK_START_ID, MIDDLE_CHUNK_IDS } from "./shared/chunks"
 import { getSnapshots } from "./snapshots"
 import { OutlinedText, OUTLINE_OFFSETS_16, OUTLINE_OFFSETS_8 } from "./outlinedTextComponent"
 
@@ -54,7 +60,7 @@ export function setupUi() {
 
 // Chunk colors for tower progress bar
 const CHUNK_COLORS: Record<string, Color4> = {
-  'ChunkStart': Color4.create(0.7, 0.5, 0.8, 1),  // Purple (base)
+  [CHUNK_START_ID]: Color4.create(0.7, 0.5, 0.8, 1),  // Purple (base)
   'Chunk01': Color4.create(0.2, 0.8, 0.2, 1),  // Green
   'Chunk02': Color4.create(0.85, 0.75, 0.4, 1),  // Yellow/Tan
   'Chunk03': Color4.create(0.9, 0.9, 0.9, 1),  // White
@@ -65,14 +71,52 @@ const CHUNK_COLORS: Record<string, Color4> = {
   'Chunk08': Color4.create(244 / 255, 242 / 255, 219 / 255, 1),  // #F4F2DB
   'Chunk09': Color4.create(200 / 255, 51 / 255, 92 / 255, 1),  // #C8335C
   'Chunk10': Color4.create(122 / 255, 68 / 255, 148 / 255, 1),  // #7A4494
-  'ChunkEnd': Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish) 
+  [CHUNK_END_ID]: Color4.create(1.0, 0.84, 0.0, 1) // Gold (finish)
 }
 
 const CONNECT_FLOOR_COUNT = 8
 const CONNECT_FLOOR_STEP_SECONDS = 0.16
 const CONNECT_MIN_VISIBLE_MS = CONNECT_FLOOR_COUNT * CONNECT_FLOOR_STEP_SECONDS * 1000
+const COOLBED_CHAR_STEP_SECONDS = 0.032
+const COOLBED_PUNCTUATION_PAUSE_SECONDS = 0.16
+const COOLBED_LINE_BREAK_PAUSE_SECONDS = 0.24
+const COOLBED_DIALOG_HOLD_SECONDS = 3.5
+const COOLBED_DIALOG_FADE_SECONDS = 1.2
 let connectUiCycleStartedAtMs = 0
 let connectUiMinVisibleUntilMs = 0
+
+function withAlpha(color: Color4, alpha: number): Color4 {
+  return Color4.create(color.r, color.g, color.b, color.a * alpha)
+}
+
+function getCoolBedCharCost(char: string): number {
+  if (char === '\n') return COOLBED_CHAR_STEP_SECONDS + COOLBED_LINE_BREAK_PAUSE_SECONDS
+  if (char === '.' || char === '!' || char === '?') return COOLBED_CHAR_STEP_SECONDS + COOLBED_PUNCTUATION_PAUSE_SECONDS
+  if (char === ',' || char === ';' || char === ':') return COOLBED_CHAR_STEP_SECONDS + COOLBED_PUNCTUATION_PAUSE_SECONDS * 0.75
+  return COOLBED_CHAR_STEP_SECONDS
+}
+
+function getCoolBedTypingDurationSeconds(text: string): number {
+  let total = 0
+  for (const char of text) {
+    total += getCoolBedCharCost(char)
+  }
+  return total
+}
+
+function getCoolBedTypedText(text: string, elapsedSeconds: number): string {
+  let elapsedBudget = Math.max(0, elapsedSeconds)
+  let visibleChars = 0
+
+  for (let i = 0; i < text.length; i++) {
+    const charCost = getCoolBedCharCost(text[i])
+    if (elapsedBudget < charCost) break
+    elapsedBudget -= charCost
+    visibleChars = i + 1
+  }
+
+  return text.slice(0, visibleChars)
+}
 
 function getTrophyUvsByRank(index: number): number[] {
   // UV order: bottom-left, top-left, top-right, bottom-right
@@ -89,6 +133,14 @@ function getWinnerFontSize(index: number): number {
 
 function truncateWinnerName(name: string): string {
   return name.length > 8 ? `${name.slice(0, 8)}...` : name
+}
+
+function formatRoundResultLabel(
+  formatTimeMs: (seconds: number) => string,
+  time: number,
+  height: number
+): string {
+  return time > 0 ? formatTimeMs(time) : `${height.toFixed(2)}m`
 }
 
 function getWinnerTextColor(index: number, hasEntry: boolean, fallbackColor: Color4): Color4 {
@@ -135,6 +187,8 @@ const TowerProgressBar = () => {
     const clampedHeight = Math.max(0, Math.min(height, totalHeight))
     return (clampedHeight / totalHeight) * BAR_WIDTH
   }
+
+  const displayedPlayers = getLocalPlayerHeights(false)
 
   return (
     <UiEntity
@@ -210,7 +264,7 @@ const TowerProgressBar = () => {
       />
 
       {/* Player indicators inside bar */}
-      {getLocalPlayerHeights(false).slice(0, 12).map((player, index) => {
+      {displayedPlayers.map((player, index) => {
         const xPos = getPlayerXPosition(player.height)
         const wallet = player.address?.toLowerCase() ?? ''
         const snapshotUrl = snapshotByWallet.get(wallet) ?? null
@@ -218,7 +272,7 @@ const TowerProgressBar = () => {
 
         return (
           <UiEntity
-            key={`player-${index}`}
+            key={wallet ? `player-${wallet}` : `player-index-${index}`}
             uiTransform={{
               width: PLAYER_MARKER_SIZE,
               height: PLAYER_MARKER_SIZE,
@@ -280,6 +334,177 @@ const TowerProgressBar = () => {
   )
 }
 
+const CoolBedDialogBubble = ({
+  screenWidth,
+  screenHeight,
+  isMobile
+}: {
+  screenWidth: number
+  screenHeight: number
+  isMobile: boolean
+}) => {
+  if (coolBedDialogTimestamp <= 0) return null
+
+  const timeSinceDialog = (Date.now() - coolBedDialogTimestamp) / 1000
+  const typingDuration = getCoolBedTypingDurationSeconds(coolBedDialogText)
+  const dialogDuration = typingDuration + COOLBED_DIALOG_HOLD_SECONDS + COOLBED_DIALOG_FADE_SECONDS
+  if (timeSinceDialog >= dialogDuration) return null
+
+  const fadeStart = dialogDuration - COOLBED_DIALOG_FADE_SECONDS
+  const alpha = timeSinceDialog < fadeStart
+    ? 1
+    : Math.max(0, 1 - (timeSinceDialog - fadeStart) / COOLBED_DIALOG_FADE_SECONDS)
+  const typedText = getCoolBedTypedText(coolBedDialogText, timeSinceDialog)
+  const isTyping = typedText.length < coolBedDialogText.length
+  const showCursor = isTyping && Math.floor(timeSinceDialog * 4) % 2 === 0
+  const visibleDialogText = `${typedText}${showCursor ? '|' : ''}`
+  const isLandscapeMobile = isMobile && screenWidth > screenHeight
+
+  const bubbleWidth = isLandscapeMobile
+    ? Math.max(420, Math.min(screenWidth * 0.46, 680))
+    : isMobile
+      ? Math.max(310, Math.min(screenWidth - 28, 430))
+    : Math.min(620, Math.max(480, screenWidth * 0.34))
+  const bubbleHeight = isLandscapeMobile ? 214 : isMobile ? 292 : 216
+  const bubbleBottom = isLandscapeMobile ? Math.max(68, screenHeight * 0.08) : isMobile ? 32 : 42
+  const bubbleLeft = Math.max(10, (screenWidth - bubbleWidth) / 2)
+  const shadowOffset = isMobile ? 10 : 8
+  const tailWidth = isLandscapeMobile ? 34 : isMobile ? 40 : 34
+  const tailHeight = isLandscapeMobile ? 18 : isMobile ? 22 : 18
+  const tailLeft = bubbleWidth / 2 - tailWidth / 2
+  const titleFontSize = isLandscapeMobile ? 14 : isMobile ? 15 : 13
+  const bodyFontSize = isLandscapeMobile ? 17 : isMobile ? 18 : 15
+  const bodyTop = isLandscapeMobile ? 58 : 64
+  const bodyHorizontalPadding = isLandscapeMobile ? 22 : 19
+  const bodyHeight = isLandscapeMobile ? bubbleHeight - 72 : bubbleHeight - 82
+
+  return (
+    <UiEntity
+      uiTransform={{
+        width: bubbleWidth + shadowOffset,
+        height: bubbleHeight + tailHeight + shadowOffset,
+        positionType: 'absolute',
+        position: { bottom: bubbleBottom, left: bubbleLeft }
+      }}
+    >
+      <UiEntity
+        uiTransform={{
+          width: bubbleWidth,
+          height: bubbleHeight,
+          positionType: 'absolute',
+          position: { top: shadowOffset, left: shadowOffset },
+          borderRadius: 30
+        }}
+        uiBackground={{
+          color: withAlpha(Color4.create(0.19, 0.1, 0.06, 0.34), alpha)
+        }}
+      />
+
+      <UiEntity
+        uiTransform={{
+          width: bubbleWidth,
+          height: bubbleHeight,
+          positionType: 'absolute',
+          position: { top: 0, left: 0 },
+          borderRadius: 30,
+          borderColor: withAlpha(Color4.create(0.2, 0.12, 0.07, 1), alpha),
+          borderWidth: 3,
+          padding: { top: 18, right: 18, bottom: 18, left: 18 }
+        }}
+        uiBackground={{
+          color: withAlpha(Color4.create(0.97, 0.94, 0.86, 0.98), alpha)
+        }}
+      >
+        <UiEntity
+          uiTransform={{
+            width: 118,
+            height: 34,
+            positionType: 'absolute',
+            position: { top: 16, left: 18 },
+            borderRadius: 18,
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+          uiBackground={{
+            color: withAlpha(Color4.create(49 / 255, 150 / 255, 143 / 255, 1), alpha)
+          }}
+        >
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              height: '100%',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            uiText={{
+              value: 'COOLBED NPC',
+              fontSize: titleFontSize,
+              color: withAlpha(Color4.White(), alpha),
+              textAlign: 'middle-center',
+              font: 'sans-serif'
+            }}
+          />
+        </UiEntity>
+
+        <UiEntity
+          uiTransform={{
+            width: bubbleWidth - bodyHorizontalPadding * 2,
+            height: bodyHeight,
+            positionType: 'absolute',
+            position: { top: bodyTop, left: bodyHorizontalPadding },
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start'
+          }}
+        >
+          <UiEntity
+            uiTransform={{
+              width: '100%',
+              height: '100%',
+              alignItems: 'flex-start',
+              justifyContent: 'flex-start'
+            }}
+            uiText={{
+              value: visibleDialogText,
+              fontSize: bodyFontSize,
+              color: withAlpha(Color4.create(0.18, 0.11, 0.06, 1), alpha),
+              textAlign: 'top-left',
+              font: 'sans-serif'
+            }}
+          />
+        </UiEntity>
+      </UiEntity>
+
+      <UiEntity
+        uiTransform={{
+          width: tailWidth,
+          height: tailHeight,
+          positionType: 'absolute',
+          position: { top: bubbleHeight - 2 + shadowOffset, left: tailLeft + shadowOffset },
+          borderRadius: 12
+        }}
+        uiBackground={{
+          color: withAlpha(Color4.create(0.19, 0.1, 0.06, 0.28), alpha)
+        }}
+      />
+
+      <UiEntity
+        uiTransform={{
+          width: tailWidth,
+          height: tailHeight,
+          positionType: 'absolute',
+          position: { top: bubbleHeight - 2, left: tailLeft },
+          borderRadius: 12,
+          borderColor: withAlpha(Color4.create(0.2, 0.12, 0.07, 1), alpha),
+          borderWidth: 3
+        }}
+        uiBackground={{
+          color: withAlpha(Color4.create(0.97, 0.94, 0.86, 0.98), alpha)
+        }}
+      />
+    </UiEntity>
+  )
+}
+
 const GameUI = () => {
   const s = getScaleUIFactor()
   const isMobile = isMobileScreen()
@@ -287,6 +512,7 @@ const GameUI = () => {
   const startMessageScale = isMobile ? 3 : 1
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
   const screenWidth = uiCanvasInfo?.width ?? 1920 * s
+  const screenHeight = uiCanvasInfo?.height ?? 1080 * s
   const localPlayerAddress = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
   const playerInfoWidth = 260 * s
   const startMessageWidth = 260 * s
@@ -308,9 +534,12 @@ const GameUI = () => {
 
   // Show result for 5 seconds
   const timeSinceResult = resultTimestamp > 0 ? (Date.now() - resultTimestamp) / 1000 : 999
-  const showResult = attemptResult && timeSinceResult < 5
+  const isPendingResult = attemptResult === 'PENDING'
   const isDeathResult = attemptResult === 'DEATH'
-  const deathShakeActive = isDeathResult && timeSinceResult < 5
+  const isErrorResult = attemptResult === 'ERROR'
+  const resultDuration = isErrorResult ? 8 : isPendingResult ? 6 : 5
+  const showResult = attemptResult && timeSinceResult < resultDuration
+  const deathShakeActive = isDeathResult && timeSinceResult < resultDuration
   const deathShakeX = deathShakeActive ? Math.sin(timeSinceResult * 24) * 6 * mobileBoostScale : 0
   const deathShakeY = deathShakeActive ? Math.cos(timeSinceResult * 28) * 6 * mobileBoostScale : 0
   const timeSinceStartMessage = startMessageTimestamp > 0 ? (Date.now() - startMessageTimestamp) / 1000 : 999
@@ -322,12 +551,13 @@ const GameUI = () => {
   const showWinners = (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && winnersToDisplay.length > 0
   const topWinnerSlots: Array<WinnerEntry | null> = [0, 1, 2].map((index) => winnersToDisplay[index] ?? null)
   const localWinner = winnersToDisplay.find((winner) => winner.address?.toLowerCase() === localPlayerAddress)
-  const localBoardEntry = leaderboard.find((entry) => entry.address?.toLowerCase() === localPlayerAddress)
   const localPlacementText = localWinner
-    ? `You placed #${localWinner.rank > 0 ? localWinner.rank : winnersToDisplay.findIndex((w) => w.address === localWinner.address) + 1} - ${localWinner.time > 0 ? formatTimeMs(localWinner.time) : `${localWinner.height.toFixed(2)}m`}`
-    : localBoardEntry && localBoardEntry.finishOrder > 0
-      ? `You placed #${localBoardEntry.finishOrder} - ${localBoardEntry.bestTime > 0 ? formatTimeMs(localBoardEntry.bestTime) : `${localBoardEntry.maxHeight.toFixed(2)}m`}`
-      : 'You did not finish this round'
+    ? `You placed #${localWinner.rank > 0 ? localWinner.rank : winnersToDisplay.findIndex((w) => w.address === localWinner.address) + 1} - ${formatRoundResultLabel(formatTimeMs, localWinner.time, localWinner.height)}`
+    : roundFinishOrder > 0
+      ? `You placed #${roundFinishOrder} - ${formatRoundResultLabel(formatTimeMs, roundFinishTime, playerMaxHeight)}`
+      : playerMaxHeight > 0
+        ? `You reached ${playerMaxHeight.toFixed(2)}m this round`
+        : 'You did not finish this round'
   const nextRoundSeconds = Math.max(0, Math.ceil(roundTimer))
 
   const nowMs = Date.now()
@@ -352,9 +582,9 @@ const GameUI = () => {
     const floorStepDuration = CONNECT_FLOOR_STEP_SECONDS
     const activeFloor = Math.floor((nowSeconds / floorStepDuration) % floorCount)
     const loaderFloorPalette = [
-      CHUNK_COLORS.ChunkStart,
-      ...Array.from({ length: 10 }, (_, i) => CHUNK_COLORS[`Chunk${String(i + 1).padStart(2, '0')}`] || Color4.Gray()),
-      CHUNK_COLORS.ChunkEnd
+      CHUNK_COLORS[CHUNK_START_ID],
+      ...MIDDLE_CHUNK_IDS.map((chunkId) => CHUNK_COLORS[chunkId] || Color4.Gray()),
+      CHUNK_COLORS[CHUNK_END_ID]
     ]
     const statusText = `CONNECTING TO SERVER${movingDots}`
 
@@ -463,6 +693,8 @@ const GameUI = () => {
         positionType: 'absolute'
       }}
     >
+      <CoolBedDialogBubble screenWidth={screenWidth} screenHeight={screenHeight} isMobile={isMobile} />
+
       {/* ROUND TIMER - Top Center */}
       <UiEntity
         uiTransform={{
@@ -873,7 +1105,7 @@ const GameUI = () => {
           {topWinnerSlots.map((winner, i) => {
             const hasEntry = winner !== null
             const display = hasEntry
-              ? (winner.time > 0 ? formatTimeMs(winner.time) : `${winner.height.toFixed(2)}m`)
+              ? formatRoundResultLabel(formatTimeMs, winner.time, winner.height)
               : '--:--.--'
             const name = hasEntry ? truncateWinnerName(winner.displayName) : 'No entries'
 
@@ -1050,6 +1282,59 @@ const GameUI = () => {
             </UiEntity>
           )}
 
+          {isPendingResult && (
+            <UiEntity
+              uiTransform={{
+                width: 420 * mobileBoostScale,
+                height: 180 * mobileBoostScale,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column'
+              }}
+            >
+              <OutlinedText
+                outlineKeyPrefix="attempt-pending-title-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={mobileBoostScale}
+                uiTransform={{
+                  width: 360 * mobileBoostScale,
+                  height: 42 * mobileBoostScale,
+                  positionType: 'absolute',
+                  position: { top: 38 * mobileBoostScale, left: 30 * mobileBoostScale },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultTitle || 'VALIDATING ATTEMPT',
+                  fontSize: 24 * mobileBoostScale,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+              <OutlinedText
+                outlineKeyPrefix="attempt-pending-body-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={mobileBoostScale}
+                uiTransform={{
+                  width: 390 * mobileBoostScale,
+                  height: 80 * mobileBoostScale,
+                  positionType: 'absolute',
+                  position: { top: 88 * mobileBoostScale, left: 15 * mobileBoostScale },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultMessage,
+                  fontSize: 16 * mobileBoostScale,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+            </UiEntity>
+          )}
+
           {attemptResult === 'DEATH' && (
             <UiEntity
               uiTransform={{
@@ -1097,7 +1382,7 @@ const GameUI = () => {
                   justifyContent: 'center'
                 }}
                 uiText={{
-                  value: 'OOPS TRY AGAIN',
+                  value: resultTitle || 'OOPS TRY AGAIN',
                   fontSize: 28 * mobileBoostScale,
                   color: Color4.White(),
                   textAlign: 'middle-center',
@@ -1166,6 +1451,59 @@ const GameUI = () => {
                   />
                 </UiEntity>
               </UiEntity>
+            </UiEntity>
+          )}
+
+          {isErrorResult && (
+            <UiEntity
+              uiTransform={{
+                width: 420 * mobileBoostScale,
+                height: 180 * mobileBoostScale,
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexDirection: 'column'
+              }}
+            >
+              <OutlinedText
+                outlineKeyPrefix="attempt-error-title-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={mobileBoostScale}
+                uiTransform={{
+                  width: 360 * mobileBoostScale,
+                  height: 42 * mobileBoostScale,
+                  positionType: 'absolute',
+                  position: { top: 38 * mobileBoostScale, left: 30 * mobileBoostScale },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultTitle || 'OOPS TRY AGAIN',
+                  fontSize: 28 * mobileBoostScale,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+              <OutlinedText
+                outlineKeyPrefix="attempt-error-body-stroke"
+                outlineOffsets={OUTLINE_OFFSETS_8}
+                outlineScale={mobileBoostScale}
+                uiTransform={{
+                  width: 390 * mobileBoostScale,
+                  height: 80 * mobileBoostScale,
+                  positionType: 'absolute',
+                  position: { top: 88 * mobileBoostScale, left: 15 * mobileBoostScale },
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                uiText={{
+                  value: resultMessage,
+                  fontSize: 16 * mobileBoostScale,
+                  color: Color4.White(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
             </UiEntity>
           )}
         </UiEntity>

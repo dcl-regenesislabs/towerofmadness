@@ -13,11 +13,8 @@ import {
   MeshCollider,
   MeshRenderer,
   Material,
-  PointerEvents,
-  PointerEventType,
   InputAction,
-  pointerEventsSystem,
-  inputSystem
+  pointerEventsSystem
 } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
@@ -33,6 +30,7 @@ import {
   sendPlayerFinished,
   sendPlayerJoined,
   onPlayerFinished,
+  onAttemptRejected,
   getRoundState,
   getLeaderboard,
   getWeeklyLeaderboard,
@@ -63,6 +61,7 @@ export let playerMaxHeight = 0
 export enum AttemptState {
   NOT_STARTED = 'NOT_STARTED',
   IN_PROGRESS = 'IN_PROGRESS',
+  VALIDATING = 'VALIDATING',
   FINISHED = 'FINISHED',
   DIED = 'DIED'
 }
@@ -71,6 +70,8 @@ export let attemptState: AttemptState = AttemptState.NOT_STARTED
 export let attemptStartTime: number = 0
 export let attemptTimer: number = 0
 export let attemptFinishTime: number = 0
+export let roundFinishOrder: number = 0
+export let roundFinishTime: number = 0
 
 // Personal best
 export let bestAttemptTime: number = 0
@@ -86,12 +87,27 @@ export function updateBestTime(time: number) {
     bestAttemptTime = time
   }
 }
+export function resetRoundPlacement() {
+  roundFinishOrder = 0
+  roundFinishTime = 0
+}
 
 // Result display
-export let attemptResult: 'WIN' | 'DEATH' | null = null
+export let attemptResult: 'WIN' | 'DEATH' | 'ERROR' | 'PENDING' | null = null
+export let resultTitle: string = ''
 export let resultMessage: string = ''
 export let resultTimestamp: number = 0
 export let startMessageTimestamp: number = 0
+export let suppressStartUntil: number = 0
+export let finishValidationStartedAt: number = 0
+export let coolBedDialogTimestamp: number = 0
+export const coolBedDialogText = `YO SUP welcome to Tower of madness
+JUMP to the top to become to Tower master and beat you friends
+You dont have friends? don't worry I can be your friend, just start jumping to the top I will catch you, after I take a nap`
+
+export function triggerCoolBedDialog() {
+  coolBedDialogTimestamp = Date.now()
+}
 
 // Connection state
 export let isConnectedToServer: boolean = false
@@ -109,6 +125,10 @@ export let pointLeaderboard: PointLeaderboardEntry[] = []
 export let weeklyPointLeaderboard: PointLeaderboardEntry[] = []
 export let roundWinners: WinnerEntry[] = []
 export let towerConfig: TowerConfig | null = null
+
+const BASE_TELEPORT_POSITION = { x: 40.38, y: 11.5, z: 10.5 }
+const START_TRIGGER_SUPPRESS_MS = 2000
+const FINISH_VALIDATION_TIMEOUT_MS = 4000
 
 // ============================================
 // HELPER FUNCTIONS
@@ -201,7 +221,9 @@ function syncRoundState() {
       // New round started - reset attempt
       attemptState = AttemptState.NOT_STARTED
       attemptTimer = 0
+      attemptFinishTime = 0
       playerMaxHeight = 0
+      resetRoundPlacement()
       attemptResult = null
       resultMessage = '🎮 New round! Go to TriggerStart to begin'
       resultTimestamp = Date.now()
@@ -236,6 +258,10 @@ function startAttempt() {
     return
   }
 
+  if (Date.now() < suppressStartUntil) {
+    return
+  }
+
   if (attemptState === AttemptState.FINISHED) {
     resultMessage = '✅ You already finished! Wait for next round.'
     resultTimestamp = Date.now()
@@ -248,9 +274,11 @@ function startAttempt() {
   attemptTimer = 0
   playerMaxHeight = playerHeight
   attemptResult = null
+  resultTitle = ''
   resultMessage = '🏃 GO! Climb to the top!'
   resultTimestamp = Date.now()
   startMessageTimestamp = Date.now()
+  finishValidationStartedAt = 0
 
   // Notify server (server tracks authoritative start time)
   sendPlayerStarted()
@@ -258,15 +286,21 @@ function startAttempt() {
 
 function finishAttempt() {
   if (!isConnectedToServer) return
-  if (attemptState !== AttemptState.IN_PROGRESS) return
   if (roundPhase !== RoundPhase.ACTIVE) return
 
-  console.log('[Game] Attempt finished')
-  attemptState = AttemptState.FINISHED
+  if (attemptState !== AttemptState.IN_PROGRESS) {
+    rejectAttempt('No active attempt detected. You likely skipped or missed the start trigger.')
+    return
+  }
+
+  console.log('[Game] Attempt reached finish trigger, waiting for server validation')
+  attemptState = AttemptState.VALIDATING
   attemptFinishTime = attemptTimer
-  attemptResult = 'WIN'
-  resultMessage = `🏆 FINISHED! Waiting for server...`
+  attemptResult = 'PENDING'
+  resultTitle = 'VALIDATING ATTEMPT'
+  resultMessage = 'Please wait while the server confirms your finish.'
   resultTimestamp = Date.now()
+  finishValidationStartedAt = Date.now()
 
   // Update personal best height (time will come from server)
   if (playerMaxHeight > bestAttemptHeight) {
@@ -283,13 +317,40 @@ function dieAttempt() {
   console.log('[Game] Player died')
   attemptState = AttemptState.DIED
   attemptResult = 'DEATH'
+  resultTitle = 'OOPS TRY AGAIN'
   resultMessage = `☠️ DEATH at ${playerMaxHeight.toFixed(1)}m - Go to TriggerStart to retry!`
   resultTimestamp = Date.now()
+  finishValidationStartedAt = 0
 
   // Update personal best height even on death
   if (playerMaxHeight > bestAttemptHeight) {
     bestAttemptHeight = playerMaxHeight
   }
+}
+
+function rejectAttempt(reason: string, title: string = 'OOPS TRY AGAIN') {
+  console.log(`[Game] Attempt rejected: ${reason}`)
+
+  attemptState = AttemptState.NOT_STARTED
+  attemptStartTime = 0
+  attemptTimer = 0
+  attemptFinishTime = 0
+  attemptResult = 'ERROR'
+  resultTitle = title
+  resultMessage = reason
+  resultTimestamp = Date.now()
+  finishValidationStartedAt = 0
+  startMessageTimestamp = 0
+  suppressStartUntil = Date.now() + START_TRIGGER_SUPPRESS_MS
+
+  movePlayerTo({
+    newRelativePosition: BASE_TELEPORT_POSITION,
+    cameraTarget: {
+      x: BASE_TELEPORT_POSITION.x,
+      y: BASE_TELEPORT_POSITION.y + 1,
+      z: BASE_TELEPORT_POSITION.z
+    }
+  })
 }
 
 // ============================================
@@ -319,14 +380,26 @@ export async function main() {
   setupClient()
 
   // Set up callback for when players finish - update our best time if it's us
-  onPlayerFinished((displayName, time, _finishOrder) => {
+  onPlayerFinished((displayName, time, finishOrder) => {
     if (localPlayerName && displayName === localPlayerName) {
       console.log(`[Game] Our finish confirmed by server: ${time.toFixed(2)}s`)
       updateBestTime(time)
+      attemptState = AttemptState.FINISHED
+      attemptResult = 'WIN'
+      resultTitle = 'CONGRATS'
+      finishValidationStartedAt = 0
+      roundFinishOrder = finishOrder
+      roundFinishTime = time
       // Update result message with server-authoritative time
       resultMessage = `🏆 FINISHED! Time: ${time.toFixed(2)}s`
       resultTimestamp = Date.now()
     }
+  })
+
+  onAttemptRejected((stage, reason) => {
+    const title = stage === 'finish' ? 'ATTEMPT NOT COUNTED' : 'OOPS TRY AGAIN'
+    const message = stage === 'finish' ? `Your attempt did not count. ${reason}` : reason
+    rejectAttempt(message, title)
   })
 
   const knownPlayerWallets = new Set<string>()
@@ -414,37 +487,36 @@ export async function main() {
     if (coolBedSetupDone) return
     coolBedSetupDone = true
     coolBedEntity = entity
-    console.log('[Game] CoolBed found, adding click-to-Talk (MeshCollider + PointerEvents)')
+    console.log('[Game] CoolBed found, adding click-to-Talk')
 
     MeshCollider.setBox(entity, ColliderLayer.CL_POINTER)
 
-    PointerEvents.create(entity, {
-      pointerEvents: [
-        {
-          eventType: PointerEventType.PET_DOWN,
-          eventInfo: {
-            button: InputAction.IA_POINTER,
-            hoverText: 'Talk',
-            showFeedback: true,
-            maxDistance: 10
-          }
+    pointerEventsSystem.onPointerDown(
+      {
+        entity,
+        opts: {
+          button: InputAction.IA_POINTER,
+          hoverText: 'Talk',
+          showFeedback: true,
+          showHighlight: true,
+          maxDistance: 10
         }
-      ]
-    })
-
-    pointerEventsSystem.onPointerDown({ entity, opts: { button: InputAction.IA_POINTER } }, () => {
-      if (!Animator.has(entity)) return
-      const breathClip = Animator.getClipOrNull(entity, 'Breath')
-      const talkClip = Animator.getClipOrNull(entity, 'Talk')
-      if (!breathClip || !talkClip) return
-      if (coolBedPhase !== 'idle' && coolBedPhase !== 'talking') return
-      talkClip.playing = true
-      talkClip.speed = TALK_SPEED
-      talkClip.weight = 0
-      if (breathClip) breathClip.weight = 1
-      coolBedPhase = 'blendToTalk'
-      coolBedPhaseStartTime = Date.now()
-    })
+      },
+      () => {
+        if (!Animator.has(entity)) return
+        const breathClip = Animator.getClipOrNull(entity, 'Breath')
+        const talkClip = Animator.getClipOrNull(entity, 'Talk')
+        if (!breathClip || !talkClip) return
+        if (coolBedPhase !== 'idle' && coolBedPhase !== 'talking') return
+        triggerCoolBedDialog()
+        talkClip.playing = true
+        talkClip.speed = TALK_SPEED
+        talkClip.weight = 0
+        if (breathClip) breathClip.weight = 1
+        coolBedPhase = 'blendToTalk'
+        coolBedPhaseStartTime = Date.now()
+      }
+    )
   }
 
   function findCoolBedEntity(): Entity | null {
@@ -573,6 +645,20 @@ export async function main() {
 
   engine.addSystem(trackPlayerHeight, undefined, 'player-height-system')
   engine.addSystem(syncRoundState, undefined, 'round-sync-system')
+  engine.addSystem(
+    () => {
+      if (attemptState !== AttemptState.VALIDATING) return
+      if (finishValidationStartedAt === 0) return
+      if (Date.now() - finishValidationStartedAt < FINISH_VALIDATION_TIMEOUT_MS) return
+
+      rejectAttempt(
+        'Your attempt did not count. The server could not validate your finish.',
+        'ATTEMPT NOT COUNTED'
+      )
+    },
+    undefined,
+    'finish-validation-timeout-system'
+  )
 
   // ============================================
   // INITIALIZE UI
@@ -584,7 +670,7 @@ export async function main() {
   // BACKGROUND MUSIC
   // ============================================
 
-  setupBackgroundMusic('sounds/PixelSodaBar.mp3')
+  setupBackgroundMusic('assets/sounds/Lobby Drift.mp3')
 
   console.log('[Game] Setup complete')
 }
@@ -599,7 +685,7 @@ function setupBackgroundMusic(audioPath: string) {
   backgroundMusicEntity = engine.addEntity()
 
   Transform.create(backgroundMusicEntity, {
-    position: Vector3.create(40, 0, 40),
+    position: Vector3.create(28, 1, 53),
     scale: Vector3.One()
   })
 
@@ -607,22 +693,30 @@ function setupBackgroundMusic(audioPath: string) {
     audioClipUrl: audioPath,
     playing: true,
     loop: true,
-    volume: 1.0
+    volume: 1,
+    pitch: 1,
+    currentTime: 0,
+    global: true
   })
 
   engine.addSystem(
     () => {
       if (backgroundMusicEntity && AudioSource.has(backgroundMusicEntity)) {
-        const audio = AudioSource.get(backgroundMusicEntity)
-        if (!audio.playing && !audioStarted) {
-          AudioSource.getMutable(backgroundMusicEntity).playing = true
-        } else if (audio.playing && !audioStarted) {
+        const audio = AudioSource.getMutable(backgroundMusicEntity)
+
+        if (!audio.playing) {
+          audio.playing = true
+          console.log(`[Audio] Retrying background music playback: ${audio.audioClipUrl}`)
+        }
+
+        if (audio.playing && !audioStarted) {
           audioStarted = true
+          console.log(`[Audio] Background music started: ${audio.audioClipUrl}`)
         }
       }
     },
     undefined,
-    'backg round-music-system'
+    'background-music-system'
   )
 
   return backgroundMusicEntity

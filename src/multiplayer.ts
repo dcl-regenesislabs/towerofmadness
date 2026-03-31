@@ -22,6 +22,7 @@ import {
   WinnerEntry,
   TowerConfig
 } from './shared/schemas'
+import { CHUNK_START_ID, getChunkIdFromAssetPath } from './shared/chunks'
 import { getServerTime, isTimeSyncReady, getTimeSyncOffset } from './shared/timeSync'
 
 // Re-export types for compatibility
@@ -40,6 +41,7 @@ export { isServer } from '@dcl/sdk/network'
 
 // Callback for when any player finishes (includes server-authoritative time)
 let onPlayerFinishedCallback: ((displayName: string, time: number, finishOrder: number) => void) | null = null
+let onAttemptRejectedCallback: ((stage: string, reason: string) => void) | null = null
 
 export function setupClient() {
   // Listen for player finished broadcasts
@@ -68,10 +70,25 @@ export function setupClient() {
       cameraTarget: { x: data.x, y: data.y + 1, z: data.z }
     })
   })
+
+  room.onMessage('attemptRejected', (data) => {
+    const localIdentity = PlayerIdentityData.getOrNull(engine.PlayerEntity)
+    if (!localIdentity?.address) return
+    if (localIdentity.address.toLowerCase() !== data.address.toLowerCase()) return
+
+    console.log(`[Game] Attempt rejected during ${data.stage}: ${data.reason}`)
+    if (onAttemptRejectedCallback) {
+      onAttemptRejectedCallback(data.stage, data.reason)
+    }
+  })
 }
 
 export function onPlayerFinished(callback: (displayName: string, time: number, finishOrder: number) => void) {
   onPlayerFinishedCallback = callback
+}
+
+export function onAttemptRejected(callback: (stage: string, reason: string) => void) {
+  onAttemptRejectedCallback = callback
 }
 
 
@@ -197,20 +214,20 @@ export function getTowerChunksFromEntities(): string[] {
     const visibility = VisibilityComponent.get(entity)
     if (!visibility.visible) continue
 
-    // Derive chunkId from GltfContainer.src (e.g., "assets/chunks/Chunk01.glb" -> "Chunk01")
+    // Derive chunkId from any shared chunk asset path (e.g., "assets/chunks/Chunk01.glb" -> "Chunk01")
     const gltf = GltfContainer.get(entity)
-    const match = gltf.src.match(/assets\/chunks\/(\w+)\.glb/)
-    if (!match) continue
+    const chunkId = getChunkIdFromAssetPath(gltf.src)
+    if (!chunkId) continue
 
     const transform = Transform.get(entity)
-    chunks.push({ chunkId: match[1], y: transform.position.y })
+    chunks.push({ chunkId, y: transform.position.y })
   }
 
   // Sort by Y position (lowest first) and return chunk IDs
   chunks.sort((a, b) => a.y - b.y)
 
   // Add ChunkStart at the beginning (it's a static entity, not in the pool)
-  return ['ChunkStart', ...chunks.map((c) => c.chunkId)]
+  return [CHUNK_START_ID, ...chunks.map((c) => c.chunkId)]
 }
 
 export function getTowerConfig(): TowerConfig | null {

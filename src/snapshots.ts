@@ -33,10 +33,6 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
     }
     snapshotByWallet.set(normalized, entry)
     snapshots.unshift(entry)
-
-    if (snapshots.length > 12) {
-      snapshots.length = 12
-    }
   } else if (displayName && entry.displayName.startsWith('0x')) {
     entry.displayName = displayName
   }
@@ -140,11 +136,11 @@ function normalizeSnapshotUrl(url: string | null): string | null {
 
   if (trimmed.startsWith('ipfs://')) {
     const cid = trimmed.replace('ipfs://', '')
-    return cid ? `https://peer.decentraland.org/content/contents/${cid}` : null
+    return cid ? `${CATALYST_URL}/content/contents/${cid}` : null
   }
 
   if (trimmed.startsWith('baf') || trimmed.startsWith('Qm')) {
-    return `https://peer.decentraland.org/content/contents/${trimmed}`
+    return `${CATALYST_URL}/content/contents/${trimmed}`
   }
 
   if (!/^https?:\/\//i.test(trimmed)) return null
