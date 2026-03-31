@@ -15,9 +15,6 @@ const CATALYST_FALLBACKS = [
   'https://interconnected.online',
   'https://peer.decentral.io'
 ]
-const CATALYSTS = [CATALYST_URL, ...CATALYST_FALLBACKS]
-const DEFAULT_AVATAR_IMAGE = 'https://decentraland.org/images/male.png'
-const MIN_SNAPSHOT_IMAGE_BYTES = 512
 
 export async function requestPlayerSnapshot(wallet: string, displayName?: string): Promise<boolean> {
   if (!wallet) return false
@@ -64,30 +61,72 @@ export function getSnapshots(): SnapshotEntry[] {
 }
 
 async function getPlayerSnapshot(wallet: string): Promise<string | null> {
+  // Try to get a direct content URL (bypasses Cloudflare CDN - avoids 525 errors)
+  const contentUrl = await getContentFaceUrl(wallet)
+  if (contentUrl) {
+    console.log('[Snapshots] OK direct content URL for', wallet, contentUrl)
+    return contentUrl
+  }
+
+  console.log('[Snapshots] WARN getContentFaceUrl failed for', wallet, '- falling back to lambdas/profiles')
+
+  // Fallback: lambdas/profiles (may return profile-images.decentraland.org CDN URLs)
   const profile = await fetchProfileWithFallback(wallet)
+  if (!profile) {
+    console.log('[Snapshots] FAIL all peers failed for', wallet, '- showing placeholder')
+    return null
+  }
+
   const avatar = profile?.avatars?.[0]?.avatar
-  const snapshots = avatar?.snapshots ?? {}
-  const rawFace256 = snapshots?.face256 ?? null
-  const rawFace = snapshots?.face ?? null
-  const faceCandidates = buildSnapshotCandidates(rawFace)
-  const face256Candidates = buildSnapshotCandidates(rawFace256)
-  const chosen =
-    (await resolveReachableSnapshotUrl([...faceCandidates, ...face256Candidates])) ?? DEFAULT_AVATAR_IMAGE
-  const chosenCid = extractCidFromUrl(chosen)
+  const snapshotData = avatar?.snapshots ?? {}
+  const rawFace256 = snapshotData?.face256 ?? null
+  const rawFace = snapshotData?.face ?? null
+  const normalizedFace256 = normalizeSnapshotUrl(rawFace256)
+  const normalizedFace = normalizeSnapshotUrl(rawFace)
 
-  console.log(
-    '[Snapshots] snapshot details',
-    wallet,
-    JSON.stringify({
-      raw: { face256: rawFace256, face: rawFace },
-      candidates: { face: faceCandidates, face256: face256Candidates },
-      chosen,
-      cid: chosenCid,
-      usedDefault: chosen === DEFAULT_AVATAR_IMAGE
-    })
-  )
+  if (!normalizedFace256 && rawFace256) {
+    console.log('[Snapshots] WARN face256 URL rejected (CDN):', rawFace256)
+  }
+  if (!normalizedFace && rawFace) {
+    console.log('[Snapshots] WARN face URL rejected (CDN):', rawFace)
+  }
 
+  const chosen = normalizedFace256 ?? normalizedFace ?? null
+  if (chosen) {
+    console.log('[Snapshots] OK fallback peer URL for', wallet, chosen)
+  } else {
+    console.log('[Snapshots] FAIL no valid URL found for', wallet, '- showing placeholder')
+  }
   return chosen
+}
+
+async function getContentFaceUrl(wallet: string): Promise<string | null> {
+  const peers = [CATALYST_URL, ...CATALYST_FALLBACKS]
+  for (const base of peers) {
+    try {
+      const res = await fetch(`${base}/content/entities/profile?pointer=${wallet}`)
+      if (!res.ok) {
+        console.log('[Snapshots] WARN', base, 'returned', res.status, 'for profile', wallet)
+        continue
+      }
+      const entities = await res.json()
+      const content: Array<{ file: string; hash: string }> = entities?.[0]?.content
+      if (!Array.isArray(content)) {
+        console.log('[Snapshots] WARN', base, 'returned no content files for', wallet)
+        continue
+      }
+      const face256 = content.find((f) => f.file === 'face256.png')
+      const face128 = content.find((f) => f.file === 'face128.png')
+      const face = content.find((f) => f.file === 'face.png')
+      const hash = face256?.hash ?? face128?.hash ?? face?.hash
+      if (hash) return `${base}/content/contents/${hash}`
+      console.log('[Snapshots] WARN', base, 'entity has no face file for', wallet, '- files:', content.map((f) => f.file).join(', '))
+    } catch (err) {
+      console.log('[Snapshots] WARN', base, 'fetch error for', wallet, String(err))
+      continue
+    }
+  }
+  return null
 }
 
 function normalizeSnapshotUrl(url: string | null): string | null {
@@ -107,64 +146,6 @@ function normalizeSnapshotUrl(url: string | null): string | null {
   if (!/^https?:\/\//i.test(trimmed)) return null
 
   return trimmed
-}
-
-function extractCidFromUrl(url: string): string | null {
-  const match = url.match(/\/content\/contents\/([^/?#]+)/i)
-  return match?.[1] ?? null
-}
-
-function buildSnapshotCandidates(url: string | null): string[] {
-  const normalized = normalizeSnapshotUrl(url)
-  if (!normalized) return []
-
-  const cid = extractCidFromUrl(normalized)
-  if (!cid) return [normalized]
-
-  return CATALYSTS.map((base) => `${base}/content/contents/${cid}`)
-}
-
-async function resolveReachableSnapshotUrl(urls: string[]): Promise<string | null> {
-  const seen = new Set<string>()
-
-  for (const url of urls) {
-    if (!url || seen.has(url)) continue
-    seen.add(url)
-
-    if (await isReachableSnapshotUrl(url)) {
-      return url
-    }
-  }
-
-  return null
-}
-
-async function isReachableSnapshotUrl(url: string): Promise<boolean> {
-  try {
-    const res = await fetch(url)
-    if (!res.ok) {
-      console.log('[Snapshots] Snapshot probe failed', url, res.status)
-      return false
-    }
-
-    const contentType = res.headers.get('content-type')?.toLowerCase() ?? ''
-    if (contentType && !contentType.startsWith('image/')) {
-      console.log('[Snapshots] Snapshot probe returned non-image content', url, contentType)
-      return false
-    }
-
-    const contentLengthHeader = res.headers.get('content-length')
-    const contentLength = contentLengthHeader ? Number(contentLengthHeader) : NaN
-    if (Number.isFinite(contentLength) && contentLength > 0 && contentLength < MIN_SNAPSHOT_IMAGE_BYTES) {
-      console.log('[Snapshots] Snapshot probe returned tiny image', url, contentLength)
-      return false
-    }
-
-    return true
-  } catch (err) {
-    console.log('[Snapshots] Snapshot probe error', url, err)
-    return false
-  }
 }
 
 async function fetchProfilesFrom(base: string, wallet: string) {
