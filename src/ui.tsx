@@ -106,7 +106,9 @@ const TowerProgressBar = () => {
   const screenWidth = uiCanvasInfo?.width ?? 1920 * s
   const snapshots = getSnapshots()
   const snapshotByWallet = new Map(
-    snapshots.map((entry) => [entry.wallet.toLowerCase(), entry.snapshotUrl])
+    snapshots
+      .filter((entry) => entry.status === 'ok' && entry.snapshotUrl)
+      .map((entry) => [entry.wallet.toLowerCase(), entry.snapshotUrl])
   )
   const localWallet = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
 
@@ -237,15 +239,11 @@ const TowerProgressBar = () => {
                 positionType: 'absolute',
                 position: { left: 2 * s, top: 2 * s }
               }}
-              uiBackground={
-                snapshotUrl
-                  ? {
-                      color: Color4.White(),
-                      texture: { src: snapshotUrl },
-                      textureMode: 'stretch'
-                    }
-                  : { color: Color4.create(0.2, 0.2, 0.2, 0.9) }
-              }
+              uiBackground={{
+                color: Color4.White(),
+                texture: { src: snapshotUrl ?? 'assets/images/emoji_start.png' },
+                textureMode: 'stretch'
+              }}
             />
 
             {isLocal && (
