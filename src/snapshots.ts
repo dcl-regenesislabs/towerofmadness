@@ -8,6 +8,7 @@ export type SnapshotEntry = {
 
 const snapshots: SnapshotEntry[] = []
 const snapshotByWallet = new Map<string, SnapshotEntry>()
+const hiddenSnapshotWallets = new Set<string>()
 
 const CATALYST_URL = 'https://peer.decentraland.org'
 const CATALYST_FALLBACKS = [
@@ -20,6 +21,7 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
   if (!wallet) return false
 
   const normalized = wallet.toLowerCase()
+  hiddenSnapshotWallets.delete(normalized)
   let entry = snapshotByWallet.get(normalized)
   const isNew = !entry
 
@@ -58,6 +60,22 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
 
 export function getSnapshots(): SnapshotEntry[] {
   return snapshots
+}
+
+export function setSnapshotHidden(wallet: string, hidden: boolean) {
+  if (!wallet) return
+
+  const normalized = wallet.toLowerCase()
+  if (hidden) {
+    hiddenSnapshotWallets.add(normalized)
+  } else {
+    hiddenSnapshotWallets.delete(normalized)
+  }
+}
+
+export function isSnapshotHidden(wallet: string): boolean {
+  if (!wallet) return false
+  return hiddenSnapshotWallets.has(wallet.toLowerCase())
 }
 
 async function getPlayerSnapshot(wallet: string): Promise<string | null> {

@@ -51,7 +51,7 @@ import {
   getTowerChunksFromEntities
 } from "./multiplayer"
 import { CHUNK_END_ID, CHUNK_START_ID, MIDDLE_CHUNK_IDS } from "./shared/chunks"
-import { getSnapshots } from "./snapshots"
+import { getSnapshots, isSnapshotHidden } from "./snapshots"
 import { OutlinedText, OUTLINE_OFFSETS_16, OUTLINE_OFFSETS_8 } from "./outlinedTextComponent"
 
 export function setupUi() {
@@ -164,7 +164,7 @@ const TowerProgressBar = () => {
   const snapshots = getSnapshots()
   const snapshotByWallet = new Map(
     snapshots
-      .filter((entry) => entry.status === 'ok' && entry.snapshotUrl)
+      .filter((entry) => !isSnapshotHidden(entry.wallet) && entry.status === 'ok' && entry.snapshotUrl)
       .map((entry) => [entry.wallet.toLowerCase(), entry.snapshotUrl])
   )
   const localWallet = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
@@ -194,7 +194,9 @@ const TowerProgressBar = () => {
   }
 
   const rawPlayers = getLocalPlayerHeights(false)
-  const displayedPlayers = [...rawPlayers].sort((a, b) => a.address.localeCompare(b.address))
+  const displayedPlayers = rawPlayers
+    .filter((player) => !isSnapshotHidden(player.address))
+    .sort((a, b) => a.address.localeCompare(b.address))
 
   // Diagnostic: detect player joins/leaves and prevented reorders
   const stableOrder = displayedPlayers.map((p) => p.address)
