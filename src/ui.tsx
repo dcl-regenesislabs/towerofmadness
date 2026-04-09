@@ -51,7 +51,7 @@ import {
   getTowerChunksFromEntities
 } from "./multiplayer"
 import { CHUNK_END_ID, CHUNK_START_ID, MIDDLE_CHUNK_IDS } from "./shared/chunks"
-import { getSnapshots } from "./snapshots"
+import { getSnapshots, isSnapshotHidden } from "./snapshots"
 import { OutlinedText, OUTLINE_OFFSETS_16, OUTLINE_OFFSETS_8 } from "./outlinedTextComponent"
 
 export function setupUi() {
@@ -151,8 +151,13 @@ function getWinnerTextColor(index: number, hasEntry: boolean, fallbackColor: Col
   return fallbackColor
 }
 
+// Diagnostic state for progress bar reorder detection
+let _prevStableOrder: string[] = []
+let _prevUnstableOrder: string[] = []
+let _lastReorderLogMs = 0
+
 // Tower Progress Bar Component
-const TowerProgressBar = () => { 
+const TowerProgressBar = () => {
   const s = getScaleUIFactor()
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
   const screenWidth = uiCanvasInfo?.width ?? 1920 * s
@@ -188,7 +193,24 @@ const TowerProgressBar = () => {
     return (clampedHeight / totalHeight) * BAR_WIDTH
   }
 
-  const displayedPlayers = getLocalPlayerHeights(false)
+  const rawPlayers = getLocalPlayerHeights(false)
+  const displayedPlayers = rawPlayers
+    .filter((player) => !isSnapshotHidden(player.address))
+    .sort((a, b) => a.address.localeCompare(b.address))
+
+  // Diagnostic: detect player joins/leaves and prevented reorders
+  const stableOrder = displayedPlayers.map((p) => p.address)
+  const unstableOrder = rawPlayers.map((p) => p.address)
+  if (stableOrder.length !== _prevStableOrder.length || stableOrder.some((a, i) => a !== _prevStableOrder[i])) {
+    console.log(`[ProgressBar] Players changed ${_prevStableOrder.length}→${stableOrder.length}:`, stableOrder.join(', '))
+    _prevStableOrder = stableOrder
+  }
+  const nowMs = Date.now()
+  if (unstableOrder.length === _prevUnstableOrder.length && unstableOrder.some((a, i) => a !== _prevUnstableOrder[i]) && nowMs - _lastReorderLogMs > 2000) {
+    console.log('[ProgressBar] Prevented height-sort reorder (Godot would recreate nodes):', unstableOrder.join(', '))
+    _lastReorderLogMs = nowMs
+  }
+  _prevUnstableOrder = unstableOrder
 
   return (
     <UiEntity

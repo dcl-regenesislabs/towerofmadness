@@ -8,7 +8,9 @@ export type SnapshotEntry = {
 
 const snapshots: SnapshotEntry[] = []
 const snapshotByWallet = new Map<string, SnapshotEntry>()
+const hiddenSnapshotWallets = new Set<string>()
 
+const ASSET_BUNDLE_REGISTRY_URL = 'https://asset-bundle-registry.decentraland.org'
 const CATALYST_URL = 'https://peer.decentraland.org'
 const CATALYST_FALLBACKS = [
   'https://peer-ec2.decentraland.org',
@@ -60,7 +62,31 @@ export function getSnapshots(): SnapshotEntry[] {
   return snapshots
 }
 
+export function setSnapshotHidden(wallet: string, hidden: boolean) {
+  if (!wallet) return
+
+  const normalized = wallet.toLowerCase()
+  if (hidden) {
+    hiddenSnapshotWallets.add(normalized)
+  } else {
+    hiddenSnapshotWallets.delete(normalized)
+  }
+}
+
+export function isSnapshotHidden(wallet: string): boolean {
+  if (!wallet) return false
+  return hiddenSnapshotWallets.has(wallet.toLowerCase())
+}
+
 async function getPlayerSnapshot(wallet: string): Promise<string | null> {
+  const registryUrl = await getRegistryFaceUrl(wallet)
+  if (registryUrl) {
+    console.log('[Snapshots] OK registry URL for', wallet, registryUrl)
+    return registryUrl
+  }
+
+  console.log('[Snapshots] WARN registry lookup failed for', wallet, '- falling back to catalyst peers')
+
   // Try to get a direct content URL (bypasses Cloudflare CDN - avoids 525 errors)
   const contentUrl = await getContentFaceUrl(wallet)
   if (contentUrl) {
@@ -98,6 +124,54 @@ async function getPlayerSnapshot(wallet: string): Promise<string | null> {
     console.log('[Snapshots] FAIL no valid URL found for', wallet, '- showing placeholder')
   }
   return chosen
+}
+
+async function getRegistryFaceUrl(wallet: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${ASSET_BUNDLE_REGISTRY_URL}/profiles`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json'
+      },
+      body: JSON.stringify({ ids: [wallet] })
+    })
+
+    if (!res.ok) {
+      console.log('[Snapshots][Registry] WARN returned', res.status, 'for', wallet)
+      return null
+    }
+
+    const profiles = await res.json()
+    const profile = Array.isArray(profiles) ? profiles[0] : null
+    const avatar = profile?.avatars?.[0]
+    const rawFace256 = avatar?.avatar?.snapshots?.face256 ?? null
+    const rawFace = avatar?.avatar?.snapshots?.face ?? null
+    const rawBody = avatar?.avatar?.snapshots?.body ?? null
+    const normalizedFace256 = normalizeSnapshotUrl(rawFace256)
+    const normalizedFace = normalizeSnapshotUrl(rawFace)
+
+    console.log(
+      '[Snapshots][Registry] profile for',
+      wallet,
+      JSON.stringify({
+        name: avatar?.name ?? null,
+        hasAvatar: !!avatar?.avatar,
+        face256: rawFace256,
+        face: rawFace,
+        body: rawBody
+      })
+    )
+
+    if (normalizedFace256) return normalizedFace256
+    if (normalizedFace) return normalizedFace
+
+    console.log('[Snapshots][Registry] WARN no valid face snapshot for', wallet)
+    return null
+  } catch (err) {
+    console.log('[Snapshots][Registry] WARN fetch error for', wallet, String(err))
+    return null
+  }
 }
 
 async function getContentFaceUrl(wallet: string): Promise<string | null> {

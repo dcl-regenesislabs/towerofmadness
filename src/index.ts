@@ -18,6 +18,7 @@ import {
 } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
+import { onEnterScene, onLeaveScene } from '@dcl/sdk/players'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
@@ -44,7 +45,7 @@ import {
   WinnerEntry,
   TowerConfig
 } from './multiplayer'
-import { requestPlayerSnapshot } from './snapshots'
+import { requestPlayerSnapshot, setSnapshotHidden } from './snapshots'
 import { TriggerEndComponent } from './shared/schemas'
 
 // ============================================
@@ -402,6 +403,18 @@ export async function main() {
     rejectAttempt(message, title)
   })
 
+  onEnterScene((player) => {
+    const wallet = player.userId?.toLowerCase()
+    if (!wallet) return
+    setSnapshotHidden(wallet, false)
+  })
+
+  onLeaveScene((userId) => {
+    const wallet = userId?.toLowerCase()
+    if (!wallet) return
+    setSnapshotHidden(wallet, true)
+  })
+
   const knownPlayerWallets = new Set<string>()
   engine.addSystem(
     () => {
@@ -410,6 +423,7 @@ export async function main() {
         if (!wallet || knownPlayerWallets.has(wallet)) continue
 
         knownPlayerWallets.add(wallet)
+        setSnapshotHidden(wallet, false)
         const avatarBase = AvatarBase.getOrNull(entity)
         requestPlayerSnapshot(wallet, avatarBase?.name).then((ok) => {
           if (!ok) knownPlayerWallets.delete(wallet)
