@@ -22,7 +22,6 @@ export async function requestPlayerSnapshot(wallet: string, displayName?: string
   if (!wallet) return false
 
   const normalized = wallet.toLowerCase()
-  hiddenSnapshotWallets.delete(normalized)
   let entry = snapshotByWallet.get(normalized)
   const isNew = !entry
 

@@ -164,7 +164,7 @@ const TowerProgressBar = () => {
   const snapshots = getSnapshots()
   const snapshotByWallet = new Map(
     snapshots
-      .filter((entry) => !isSnapshotHidden(entry.wallet) && entry.status === 'ok' && entry.snapshotUrl)
+      .filter((entry) => entry.status === 'ok' && entry.snapshotUrl)
       .map((entry) => [entry.wallet.toLowerCase(), entry.snapshotUrl])
   )
   const localWallet = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
