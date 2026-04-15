@@ -381,7 +381,8 @@ export async function main() {
 
   InputModifier.create(engine.PlayerEntity, {
     mode: InputModifier.Mode.Standard({
-      disableDoubleJump: true
+      disableDoubleJump: true,
+      disableGliding: true
     })
   })
 
