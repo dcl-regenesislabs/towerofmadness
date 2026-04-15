@@ -53,6 +53,7 @@ import {
 import { CHUNK_END_ID, CHUNK_START_ID, MIDDLE_CHUNK_IDS } from "./shared/chunks"
 import { getSnapshots, isSnapshotHidden } from "./snapshots"
 import { OutlinedText, OUTLINE_OFFSETS_16, OUTLINE_OFFSETS_8 } from "./outlinedTextComponent"
+import { formatPlayerNameWithWallet } from "./playerNames"
 
 export function setupUi() {
   ReactEcsRenderer.setUiRenderer(GameUI)
@@ -131,8 +132,8 @@ function getWinnerFontSize(index: number): number {
   return 22
 }
 
-function truncateWinnerName(name: string): string {
-  return name.length > 8 ? `${name.slice(0, 8)}...` : name
+function truncateWinnerName(name: string, wallet?: string): string {
+  return formatPlayerNameWithWallet(name, wallet, 12)
 }
 
 function formatRoundResultLabel(
@@ -993,9 +994,7 @@ const GameUI = () => {
 
           {leaderboard.slice(0, 10).map((player, index) => {
             const medal = index === 0 ? '1.' : index === 1 ? '2.' : index === 2 ? '3.' : `${index + 1}.`
-            const name = player.displayName.length > 10
-              ? player.displayName.substring(0, 10) + '..'
-              : player.displayName
+            const name = formatPlayerNameWithWallet(player.displayName, player.address, 14)
 
             // Always show all-time bests
             const hasFinished = player.allTimeFinishCount > 0
@@ -1062,9 +1061,7 @@ const GameUI = () => {
             .slice(0, 3)
             .map((player, index) => {
             const medal = index === 0 ? '1.' : index === 1 ? '2.' : '3.'
-            const name = player.displayName.length > 10
-              ? player.displayName.substring(0, 10) + '..'
-              : player.displayName
+            const name = formatPlayerNameWithWallet(player.displayName, player.address, 14)
 
             const statsDisplay = `${player.allTimeBestTime.toFixed(2)}s`
 
@@ -1129,7 +1126,7 @@ const GameUI = () => {
             const display = hasEntry
               ? formatRoundResultLabel(formatTimeMs, winner.time, winner.height)
               : '--:--.--'
-            const name = hasEntry ? truncateWinnerName(winner.displayName) : 'No entries'
+            const name = hasEntry ? truncateWinnerName(winner.displayName, winner.address) : 'No entries'
 
             return (
               <UiEntity

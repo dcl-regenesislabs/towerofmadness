@@ -11,11 +11,12 @@ import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
 import { EntityNames } from '../assets/scene/entity-names'
 import { PointLeaderboardEntry } from './multiplayer'
 import { createPointLeaderboardPanel, setPointTabData } from './PointLeaderboardPanel'
+import { formatPlayerNameWithWallet } from './playerNames'
 
 const POINT_LEADERBOARD_TEXT_OFFSET = Vector3.create(1.6, 5.5, 0.8)
 const POINT_LEADERBOARD_TEXT_ROTATION = Quaternion.fromEulerDegrees(0, 180, 0)
 const POINT_LEADERBOARD_TEXT_SCALE = Vector3.create(1.2, 1.2, 1)
-const POINT_LEADERBOARD_NAME_WIDTH = 10
+const POINT_LEADERBOARD_NAME_WIDTH = 12
 const POINT_LEADERBOARD_HEADER_GAP = 3
 const POINT_LEADERBOARD_HEADER_BODY_GAP = 0.65
 
@@ -62,10 +63,7 @@ export function setupWorldPointLeaderboard(
 
     const lines = topEntries.map((player, index) => {
       const rank = `${index + 1}.`.padEnd(3)
-      const name = player.displayName.length > POINT_LEADERBOARD_NAME_WIDTH
-        ? player.displayName.substring(0, POINT_LEADERBOARD_NAME_WIDTH) + '..'
-        : player.displayName
-
+      const name = formatPlayerNameWithWallet(player.displayName, player.address, POINT_LEADERBOARD_NAME_WIDTH)
       const namePadded = name.padEnd(POINT_LEADERBOARD_NAME_WIDTH)
       return `${rank} ${namePadded}  ${Math.floor(player.points)}`
     })
@@ -134,7 +132,7 @@ export function setupWorldPointLeaderboard(
       .slice(0, 10)
 
     return topEntries.map((player) => ({
-      name: player.displayName,
+      name: formatPlayerNameWithWallet(player.displayName, player.address, POINT_LEADERBOARD_NAME_WIDTH),
       points: `${Math.floor(player.points)}`
     }))
   }
@@ -146,7 +144,7 @@ export function setupWorldPointLeaderboard(
       .slice(0, 10)
 
     return topEntries.map((player) => ({
-      name: player.displayName,
+      name: formatPlayerNameWithWallet(player.displayName, player.address, POINT_LEADERBOARD_NAME_WIDTH),
       points: `${Math.floor(player.points)}`
     }))
   }

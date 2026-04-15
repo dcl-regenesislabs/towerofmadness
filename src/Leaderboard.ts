@@ -11,11 +11,12 @@ import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
 import { EntityNames } from '../assets/scene/entity-names'
 import { LeaderboardEntry } from './multiplayer'
 import { createLeaderboardPanel, setTabData } from './LeaderboardPanel'
+import { formatPlayerNameWithWallet } from './playerNames'
 
 const LEADERBOARD_TEXT_OFFSET = Vector3.create(1.6, 5.5, 0.8)
 const LEADERBOARD_TEXT_ROTATION = Quaternion.fromEulerDegrees(0, 180, 0)
 const LEADERBOARD_TEXT_SCALE = Vector3.create(1.2, 1.2, 1)
-const LEADERBOARD_NAME_WIDTH = 10
+const LEADERBOARD_NAME_WIDTH = 12
 const LEADERBOARD_HEADER_GAP = 4
 const LEADERBOARD_HEADER_BODY_GAP = 0.65
 
@@ -58,10 +59,7 @@ export function setupWorldLeaderboard(
 
     const lines = finishedEntries.map((player, index) => {
       const rank = `${index + 1}.`.padEnd(3)
-      const name = player.displayName.length > LEADERBOARD_NAME_WIDTH
-        ? player.displayName.substring(0, LEADERBOARD_NAME_WIDTH) + '..'
-        : player.displayName
-
+      const name = formatPlayerNameWithWallet(player.displayName, player.address, LEADERBOARD_NAME_WIDTH)
       const namePadded = name.padEnd(LEADERBOARD_NAME_WIDTH)
 
       const hasFinished = player.allTimeFinishCount > 0
@@ -136,7 +134,7 @@ export function setupWorldLeaderboard(
       .slice(0, 10)
 
     return finishedEntries.map((player) => ({
-      name: player.displayName,
+      name: formatPlayerNameWithWallet(player.displayName, player.address, LEADERBOARD_NAME_WIDTH),
       time: `${player.allTimeBestTime.toFixed(2)}s`
     }))
   }
@@ -148,7 +146,7 @@ export function setupWorldLeaderboard(
       .slice(0, 10)
 
     return finishedEntries.map((player) => ({
-      name: player.displayName,
+      name: formatPlayerNameWithWallet(player.displayName, player.address, LEADERBOARD_NAME_WIDTH),
       time: `${player.weeklyBestTime.toFixed(2)}s`
     }))
   }
