@@ -14,6 +14,7 @@ import {
   MeshRenderer,
   Material,
   InputAction,
+  InputModifier,
   pointerEventsSystem
 } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
@@ -377,6 +378,12 @@ export async function main() {
   // ============================================
   // CLIENT SETUP
   // ============================================
+
+  InputModifier.create(engine.PlayerEntity, {
+    mode: InputModifier.Mode.Standard({
+      disableDoubleJump: true
+    })
+  })
 
   setupClient()
 
