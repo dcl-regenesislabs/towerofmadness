@@ -1,4 +1,4 @@
-import { engine, Entity, Transform, GltfContainer, VisibilityComponent, MeshRenderer, Material } from '@dcl/sdk/ecs'
+import { engine, Entity, Transform, GltfContainer, VisibilityComponent, MeshRenderer, Material, ColliderLayer } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { isServer, syncEntity } from '@dcl/sdk/network'
 import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
@@ -37,8 +37,24 @@ function protectServerEntity(entity: Entity, components: ComponentWithValidation
   }
 }
 
+function resetTowerChunkEntity(entity: Entity) {
+  const gltf = GltfContainer.getMutable(entity)
+  gltf.src = ''
+  gltf.visibleMeshesCollisionMask = undefined
+  gltf.invisibleMeshesCollisionMask = undefined
+  VisibilityComponent.getMutable(entity).visible = false
+}
+
+function configureTowerChunkEntity(entity: Entity, src: string) {
+  const gltf = GltfContainer.getMutable(entity)
+  gltf.src = src
+  gltf.visibleMeshesCollisionMask = 0
+  gltf.invisibleMeshesCollisionMask = ColliderLayer.CL_PHYSICS
+  VisibilityComponent.getMutable(entity).visible = true
+}
+
 // Constants
-const BASE_TIMER = 420 // 7 minutes
+const BASE_TIMER = 30 // debug: 30 seconds
 const CHUNK_HEIGHT = 10.821
 const TOWER_X = 40
 const TOWER_Z = 40
@@ -420,7 +436,7 @@ export class GameState {
   private destroyTower() {
     // Hide all pooled entities using VisibilityComponent
     for (const entity of this.towerEntityPool) {
-      VisibilityComponent.getMutable(entity).visible = false
+      resetTowerChunkEntity(entity)
     }
     this.towerEntities = []
     console.log('[Server] Tower hidden')
@@ -440,8 +456,7 @@ export class GameState {
       transform.rotation = Quaternion.fromEulerDegrees(0, rotationY, 0)
       transform.scale = Vector3.One()
 
-      GltfContainer.getMutable(entity).src = getChunkAssetPath(chunkIds[i])
-      VisibilityComponent.getMutable(entity).visible = true
+      configureTowerChunkEntity(entity, getChunkAssetPath(chunkIds[i]))
 
       this.towerEntities.push(entity)
     }
@@ -456,8 +471,7 @@ export class GameState {
     endTransform.rotation = Quaternion.fromEulerDegrees(0, endRotationY, 0)
     endTransform.scale = Vector3.One()
 
-    GltfContainer.getMutable(endEntity).src = getChunkAssetPath(CHUNK_END_ID)
-    VisibilityComponent.getMutable(endEntity).visible = true
+    configureTowerChunkEntity(endEntity, getChunkAssetPath(CHUNK_END_ID))
     // Ensure only the current end entity has the ChunkEnd tag
     for (const entity of this.towerEntityPool) {
       if (ChunkEndComponent.has(entity)) ChunkEndComponent.deleteFrom(entity)
@@ -480,7 +494,7 @@ export class GameState {
 
     // Hide unused pool entities (if fewer chunks this round)
     for (let i = chunkIds.length + 1; i < this.towerEntityPool.length; i++) {
-      VisibilityComponent.getMutable(this.towerEntityPool[i]).visible = false
+      resetTowerChunkEntity(this.towerEntityPool[i])
     }
 
     // Update tower config for UI (include ChunkStart at the beginning)
