@@ -418,8 +418,11 @@ export class GameState {
 
   // Tower management
   private destroyTower() {
-    // Hide all pooled entities using VisibilityComponent
     for (const entity of this.towerEntityPool) {
+      // Reset src to empty string so CRDT always emits a delta when createTower assigns a new src.
+      // Without this, if the same chunk asset is reused across rounds the CRDT sees no change and
+      // some clients skip reloading the GLTF, losing colliders on those chunks.
+      GltfContainer.getMutable(entity).src = ''
       VisibilityComponent.getMutable(entity).visible = false
     }
     this.towerEntities = []
