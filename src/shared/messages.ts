@@ -45,6 +45,27 @@ export const Messages = {
     x: Schemas.Number,
     y: Schemas.Number,
     z: Schemas.Number
+  }),
+
+  // Admin -> Server: Start a tournament (only accepted from authorized wallets)
+  adminStartTournament: Schemas.Map({
+    durationMinutes: Schemas.Number,
+    prizeMANA: Schemas.Number
+  }),
+
+  // Server -> All clients: Tournament started
+  tournamentStarted: Schemas.Map({
+    tournamentId: Schemas.String,
+    endTime: Schemas.Int64,
+    prizeMANA: Schemas.Number
+  }),
+
+  // Server -> All clients: Tournament ended
+  tournamentEnded: Schemas.Map({
+    winnerAddress: Schemas.String,
+    winnerName: Schemas.String,
+    winnerPoints: Schemas.Number,
+    prizeMANA: Schemas.Number
   })
 }
 

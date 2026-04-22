@@ -131,6 +131,34 @@ ChunkComponent.validateBeforeChange((value) => {
 })
 
 // ============================================
+// TOURNAMENT COMPONENT (Server-authoritative)
+// ============================================
+export const TournamentComponent = engine.defineComponent('tower:Tournament', {
+  active: Schemas.Boolean,
+  tournamentId: Schemas.String,
+  endTime: Schemas.Int64,         // epoch ms when tournament ends
+  prizeMANA: Schemas.Number,
+  winnerAddress: Schemas.String,  // filled when tournament ends
+  winnerName: Schemas.String,
+  winnerPoints: Schemas.Number,
+  paymentTxHash: Schemas.String   // filled when blockchain confirms
+})
+TournamentComponent.validateBeforeChange((value) => {
+  return value.senderAddress === AUTH_SERVER_PEER_ID
+})
+
+export type TournamentState = {
+  active: boolean
+  tournamentId: string
+  endTime: number
+  prizeMANA: number
+  winnerAddress: string
+  winnerName: string
+  winnerPoints: number
+  paymentTxHash: string
+}
+
+// ============================================
 // CHUNK END COMPONENT (Empty tag for the ChunkEnd entity)
 // ============================================
 export const ChunkEndComponent = engine.defineComponent('tower:ChunkEnd', {})

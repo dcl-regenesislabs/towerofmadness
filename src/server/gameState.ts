@@ -3,12 +3,15 @@ import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { isServer, syncEntity } from '@dcl/sdk/network'
 import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
 import { Storage } from '@dcl/sdk/server'
+import { ethers } from 'ethers'
+import { TOURNAMENT_CONFIG } from './tournamentConfig'
 import {
   RoundStateComponent,
   LeaderboardComponent,
   PointLeaderboardComponent,
   WinnersComponent,
   TowerConfigComponent,
+  TournamentComponent,
   ChunkComponent,
   ChunkEndComponent,
   TriggerEndComponent,
@@ -52,6 +55,7 @@ const POINTS_GLOBAL_LEADERBOARD_KEY = 'globalPointLeaderboard'
 const POINTS_GLOBAL_LEADERBOARD_SIZE = 10
 const POINTS_WEEKLY_LEADERBOARD_KEY = 'weeklyPointLeaderboard'
 const POINTS_WEEKLY_LEADERBOARD_SIZE = 10
+const TOURNAMENT_STATE_KEY = 'tournamentState'
 
 function getWeekStartKeyUTC(now: number = Date.now()): string {
   const d = new Date(now)
@@ -160,6 +164,7 @@ export class GameState {
   public winnersEntity!: Entity
   public towerConfigEntity!: Entity
   public triggerEndEntity!: Entity
+  public tournamentEntity!: Entity
 
   // Tower entities (synced to clients)
   private towerEntities: Entity[] = []
@@ -182,6 +187,13 @@ export class GameState {
   private weeklyPointsMetaKey: string = getWeekStartKeyUTC()
   private lastAllTimePointsKey: string = ''
   private lastWeeklyPointsKey: string = ''
+
+  // Tournament state (server-only)
+  public tournamentActive: boolean = false
+  private tournamentEndTime: number = 0
+  private tournamentPrizeMANA: number = 0
+  private tournamentId: string = ''
+  private tournamentEnding: boolean = false
 
   public static getInstance(): GameState {
     if (!GameState.instance) {
@@ -230,6 +242,20 @@ export class GameState {
       weeklyPlayers: []
     })
     syncEntity(this.pointLeaderboardEntity, [PointLeaderboardComponent.componentId])
+
+    // Create tournament entity
+    this.tournamentEntity = engine.addEntity()
+    TournamentComponent.create(this.tournamentEntity, {
+      active: false,
+      tournamentId: '',
+      endTime: 0,
+      prizeMANA: 0,
+      winnerAddress: '',
+      winnerName: '',
+      winnerPoints: 0,
+      paymentTxHash: ''
+    })
+    syncEntity(this.tournamentEntity, [TournamentComponent.componentId])
 
     // Create tower config entity
     this.towerConfigEntity = engine.addEntity()
@@ -292,6 +318,7 @@ export class GameState {
     void this.loadWeeklyLeaderboard()
     void this.loadGlobalPointLeaderboard()
     void this.loadWeeklyPointLeaderboard()
+    void this.restoreTournamentState()
   }
 
   // Player management (normalize address to lowercase for consistency)
@@ -1005,6 +1032,164 @@ export class GameState {
       console.log(`[Server][Storage] Saved weekly point leaderboard: ${topEntries.length} entries`)
     } catch (error) {
       console.error('[Server][Storage] Failed to save weekly point leaderboard:', error)
+    }
+  }
+
+  // ============================================
+  // TOURNAMENT
+  // ============================================
+
+  startTournament(durationMinutes: number, prizeMANA: number) {
+    this.tournamentId = `tournament_${Date.now()}`
+    this.tournamentEndTime = Date.now() + durationMinutes * 60 * 1000
+    this.tournamentPrizeMANA = prizeMANA
+    this.tournamentActive = true
+    this.tournamentEnding = false
+
+    // Reset weekly points so everyone starts from 0
+    this.weeklyPoints.clear()
+    this.weeklyPointsMetaKey = getWeekStartKeyUTC()
+    this.lastWeeklyPointsKey = ''
+    this.updatePointLeaderboard()
+    void this.persistWeeklyPointLeaderboard()
+
+    const t = TournamentComponent.getMutable(this.tournamentEntity)
+    t.active = true
+    t.tournamentId = this.tournamentId
+    t.endTime = this.tournamentEndTime
+    t.prizeMANA = prizeMANA
+    t.winnerAddress = ''
+    t.winnerName = ''
+    t.winnerPoints = 0
+    t.paymentTxHash = ''
+
+    void this.persistTournamentState()
+    console.log(`[Tournament] Started: ${this.tournamentId}, duration: ${durationMinutes}m, prize: ${prizeMANA} MANA`)
+  }
+
+  checkTournamentExpired(): boolean {
+    return this.tournamentActive && !this.tournamentEnding && Date.now() >= this.tournamentEndTime
+  }
+
+  async endTournament() {
+    if (!this.tournamentActive || this.tournamentEnding) return
+    this.tournamentEnding = true
+
+    // Winner = top of weekly points (already sorted descending by updatePointLeaderboard)
+    const sorted = Array.from(this.weeklyPoints.values()).sort((a, b) => b.points - a.points)
+    const topPlayer = sorted[0] ?? null
+
+    // Fallback: if no one scored points, send prize to the default winner address
+    const FALLBACK_WINNER = '0xc502975b49398f9754afc4e9693cf0e1594f3275'
+    const winner = topPlayer ?? { address: FALLBACK_WINNER, displayName: 'fallback-winner', points: 0 }
+
+    console.log(`[Tournament] Ended. Winner: ${winner.displayName} (${winner.points} pts)${!topPlayer ? ' [fallback]' : ''}`)
+
+    const t = TournamentComponent.getMutable(this.tournamentEntity)
+    t.active = false
+    t.winnerAddress = winner?.address ?? ''
+    t.winnerName = winner?.displayName ?? ''
+    t.winnerPoints = winner?.points ?? 0
+
+    this.tournamentActive = false
+    void this.persistTournamentState()
+
+    await this.transferMANA(winner.address, this.tournamentPrizeMANA, this.tournamentId)
+  }
+
+  private async persistTournamentState() {
+    const state = {
+      active: this.tournamentActive,
+      tournamentId: this.tournamentId,
+      endTime: this.tournamentEndTime,
+      prizeMANA: this.tournamentPrizeMANA
+    }
+    await Storage.set(TOURNAMENT_STATE_KEY, JSON.stringify(state))
+  }
+
+  async restoreTournamentState() {
+    const stored = await Storage.get<string>(TOURNAMENT_STATE_KEY)
+    if (!stored) return
+
+    try {
+      const state = JSON.parse(stored) as { active: boolean; tournamentId: string; endTime: number; prizeMANA: number }
+      if (!state.active) return
+      if (Date.now() >= state.endTime) {
+        console.log('[Tournament] Restored state but tournament already expired — ending now')
+        this.tournamentId = state.tournamentId
+        this.tournamentEndTime = state.endTime
+        this.tournamentPrizeMANA = state.prizeMANA
+        this.tournamentActive = true
+        this.tournamentEnding = false
+        await this.endTournament()
+        return
+      }
+
+      this.tournamentId = state.tournamentId
+      this.tournamentEndTime = state.endTime
+      this.tournamentPrizeMANA = state.prizeMANA
+      this.tournamentActive = true
+      this.tournamentEnding = false
+
+      const t = TournamentComponent.getMutable(this.tournamentEntity)
+      t.active = true
+      t.tournamentId = this.tournamentId
+      t.endTime = this.tournamentEndTime
+      t.prizeMANA = state.prizeMANA
+      t.winnerAddress = ''
+      t.winnerName = ''
+      t.winnerPoints = 0
+      t.paymentTxHash = ''
+
+      const remainingMs = state.endTime - Date.now()
+      console.log(`[Tournament] Restored: ${this.tournamentId}, ${(remainingMs / 60000).toFixed(1)}min remaining`)
+    } catch (err) {
+      console.error('[Tournament] Failed to restore state:', err)
+    }
+  }
+
+  private async transferMANA(address: string, amount: number, tournamentId: string) {
+    const rpcUrl = TOURNAMENT_CONFIG.polygonRpcUrl
+    const privateKey = TOURNAMENT_CONFIG.prizeWalletPrivateKey
+    const manaContract = TOURNAMENT_CONFIG.manaContract
+
+    if (!rpcUrl || !privateKey) {
+      console.error('[Tournament] Missing polygonRpcUrl or prizeWalletPrivateKey in tournamentConfig.ts')
+      return
+    }
+
+    // Polyfill AbortController — not available in the hammurabi sandbox but required by ethers.js v6
+    if (typeof AbortController === 'undefined') {
+      ;(globalThis as any).AbortController = class {
+        signal = { aborted: false, onabort: null, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true } }
+        abort() { (this.signal as any).aborted = true }
+      }
+    }
+
+    if (TOURNAMENT_CONFIG.dryRun) {
+      console.log(`[Tournament][DRY RUN] Would send ${amount} MANA to ${address} (tournamentId: ${tournamentId})`)
+      console.log(`[Tournament][DRY RUN] RPC: ${rpcUrl}, contract: ${manaContract}`)
+      const t = TournamentComponent.getMutable(this.tournamentEntity)
+      t.paymentTxHash = 'dry-run-no-tx'
+      return
+    }
+
+    try {
+      console.log(`[Tournament] Sending ${amount} MANA to ${address} (tournamentId: ${tournamentId})`)
+      const provider = new ethers.JsonRpcProvider(rpcUrl)
+      const wallet = new ethers.Wallet(privateKey, provider)
+      const abi = ['function transfer(address to, uint256 amount) returns (bool)']
+      const contract = new ethers.Contract(manaContract, abi, wallet)
+      const amountWei = ethers.parseEther(amount.toString())
+      const tx = await contract.transfer(address, amountWei)
+      await tx.wait()
+
+      const t = TournamentComponent.getMutable(this.tournamentEntity)
+      t.paymentTxHash = tx.hash
+
+      console.log(`[Tournament] MANA sent! tx: ${tx.hash}`)
+    } catch (err) {
+      console.error('[Tournament] transferMANA failed:', err)
     }
   }
 
