@@ -92,6 +92,23 @@ PointLeaderboardComponent.validateBeforeChange((value) => {
 })
 
 // ============================================
+// TOURNAMENT LEADERBOARD COMPONENT (Server-authoritative)
+// ============================================
+export const TournamentLeaderboardComponent = engine.defineComponent('tower:TournamentLeaderboard', {
+  tournamentId: Schemas.String,
+  players: Schemas.Array(
+    Schemas.Map({
+      address: Schemas.String,
+      displayName: Schemas.String,
+      points: Schemas.Number
+    })
+  )
+})
+TournamentLeaderboardComponent.validateBeforeChange((value) => {
+  return value.senderAddress === AUTH_SERVER_PEER_ID
+})
+
+// ============================================
 // WINNERS COMPONENT (Server-authoritative)
 // ============================================
 export const WinnersComponent = engine.defineComponent('tower:Winners', {

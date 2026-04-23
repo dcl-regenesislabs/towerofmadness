@@ -111,6 +111,27 @@
             "parent": 0
           }
         },
+        "514": {
+          "json": {
+            "position": {
+              "x": 57,
+              "y": 1.5,
+              "z": 68.5
+            },
+            "rotation": {
+              "x": 0,
+              "y": -0.9588197469711304,
+              "z": 0,
+              "w": 0.28401535749435425
+            },
+            "scale": {
+              "x": 1,
+              "y": 1,
+              "z": 1
+            },
+            "parent": 0
+          }
+        },
         "515": {
           "json": {
             "position": {
@@ -317,6 +338,13 @@
             "invisibleMeshesCollisionMask": 3
           }
         },
+        "514": {
+          "json": {
+            "src": "assets/scene/Models/LeaderBoard01/LeaderBoard01.glb",
+            "visibleMeshesCollisionMask": 2,
+            "invisibleMeshesCollisionMask": 3
+          }
+        },
         "515": {
           "json": {
             "src": "assets/scene/Models/Podium01/Podium01.glb",
@@ -384,6 +412,11 @@
         "512": {
           "json": {
             "value": "CoolBed.glb"
+          }
+        },
+        "514": {
+          "json": {
+            "value": "LeaderBoard01.glb_3"
           }
         },
         "515": {
@@ -486,9 +519,9 @@
         "serializationType": "map"
       },
       "data": {
-        "512": {
+        "514": {
           "json": {
-            "gizmo": 0
+            "gizmo": 2
           }
         }
       }
@@ -546,7 +579,8 @@
                   512,
                   515,
                   516,
-                  517
+                  517,
+                  514
                 ]
               },
               {
@@ -588,6 +622,10 @@
               {
                 "entity": 517,
                 "children": []
+              },
+              {
+                "entity": 514,
+                "children": []
               }
             ]
           }
@@ -615,6 +653,9 @@
           "json": {}
         },
         "513": {
+          "json": {}
+        },
+        "514": {
           "json": {}
         },
         "515": {
@@ -666,7 +707,7 @@
       }
     },
     {
-      "name": "inspector::SceneMetadata-v2",
+      "name": "inspector::SceneMetadata-v3",
       "jsonSchema": {
         "type": "object",
         "properties": {
@@ -859,14 +900,14 @@
                         "type": "object",
                         "properties": {
                           "single": {
-                            "type": "integer",
-                            "serializationType": "int32"
+                            "type": "number",
+                            "serializationType": "float32"
                           },
                           "range": {
                             "type": "array",
                             "items": {
-                              "type": "integer",
-                              "serializationType": "int32"
+                              "type": "number",
+                              "serializationType": "float32"
                             },
                             "serializationType": "array"
                           }
@@ -877,14 +918,14 @@
                         "type": "object",
                         "properties": {
                           "single": {
-                            "type": "integer",
-                            "serializationType": "int32"
+                            "type": "number",
+                            "serializationType": "float32"
                           },
                           "range": {
                             "type": "array",
                             "items": {
-                              "type": "integer",
-                              "serializationType": "int32"
+                              "type": "number",
+                              "serializationType": "float32"
                             },
                             "serializationType": "array"
                           }
@@ -895,14 +936,14 @@
                         "type": "object",
                         "properties": {
                           "single": {
-                            "type": "integer",
-                            "serializationType": "int32"
+                            "type": "number",
+                            "serializationType": "float32"
                           },
                           "range": {
                             "type": "array",
                             "items": {
-                              "type": "integer",
-                              "serializationType": "int32"
+                              "type": "number",
+                              "serializationType": "float32"
                             },
                             "serializationType": "array"
                           }
@@ -919,16 +960,16 @@
                       "type": "object",
                       "properties": {
                         "x": {
-                          "type": "integer",
-                          "serializationType": "int32"
+                          "type": "number",
+                          "serializationType": "float32"
                         },
                         "y": {
-                          "type": "integer",
-                          "serializationType": "int32"
+                          "type": "number",
+                          "serializationType": "float32"
                         },
                         "z": {
-                          "type": "integer",
-                          "serializationType": "int32"
+                          "type": "number",
+                          "serializationType": "float32"
                         }
                       },
                       "serializationType": "map"

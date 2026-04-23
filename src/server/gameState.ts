@@ -3,12 +3,12 @@ import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { isServer, syncEntity } from '@dcl/sdk/network'
 import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
 import { Storage } from '@dcl/sdk/server'
-import { ethers } from 'ethers'
 import { TOURNAMENT_CONFIG } from './tournamentConfig'
 import {
   RoundStateComponent,
   LeaderboardComponent,
   PointLeaderboardComponent,
+  TournamentLeaderboardComponent,
   WinnersComponent,
   TowerConfigComponent,
   TournamentComponent,
@@ -56,6 +56,7 @@ const POINTS_GLOBAL_LEADERBOARD_SIZE = 10
 const POINTS_WEEKLY_LEADERBOARD_KEY = 'weeklyPointLeaderboard'
 const POINTS_WEEKLY_LEADERBOARD_SIZE = 10
 const TOURNAMENT_STATE_KEY = 'tournamentState'
+const TOURNAMENT_LEADERBOARD_KEY = 'tournamentLeaderboard'
 
 function getWeekStartKeyUTC(now: number = Date.now()): string {
   const d = new Date(now)
@@ -188,6 +189,10 @@ export class GameState {
   private lastAllTimePointsKey: string = ''
   private lastWeeklyPointsKey: string = ''
 
+  // Tournament leaderboard (separate from weekly/alltime)
+  private tournamentPoints = new Map<string, { address: string; displayName: string; points: number }>()
+  private tournamentLeaderboardEntity!: Entity
+
   // Tournament state (server-only)
   public tournamentActive: boolean = false
   private tournamentEndTime: number = 0
@@ -242,6 +247,14 @@ export class GameState {
       weeklyPlayers: []
     })
     syncEntity(this.pointLeaderboardEntity, [PointLeaderboardComponent.componentId])
+
+    // Create tournament leaderboard entity
+    this.tournamentLeaderboardEntity = engine.addEntity()
+    TournamentLeaderboardComponent.create(this.tournamentLeaderboardEntity, {
+      tournamentId: '',
+      players: []
+    })
+    syncEntity(this.tournamentLeaderboardEntity, [TournamentLeaderboardComponent.componentId])
 
     // Create tournament entity
     this.tournamentEntity = engine.addEntity()
@@ -816,6 +829,19 @@ export class GameState {
         })
       }
 
+      // Tournament leaderboard — only accumulate if a tournament is active
+      if (this.tournamentActive) {
+        const t = this.tournamentPoints.get(address)
+        if (t) {
+          t.points += award.points
+          t.displayName = award.displayName
+        } else {
+          this.tournamentPoints.set(address, { address, displayName: award.displayName, points: award.points })
+        }
+        this.updateTournamentLeaderboard()
+        void this.persistTournamentLeaderboard()
+      }
+
       changed = true
     }
 
@@ -1036,6 +1062,41 @@ export class GameState {
   }
 
   // ============================================
+  // TOURNAMENT LEADERBOARD
+  // ============================================
+
+  private updateTournamentLeaderboard() {
+    const sorted = Array.from(this.tournamentPoints.values()).sort((a, b) => b.points - a.points)
+    const lb = TournamentLeaderboardComponent.getMutable(this.tournamentLeaderboardEntity)
+    lb.tournamentId = this.tournamentId
+    lb.players = sorted.slice(0, 10)
+  }
+
+  private async persistTournamentLeaderboard() {
+    try {
+      const entries = Array.from(this.tournamentPoints.values())
+      await Storage.set(`${TOURNAMENT_LEADERBOARD_KEY}_${this.tournamentId}`, JSON.stringify(entries))
+    } catch (err) {
+      console.error('[Server][Storage] Failed to save tournament leaderboard:', err)
+    }
+  }
+
+  async loadTournamentLeaderboard(tournamentId: string) {
+    try {
+      const stored = await Storage.get<string>(`${TOURNAMENT_LEADERBOARD_KEY}_${tournamentId}`)
+      if (!stored) return
+      const entries = JSON.parse(stored) as { address: string; displayName: string; points: number }[]
+      this.tournamentPoints.clear()
+      for (const e of entries) {
+        this.tournamentPoints.set(e.address, e)
+      }
+      this.updateTournamentLeaderboard()
+    } catch (err) {
+      console.error('[Server][Storage] Failed to load tournament leaderboard:', err)
+    }
+  }
+
+  // ============================================
   // TOURNAMENT
   // ============================================
 
@@ -1046,12 +1107,9 @@ export class GameState {
     this.tournamentActive = true
     this.tournamentEnding = false
 
-    // Reset weekly points so everyone starts from 0
-    this.weeklyPoints.clear()
-    this.weeklyPointsMetaKey = getWeekStartKeyUTC()
-    this.lastWeeklyPointsKey = ''
-    this.updatePointLeaderboard()
-    void this.persistWeeklyPointLeaderboard()
+    // Reset tournament leaderboard (weekly/alltime leaderboards are NOT affected)
+    this.tournamentPoints.clear()
+    this.updateTournamentLeaderboard()
 
     const t = TournamentComponent.getMutable(this.tournamentEntity)
     t.active = true
@@ -1075,8 +1133,8 @@ export class GameState {
     if (!this.tournamentActive || this.tournamentEnding) return
     this.tournamentEnding = true
 
-    // Winner = top of weekly points (already sorted descending by updatePointLeaderboard)
-    const sorted = Array.from(this.weeklyPoints.values()).sort((a, b) => b.points - a.points)
+    // Winner = top of tournament leaderboard
+    const sorted = Array.from(this.tournamentPoints.values()).sort((a, b) => b.points - a.points)
     const topPlayer = sorted[0] ?? null
 
     // Fallback: if no one scored points, send prize to the default winner address
@@ -1141,6 +1199,8 @@ export class GameState {
       t.winnerPoints = 0
       t.paymentTxHash = ''
 
+      void this.loadTournamentLeaderboard(this.tournamentId)
+
       const remainingMs = state.endTime - Date.now()
       console.log(`[Tournament] Restored: ${this.tournamentId}, ${(remainingMs / 60000).toFixed(1)}min remaining`)
     } catch (err) {
@@ -1149,45 +1209,41 @@ export class GameState {
   }
 
   private async transferMANA(address: string, amount: number, tournamentId: string) {
-    const rpcUrl = TOURNAMENT_CONFIG.polygonRpcUrl
-    const privateKey = TOURNAMENT_CONFIG.prizeWalletPrivateKey
-    const manaContract = TOURNAMENT_CONFIG.manaContract
-
-    if (!rpcUrl || !privateKey) {
-      console.error('[Tournament] Missing polygonRpcUrl or prizeWalletPrivateKey in tournamentConfig.ts')
-      return
-    }
-
-    // Polyfill AbortController — not available in the hammurabi sandbox but required by ethers.js v6
-    if (typeof AbortController === 'undefined') {
-      ;(globalThis as any).AbortController = class {
-        signal = { aborted: false, onabort: null, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return true } }
-        abort() { (this.signal as any).aborted = true }
-      }
-    }
-
     if (TOURNAMENT_CONFIG.dryRun) {
       console.log(`[Tournament][DRY RUN] Would send ${amount} MANA to ${address} (tournamentId: ${tournamentId})`)
-      console.log(`[Tournament][DRY RUN] RPC: ${rpcUrl}, contract: ${manaContract}`)
+      console.log(`[Tournament][DRY RUN] Prize server URL: ${TOURNAMENT_CONFIG.prizeServerUrl}`)
       const t = TournamentComponent.getMutable(this.tournamentEntity)
       t.paymentTxHash = 'dry-run-no-tx'
       return
     }
 
+    if (!TOURNAMENT_CONFIG.prizeServerUrl || !TOURNAMENT_CONFIG.prizeServerSecret) {
+      console.error('[Tournament] Missing prizeServerUrl or prizeServerSecret in tournamentConfig.ts')
+      return
+    }
+
     try {
-      console.log(`[Tournament] Sending ${amount} MANA to ${address} (tournamentId: ${tournamentId})`)
-      const provider = new ethers.JsonRpcProvider(rpcUrl)
-      const wallet = new ethers.Wallet(privateKey, provider)
-      const abi = ['function transfer(address to, uint256 amount) returns (bool)']
-      const contract = new ethers.Contract(manaContract, abi, wallet)
-      const amountWei = ethers.parseEther(amount.toString())
-      const tx = await contract.transfer(address, amountWei)
-      await tx.wait()
+      console.log(`[Tournament] Calling prize server for ${amount} MANA → ${address}`)
+      const response = await fetch(`${TOURNAMENT_CONFIG.prizeServerUrl}/transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${TOURNAMENT_CONFIG.prizeServerSecret}`
+        },
+        body: JSON.stringify({ address, amount, tournamentId })
+      })
+
+      const data = await response.json() as { success?: boolean; txHash?: string; error?: string }
+
+      if (!response.ok || !data.success) {
+        console.error(`[Tournament] Prize server error: ${data.error}`)
+        return
+      }
 
       const t = TournamentComponent.getMutable(this.tournamentEntity)
-      t.paymentTxHash = tx.hash
+      t.paymentTxHash = data.txHash ?? ''
 
-      console.log(`[Tournament] MANA sent! tx: ${tx.hash}`)
+      console.log(`[Tournament] MANA sent! tx: ${data.txHash}`)
     } catch (err) {
       console.error('[Tournament] transferMANA failed:', err)
     }

@@ -13,6 +13,7 @@ import {
   RoundStateComponent,
   LeaderboardComponent,
   PointLeaderboardComponent,
+  TournamentLeaderboardComponent,
   WinnersComponent,
   TowerConfigComponent,
   TournamentComponent,
@@ -259,4 +260,11 @@ export function getTournament(): TournamentState | null {
     return TournamentComponent.get(entity) as TournamentState
   }
   return null
+}
+
+export function getTournamentLeaderboard(): { address: string; displayName: string; points: number }[] {
+  for (const [entity] of engine.getEntitiesWith(TournamentLeaderboardComponent)) {
+    return TournamentLeaderboardComponent.get(entity).players as { address: string; displayName: string; points: number }[]
+  }
+  return []
 }
