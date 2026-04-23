@@ -529,11 +529,16 @@ const CoolBedDialogBubble = ({
   )
 }
 
-const TournamentPanel = ({ screenWidth, s }: { screenWidth: number; s: number }) => {
+const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s: number; isMobile: boolean }) => {
   const tournament = getTournament()
   if (!tournament) return null
 
-  const PANEL_WIDTH = 320 * s
+  const mb = isMobile ? 2.8 : 1
+  const PANEL_WIDTH = 480 * s * mb
+  const PANEL_HEIGHT_ACTIVE = 56 * s * mb
+  const PANEL_HEIGHT_ENDED = 70 * s * mb
+  const FONT_SIZE = 15 * s * mb
+  const ICON_SIZE = 34 * s * mb
   const PANEL_LEFT = (screenWidth - PANEL_WIDTH) / 2
 
   // Tournament still active — show countdown + prize
@@ -548,30 +553,41 @@ const TournamentPanel = ({ screenWidth, s }: { screenWidth: number; s: number })
       <UiEntity
         uiTransform={{
           width: PANEL_WIDTH,
-          height: 44 * s,
+          height: PANEL_HEIGHT_ACTIVE,
           positionType: 'absolute',
           position: { top: 190 * s, left: PANEL_LEFT },
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: 10 * s
+          borderRadius: 10 * s * mb,
+          borderWidth: 2 * s * mb,
+          borderColor: Color4.create(1, 0.84, 0, 1)
         }}
-        uiBackground={{ color: Color4.create(0.05, 0.05, 0.18, 0.9) }}
+        uiBackground={{ color: Color4.create(0.05, 0.05, 0.18, 0.95) }}
       >
         <UiEntity
-          uiTransform={{ width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
-        >
-          <UiEntity
-            uiTransform={{ width: '100%', height: 22 * s, alignItems: 'center', justifyContent: 'center' }}
-            uiText={{
-              value: `TOURNAMENT  |  Prize: ${tournament.prizeMANA} MANA  |  Ends in: ${countdown}`,
-              fontSize: 13 * s,
-              color: Color4.create(1, 0.84, 0, 1),
-              textAlign: 'middle-center',
-              font: 'sans-serif'
-            }}
-          />
-        </UiEntity>
+          uiTransform={{
+            width: ICON_SIZE,
+            height: ICON_SIZE,
+            margin: { left: 10 * s * mb, right: 6 * s * mb },
+            flexShrink: 0
+          }}
+          uiBackground={{
+            color: Color4.White(),
+            texture: { src: 'assets/images/trophy.png' },
+            textureMode: 'stretch'
+          }}
+        />
+        <UiEntity
+          uiTransform={{ width: PANEL_WIDTH - ICON_SIZE - 28 * s * mb, height: '100%', alignItems: 'center', justifyContent: 'center' }}
+          uiText={{
+            value: `TOURNAMENT  |  Prize: ${tournament.prizeMANA} MANA  |  Ends in: ${countdown}`,
+            fontSize: FONT_SIZE,
+            color: Color4.create(1, 0.84, 0, 1),
+            textAlign: 'middle-center',
+            font: 'sans-serif'
+          }}
+        />
       </UiEntity>
     )
   }
@@ -583,36 +599,55 @@ const TournamentPanel = ({ screenWidth, s }: { screenWidth: number; s: number })
       <UiEntity
         uiTransform={{
           width: PANEL_WIDTH,
-          height: 54 * s,
+          height: PANEL_HEIGHT_ENDED,
           positionType: 'absolute',
           position: { top: 190 * s, left: PANEL_LEFT },
-          flexDirection: 'column',
+          flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: 10 * s
+          borderRadius: 10 * s * mb,
+          borderWidth: 2 * s * mb,
+          borderColor: Color4.create(1, 0.84, 0, 1)
         }}
-        uiBackground={{ color: Color4.create(0.05, 0.05, 0.18, 0.9) }}
+        uiBackground={{ color: Color4.create(0.05, 0.05, 0.18, 0.95) }}
       >
         <UiEntity
-          uiTransform={{ width: '100%', height: 24 * s, alignItems: 'center', justifyContent: 'center' }}
-          uiText={{
-            value: `TOURNAMENT WINNER: ${tournament.winnerName}  (${tournament.winnerPoints} pts)`,
-            fontSize: 13 * s,
-            color: Color4.create(1, 0.84, 0, 1),
-            textAlign: 'middle-center',
-            font: 'sans-serif'
+          uiTransform={{
+            width: ICON_SIZE,
+            height: ICON_SIZE,
+            margin: { left: 10 * s * mb, right: 6 * s * mb },
+            flexShrink: 0
+          }}
+          uiBackground={{
+            color: Color4.White(),
+            texture: { src: 'assets/images/trophy.png' },
+            textureMode: 'stretch'
           }}
         />
         <UiEntity
-          uiTransform={{ width: '100%', height: 20 * s, alignItems: 'center', justifyContent: 'center' }}
-          uiText={{
-            value: paid ? `${tournament.prizeMANA} MANA sent!` : `Sending ${tournament.prizeMANA} MANA...`,
-            fontSize: 12 * s,
-            color: paid ? Color4.create(0.4, 0.9, 0.4, 1) : Color4.Yellow(),
-            textAlign: 'middle-center',
-            font: 'sans-serif'
-          }}
-        />
+          uiTransform={{ width: PANEL_WIDTH - ICON_SIZE - 28 * s * mb, height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
+        >
+          <UiEntity
+            uiTransform={{ width: '100%', height: 30 * s * mb, alignItems: 'center', justifyContent: 'center' }}
+            uiText={{
+              value: `TOURNAMENT WINNER: ${tournament.winnerName}  (${tournament.winnerPoints} pts)`,
+              fontSize: FONT_SIZE,
+              color: Color4.create(1, 0.84, 0, 1),
+              textAlign: 'middle-center',
+              font: 'sans-serif'
+            }}
+          />
+          <UiEntity
+            uiTransform={{ width: '100%', height: 26 * s * mb, alignItems: 'center', justifyContent: 'center' }}
+            uiText={{
+              value: paid ? `${tournament.prizeMANA} MANA sent!` : `Sending ${tournament.prizeMANA} MANA...`,
+              fontSize: (FONT_SIZE - 1 * s * mb),
+              color: paid ? Color4.create(0.4, 0.9, 0.4, 1) : Color4.Yellow(),
+              textAlign: 'middle-center',
+              font: 'sans-serif'
+            }}
+          />
+        </UiEntity>
       </UiEntity>
     )
   }
@@ -1662,7 +1697,7 @@ const GameUI = () => {
       )}
       */}
       {/* Tournament Panel - Below round timer, above progress bar */}
-      <TournamentPanel screenWidth={screenWidth} s={s} />
+      <TournamentPanel screenWidth={screenWidth} s={s} isMobile={isMobile} />
       {/* Tower Progress Bar - Top Center */}
       <TowerProgressBar />
       {/* START MESSAGE - Below Progress Bar Left */}

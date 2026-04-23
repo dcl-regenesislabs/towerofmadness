@@ -27,6 +27,7 @@ export type PointLeaderboardPanelOptions = {
   size?: Vector3
   tabs?: string[]
   tabData?: PointLeaderboardPanelEntry[][]
+  accentColor?: Color4
 }
 
 type PanelState = {
@@ -50,6 +51,7 @@ export function createPointLeaderboardPanel(options: PointLeaderboardPanelOption
   const size = options.size ?? DEFAULT_SIZE
   const tabs = options.tabs && options.tabs.length > 0 ? options.tabs : DEFAULT_TABS
   const tabData = options.tabData && options.tabData.length > 0 ? options.tabData : DEFAULT_TAB_DATA
+  const accent = options.accentColor ?? Color4.fromHexString('#076F7Bff')
 
   const root = engine.addEntity()
   if (options.parent) {
@@ -74,6 +76,18 @@ export function createPointLeaderboardPanel(options: PointLeaderboardPanelOption
   Material.setBasicMaterial(background, {
     diffuseColor: Color4.fromHexString('#111111ff')
   })
+
+  if (options.accentColor) {
+    const border = engine.addEntity()
+    Transform.createOrReplace(border, {
+      parent: root,
+      position: Vector3.create(0, 0, 0.08),
+      rotation: Quaternion.Identity(),
+      scale: Vector3.create(size.x + 0.18, size.y + 0.18, 1)
+    })
+    MeshRenderer.setPlane(border)
+    Material.setBasicMaterial(border, { diffuseColor: options.accentColor })
+  }
 
   const tabLabels: Array<Entity | null> = []
   const tabUnderlines: Array<Entity | null> = []
@@ -111,9 +125,7 @@ export function createPointLeaderboardPanel(options: PointLeaderboardPanelOption
       scale: Vector3.create(0.9, 0.05, 1)
     })
     MeshRenderer.setPlane(underline)
-    Material.setBasicMaterial(underline, {
-      diffuseColor: Color4.fromHexString('#076F7B')
-    })
+    Material.setBasicMaterial(underline, { diffuseColor: accent })
     VisibilityComponent.createOrReplace(underline, { visible: i === 0 })
 
     tabLabels.push(tabLabel)
@@ -149,7 +161,7 @@ export function createPointLeaderboardPanel(options: PointLeaderboardPanelOption
     TextShape.createOrReplace(headerName, {
       text: 'PLAYER',
       fontSize: 1.35,
-      textColor: Color4.fromHexString('#076F7B'),
+      textColor: accent,
       outlineColor: Color4.Black(),
       outlineWidth: 0.1,
       textAlign: TextAlignMode.TAM_MIDDLE_LEFT
@@ -166,7 +178,7 @@ export function createPointLeaderboardPanel(options: PointLeaderboardPanelOption
     TextShape.createOrReplace(headerPoints, {
       text: 'POINTS',
       fontSize: 1.35,
-      textColor: Color4.fromHexString('#076F7B'),
+      textColor: accent,
       outlineColor: Color4.Black(),
       outlineWidth: 0.1,
       textAlign: TextAlignMode.TAM_MIDDLE_RIGHT
@@ -249,37 +261,43 @@ export function createPointLeaderboardPanel(options: PointLeaderboardPanelOption
     tabVisibility.push(visibilityList)
   }
 
+  const showNav = tabs.length > 1
+
   const leftButton = engine.addEntity()
-  Transform.createOrReplace(leftButton, {
-    parent: root,
-    position: Vector3.create(-size.x / 2 + 0.6, -size.y / 2 + 0.3, -0.03),
-    rotation: Quaternion.Identity(),
-    scale: Vector3.create(1.4, 0.85, 1)
-  })
-  MeshRenderer.setPlane(leftButton)
-  MeshCollider.setPlane(leftButton, ColliderLayer.CL_POINTER)
-  Material.setBasicMaterial(leftButton, {
-    texture: Material.Texture.Common({ src: 'assets/images/backButton.png' }),
-    alphaTexture: Material.Texture.Common({ src: 'assets/images/backButton.png' }),
-    diffuseColor: Color4.create(1, 1, 1, 1),
-    alphaTest: MaterialTransparencyMode.MTM_ALPHA_BLEND
-  })
+  if (showNav) {
+    Transform.createOrReplace(leftButton, {
+      parent: root,
+      position: Vector3.create(-size.x / 2 + 0.6, -size.y / 2 + 0.3, -0.03),
+      rotation: Quaternion.Identity(),
+      scale: Vector3.create(1.4, 0.85, 1)
+    })
+    MeshRenderer.setPlane(leftButton)
+    MeshCollider.setPlane(leftButton, ColliderLayer.CL_POINTER)
+    Material.setBasicMaterial(leftButton, {
+      texture: Material.Texture.Common({ src: 'assets/images/backButton.png' }),
+      alphaTexture: Material.Texture.Common({ src: 'assets/images/backButton.png' }),
+      diffuseColor: Color4.create(1, 1, 1, 1),
+      alphaTest: MaterialTransparencyMode.MTM_ALPHA_BLEND
+    })
+  }
 
   const rightButton = engine.addEntity()
-  Transform.createOrReplace(rightButton, {
-    parent: root,
-    position: Vector3.create(size.x / 2 - 0.6, -size.y / 2 + 0.3, -0.03),
-    rotation: Quaternion.Identity(),
-    scale: Vector3.create(1.4, 0.85, 1)
-  })
-  MeshRenderer.setPlane(rightButton)
-  MeshCollider.setPlane(rightButton, ColliderLayer.CL_POINTER)
-  Material.setBasicMaterial(rightButton, {
-    texture: Material.Texture.Common({ src: 'assets/images/nextButton.png' }),
-    alphaTexture: Material.Texture.Common({ src: 'assets/images/nextButton.png' }),
-    diffuseColor: Color4.create(1, 1, 1, 1),
-    alphaTest: MaterialTransparencyMode.MTM_ALPHA_BLEND
-  })
+  if (showNav) {
+    Transform.createOrReplace(rightButton, {
+      parent: root,
+      position: Vector3.create(size.x / 2 - 0.6, -size.y / 2 + 0.3, -0.03),
+      rotation: Quaternion.Identity(),
+      scale: Vector3.create(1.4, 0.85, 1)
+    })
+    MeshRenderer.setPlane(rightButton)
+    MeshCollider.setPlane(rightButton, ColliderLayer.CL_POINTER)
+    Material.setBasicMaterial(rightButton, {
+      texture: Material.Texture.Common({ src: 'assets/images/nextButton.png' }),
+      alphaTexture: Material.Texture.Common({ src: 'assets/images/nextButton.png' }),
+      diffuseColor: Color4.create(1, 1, 1, 1),
+      alphaTest: MaterialTransparencyMode.MTM_ALPHA_BLEND
+    })
+  }
 
   const state: PanelState = {
     root,
@@ -293,29 +311,31 @@ export function createPointLeaderboardPanel(options: PointLeaderboardPanelOption
     rightButton
   }
 
-  pointerEventsSystem.onPointerDown(
-    {
-      entity: leftButton,
-      opts: {
-        button: InputAction.IA_POINTER,
-        hoverText: 'PREV TAB',
-        showHighlight: false
-      }
-    },
-    () => setActivePointTab(state, state.currentTab - 1)
-  )
+  if (showNav) {
+    pointerEventsSystem.onPointerDown(
+      {
+        entity: leftButton,
+        opts: {
+          button: InputAction.IA_POINTER,
+          hoverText: 'PREV TAB',
+          showHighlight: false
+        }
+      },
+      () => setActivePointTab(state, state.currentTab - 1)
+    )
 
-  pointerEventsSystem.onPointerDown(
-    {
-      entity: rightButton,
-      opts: {
-        button: InputAction.IA_POINTER,
-        hoverText: 'NEXT TAB',
-        showHighlight: false
-      }
-    },
-    () => setActivePointTab(state, state.currentTab + 1)
-  )
+    pointerEventsSystem.onPointerDown(
+      {
+        entity: rightButton,
+        opts: {
+          button: InputAction.IA_POINTER,
+          hoverText: 'NEXT TAB',
+          showHighlight: false
+        }
+      },
+      () => setActivePointTab(state, state.currentTab + 1)
+    )
+  }
 
   for (let i = 0; i < tabs.length; i++) {
     setPointTabData(state, i, tabData[i] ?? [])

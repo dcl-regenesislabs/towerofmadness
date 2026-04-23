@@ -5,9 +5,16 @@ import {
   Transform,
   TextShape,
   TextAlignMode,
-  VisibilityComponent
+  VisibilityComponent,
+  Billboard,
+  BillboardMode,
+  MeshRenderer,
+  Material,
+  MaterialTransparencyMode
 } from '@dcl/sdk/ecs'
 import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
+
+const GOLD = Color4.create(1, 0.84, 0, 1)
 import { EntityNames } from '../assets/scene/entity-names'
 import { createPointLeaderboardPanel, setPointTabData } from './PointLeaderboardPanel'
 import { formatPlayerNameWithWallet } from './playerNames'
@@ -112,8 +119,24 @@ export function setupWorldTournamentLeaderboard(
         rotation: TEXT_ROTATION,
         scale: Vector3.create(1, 1, 1)
       },
-      tabs: ['TOURNAMENT']
+      tabs: ['TOURNAMENT'],
+      accentColor: GOLD
     })
+
+    const trophy = engine.addEntity()
+    Transform.create(trophy, {
+      parent: entity,
+      position: Vector3.create(0, 8.8, 0.7),
+      scale: Vector3.create(2.2, 2.2, 1)
+    })
+    MeshRenderer.setPlane(trophy)
+    Material.setBasicMaterial(trophy, {
+      texture: Material.Texture.Common({ src: 'assets/images/trophy.png' }),
+      alphaTexture: Material.Texture.Common({ src: 'assets/images/trophy.png' }),
+      diffuseColor: Color4.White(),
+      alphaTest: MaterialTransparencyMode.MTM_ALPHA_BLEND
+    })
+    Billboard.create(trophy, { billboardMode: BillboardMode.BM_Y })
   }
 
   engine.addSystem(() => {
