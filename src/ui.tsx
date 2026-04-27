@@ -51,6 +51,7 @@ import {
   getTowerChunksFromEntities,
   getTournament
 } from "./multiplayer"
+import { copyToClipboard } from '~system/RestrictedActions'
 import { CHUNK_END_ID, CHUNK_START_ID, MIDDLE_CHUNK_IDS } from "./shared/chunks"
 import { getSnapshots, isSnapshotHidden } from "./snapshots"
 import { OutlinedText, OUTLINE_OFFSETS_16, OUTLINE_OFFSETS_8 } from "./outlinedTextComponent"
@@ -536,7 +537,7 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
   const mb = isMobile ? 2.8 : 1
   const PANEL_WIDTH = 480 * s * mb
   const PANEL_HEIGHT_ACTIVE = 56 * s * mb
-  const PANEL_HEIGHT_ENDED = 70 * s * mb
+  const PANEL_HEIGHT_ENDED = 82 * s * mb
   const FONT_SIZE = 15 * s * mb
   const ICON_SIZE = 34 * s * mb
   const PANEL_LEFT = (screenWidth - PANEL_WIDTH) / 2
@@ -638,7 +639,7 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
             }}
           />
           <UiEntity
-            uiTransform={{ width: '100%', height: 26 * s * mb, alignItems: 'center', justifyContent: 'center' }}
+            uiTransform={{ width: '100%', height: 22 * s * mb, alignItems: 'center', justifyContent: 'center' }}
             uiText={{
               value: paid ? `${tournament.prizeMANA} MANA sent!` : `Sending ${tournament.prizeMANA} MANA...`,
               fontSize: (FONT_SIZE - 1 * s * mb),
@@ -647,6 +648,44 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
               font: 'sans-serif'
             }}
           />
+          <UiEntity
+            uiTransform={{ width: '100%', height: 18 * s * mb, alignItems: 'center', justifyContent: 'center' }}
+            uiText={{
+              value: `To: ${tournament.winnerAddress.substring(0, 6)}...${tournament.winnerAddress.substring(tournament.winnerAddress.length - 4)}`,
+              fontSize: (FONT_SIZE - 2 * s * mb),
+              color: Color4.create(0.7, 0.7, 0.7, 1),
+              textAlign: 'middle-center',
+              font: 'sans-serif'
+            }}
+          />
+          {paid && (
+            <UiEntity
+              uiTransform={{ width: '100%', height: 18 * s * mb, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}
+            >
+              <UiEntity
+                uiText={{
+                  value: `tx: ${tournament.paymentTxHash.substring(0, 10)}...${tournament.paymentTxHash.substring(tournament.paymentTxHash.length - 6)}`,
+                  fontSize: (FONT_SIZE - 2 * s * mb),
+                  color: Color4.create(0.4, 0.7, 1, 1),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+                uiTransform={{ height: '100%', alignItems: 'center', justifyContent: 'center', margin: { right: 6 * s * mb } }}
+              />
+              <UiEntity
+                uiTransform={{
+                  width: 18 * s * mb,
+                  height: 18 * s * mb,
+                }}
+                uiBackground={{
+                  color: Color4.White(),
+                  texture: { src: 'assets/images/copy-icon.png' },
+                  textureMode: 'stretch'
+                }}
+                onMouseDown={() => { void copyToClipboard({ text: tournament.paymentTxHash }) }}
+              />
+            </UiEntity>
+          )}
         </UiEntity>
       </UiEntity>
     )

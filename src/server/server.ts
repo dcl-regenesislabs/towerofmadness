@@ -23,27 +23,32 @@ export function server() {
 
   setupMessageHandlers(gameState)
 
-  // Auto-start tournament if configured (deferred so restoreTournamentState() runs first)
-  if (TOURNAMENT_CONFIG.autoStart) {
-    setTimeout(() => {
-      if (!gameState.tournamentActive) {
-        console.log(`[Tournament] Auto-starting: ${TOURNAMENT_CONFIG.durationMinutes}m, prize: ${TOURNAMENT_CONFIG.prizeMANA} MANA`)
-        gameState.startTournament(TOURNAMENT_CONFIG.durationMinutes, TOURNAMENT_CONFIG.prizeMANA)
-      } else {
-        console.log('[Tournament] Skipping auto-start — tournament already active (restored from storage)')
-      }
-    }, 2000)
-  }
-
   // Timer system
   let lastUpdate = 0
   let roundEndTime = 0
   let breakStartTime = 0
+  // Auto-start deferred: wait ~2s after boot so restoreTournamentState() can complete first
+  let autoStartDelay = TOURNAMENT_CONFIG.autoStart ? 2 : -1
 
   engine.addSystem((dt: number) => {
     lastUpdate += dt
     if (lastUpdate < ROUND_TIMER_CHECK_INTERVAL) return
+    const elapsed = lastUpdate
     lastUpdate = 0
+
+    // Auto-start tournament after boot delay (setTimeout not available in sandbox)
+    if (autoStartDelay > 0) {
+      autoStartDelay -= elapsed
+      if (autoStartDelay <= 0) {
+        autoStartDelay = -1
+        if (!gameState.tournamentActive) {
+          console.log(`[Tournament] Auto-starting: ${TOURNAMENT_CONFIG.durationMinutes}m, prize: ${TOURNAMENT_CONFIG.prizeMANA} MANA`)
+          gameState.startTournament(TOURNAMENT_CONFIG.durationMinutes, TOURNAMENT_CONFIG.prizeMANA)
+        } else {
+          console.log('[Tournament] Skipping auto-start — tournament already active (restored from storage)')
+        }
+      }
+    }
 
     const phase = gameState.getPhase()
 

@@ -3,6 +3,7 @@ import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { isServer, syncEntity } from '@dcl/sdk/network'
 import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
 import { Storage } from '@dcl/sdk/server'
+import { signedFetch } from '~system/SignedFetch'
 import { TOURNAMENT_CONFIG } from './tournamentConfig'
 import {
   RoundStateComponent,
@@ -1222,30 +1223,46 @@ export class GameState {
       return
     }
 
+    const url = `${TOURNAMENT_CONFIG.prizeServerUrl}/transfer`
+    console.log(`[Tournament] → POST ${url}`)
+    console.log(`[Tournament]   address: ${address}`)
+    console.log(`[Tournament]   amount:  ${amount} MANA`)
+    console.log(`[Tournament]   tournamentId: ${tournamentId}`)
+
     try {
-      console.log(`[Tournament] Calling prize server for ${amount} MANA → ${address}`)
-      const response = await fetch(`${TOURNAMENT_CONFIG.prizeServerUrl}/transfer`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${TOURNAMENT_CONFIG.prizeServerSecret}`
-        },
-        body: JSON.stringify({ address, amount, tournamentId })
+      const response = await signedFetch({
+        url,
+        init: {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOURNAMENT_CONFIG.prizeServerSecret}`
+          },
+          body: JSON.stringify({ address, amount, tournamentId })
+        }
       })
 
-      const data = await response.json() as { success?: boolean; txHash?: string; error?: string }
+      console.log(`[Tournament] ← HTTP ${response.status}`)
+
+      let data: { success?: boolean; txHash?: string; error?: string } = {}
+      try {
+        data = JSON.parse(response.body ?? '{}') as { success?: boolean; txHash?: string; error?: string }
+        console.log(`[Tournament]   response body: ${response.body}`)
+      } catch {
+        console.error('[Tournament]   Failed to parse response JSON')
+      }
 
       if (!response.ok || !data.success) {
-        console.error(`[Tournament] Prize server error: ${data.error}`)
+        console.error(`[Tournament] ✗ Prize server rejected: ${data.error ?? 'unknown error'} (HTTP ${response.status})`)
         return
       }
 
       const t = TournamentComponent.getMutable(this.tournamentEntity)
       t.paymentTxHash = data.txHash ?? ''
 
-      console.log(`[Tournament] MANA sent! tx: ${data.txHash}`)
+      console.log(`[Tournament] ✓ MANA sent! tx: ${data.txHash}`)
     } catch (err) {
-      console.error('[Tournament] transferMANA failed:', err)
+      console.error(`[Tournament] ✗ signedFetch to prize server failed:`, err)
     }
   }
 

@@ -11,10 +11,10 @@
 const DRY_RUN = true
 
 // URL of the prize server (deployed on Render/Railway)
-const PRIZE_SERVER_URL = 'https://your-prize-server.onrender.com'
+const PRIZE_SERVER_URL = 'https://prize-server.onrender.com'
 
 // Secret token — must match SECRET_TOKEN env var in the prize server
-const PRIZE_SERVER_SECRET = 'change-this-to-a-random-secret'
+const PRIZE_SERVER_SECRET = 'tower-mad-2026-secret'
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -30,7 +30,7 @@ export const TOURNAMENT_CONFIG = {
   durationMinutes: 1,
 
   // Prize amount in MANA
-  prizeMANA: 100,
+  prizeMANA: 10,
 
   // Wallets authorized to send the adminStartTournament message (lowercase)
   adminWallets: ['0x62bd11099260b3861c2da1418566c354e0cdfa65']
