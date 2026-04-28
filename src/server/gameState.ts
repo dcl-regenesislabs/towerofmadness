@@ -260,6 +260,7 @@ export class GameState {
     // Create tournament entity
     this.tournamentEntity = engine.addEntity()
     TournamentComponent.create(this.tournamentEntity, {
+      tournamentMode: TOURNAMENT_CONFIG.tournamentMode,
       active: false,
       tournamentId: '',
       endTime: 0,
@@ -831,7 +832,7 @@ export class GameState {
       }
 
       // Tournament leaderboard — only accumulate if a tournament is active
-      if (this.tournamentActive) {
+      if (TOURNAMENT_CONFIG.tournamentMode && this.tournamentActive) {
         const t = this.tournamentPoints.get(address)
         if (t) {
           t.points += award.points

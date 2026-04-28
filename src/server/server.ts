@@ -28,7 +28,7 @@ export function server() {
   let roundEndTime = 0
   let breakStartTime = 0
   // Auto-start deferred: wait ~2s after boot so restoreTournamentState() can complete first
-  let autoStartDelay = TOURNAMENT_CONFIG.autoStart ? 2 : -1
+  let autoStartDelay = (TOURNAMENT_CONFIG.tournamentMode && TOURNAMENT_CONFIG.autoStart) ? 2 : -1
 
   engine.addSystem((dt: number) => {
     lastUpdate += dt
@@ -53,7 +53,7 @@ export function server() {
     const phase = gameState.getPhase()
 
     // Tournament expiry check
-    if (gameState.checkTournamentExpired()) {
+    if (TOURNAMENT_CONFIG.tournamentMode && gameState.checkTournamentExpired()) {
       void gameState.endTournament()
     }
 

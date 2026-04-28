@@ -27,7 +27,8 @@ const HEADER_GAP = 3
 const HEADER_BODY_GAP = 0.65
 
 export function setupWorldTournamentLeaderboard(
-  getEntries: () => { address: string; displayName: string; points: number }[]
+  getEntries: () => { address: string; displayName: string; points: number }[],
+  isTournamentMode: () => boolean
 ) {
   let textEntity: Entity | null = null
   let headerEntity: Entity | null = null
@@ -139,10 +140,27 @@ export function setupWorldTournamentLeaderboard(
     Billboard.create(trophy, { billboardMode: BillboardMode.BM_Y })
   }
 
+  let modelHidden = false
+
   engine.addSystem(() => {
+    if (!isTournamentMode()) {
+      // Hide the leaderboard model when tournament mode is off
+      if (!modelHidden) {
+        const entity = findLeaderboardEntity()
+        if (entity) {
+          VisibilityComponent.createOrReplace(entity, { visible: false })
+          modelHidden = true
+        }
+      }
+      return
+    }
+
     if (!setupDone) {
       const entity = findLeaderboardEntity()
-      if (entity) setup(entity)
+      if (entity) {
+        VisibilityComponent.createOrReplace(entity, { visible: true })
+        setup(entity)
+      }
       return
     }
 

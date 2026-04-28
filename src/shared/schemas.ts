@@ -151,6 +151,7 @@ ChunkComponent.validateBeforeChange((value) => {
 // TOURNAMENT COMPONENT (Server-authoritative)
 // ============================================
 export const TournamentComponent = engine.defineComponent('tower:Tournament', {
+  tournamentMode: Schemas.Boolean, // master switch — false disables all tournament UI
   active: Schemas.Boolean,
   tournamentId: Schemas.String,
   endTime: Schemas.Int64,         // epoch ms when tournament ends
@@ -165,6 +166,7 @@ TournamentComponent.validateBeforeChange((value) => {
 })
 
 export type TournamentState = {
+  tournamentMode: boolean
   active: boolean
   tournamentId: string
   endTime: number

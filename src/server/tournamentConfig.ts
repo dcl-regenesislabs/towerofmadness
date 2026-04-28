@@ -7,6 +7,9 @@
 
 // ─── EDIT THESE VALUES ───────────────────────────────────────────────────────
 
+// Master switch — set to false to disable ALL tournament functionality
+const TOURNAMENT_MODE = false
+
 // Set to true to skip the actual blockchain tx and only log what would happen
 const DRY_RUN = true
 
@@ -19,6 +22,7 @@ const PRIZE_SERVER_SECRET = 'tower-mad-2026-secret'
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const TOURNAMENT_CONFIG = {
+  tournamentMode: TOURNAMENT_MODE,
   dryRun: DRY_RUN,
   prizeServerUrl: PRIZE_SERVER_URL,
   prizeServerSecret: PRIZE_SERVER_SECRET,

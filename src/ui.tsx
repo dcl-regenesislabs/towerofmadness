@@ -532,7 +532,7 @@ const CoolBedDialogBubble = ({
 
 const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s: number; isMobile: boolean }) => {
   const tournament = getTournament()
-  if (!tournament) return null
+  if (!tournament || !tournament.tournamentMode) return null
 
   const mb = isMobile ? 2.8 : 1
   const PANEL_WIDTH = 480 * s * mb

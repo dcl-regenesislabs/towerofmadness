@@ -41,6 +41,7 @@ import {
   getWeeklyPointLeaderboard,
   getWinners,
   getTowerConfig,
+  getTournament,
   getTournamentLeaderboard,
   RoundPhase,
   LeaderboardEntry,
@@ -446,7 +447,7 @@ export async function main() {
 
   setupWorldLeaderboard(() => leaderboard, () => weeklyLeaderboard)
   setupWorldPointLeaderboard(() => pointLeaderboard, () => weeklyPointLeaderboard)
-  setupWorldTournamentLeaderboard(() => getTournamentLeaderboard())
+  setupWorldTournamentLeaderboard(() => getTournamentLeaderboard(), () => getTournament()?.tournamentMode ?? false)
 
   // ============================================
   // TRIGGER SETUP
