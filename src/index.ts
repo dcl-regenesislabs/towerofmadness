@@ -48,6 +48,7 @@ import {
 } from './multiplayer'
 import { requestPlayerSnapshot, setSnapshotHidden } from './snapshots'
 import { TriggerEndComponent } from './shared/schemas'
+import { setupCinematicSystem, playCinematic, shouldAutoPlayCinematic, isCinematicPlaying } from './cinematicCamera'
 
 // ============================================
 // GAME STATE
@@ -229,6 +230,11 @@ function syncRoundState() {
       attemptResult = null
       resultMessage = '🎮 New round! Go to TriggerStart to begin'
       resultTimestamp = Date.now()
+      
+      // Play cinematic for new tower
+      setTimeout(() => {
+        playCinematic()
+      }, 1000)
     } else if (state.phase === RoundPhase.ENDING) {
       roundWinners = getWinners()
       resultMessage = '🏁 Round Complete!'
@@ -261,6 +267,11 @@ function startAttempt() {
   }
 
   if (Date.now() < suppressStartUntil) {
+    return
+  }
+
+  // Don't allow starting attempt during cinematic
+  if (isCinematicPlaying()) {
     return
   }
 
@@ -387,6 +398,14 @@ export async function main() {
   })
 
   setupClient()
+  setupCinematicSystem()
+
+  // Play cinematic on first world arrival (after a short delay to let scene load)
+  setTimeout(() => {
+    if (shouldAutoPlayCinematic()) {
+      playCinematic()
+    }
+  }, 1000)
 
   // Set up callback for when players finish - update our best time if it's us
   onPlayerFinished((displayName, time, finishOrder) => {
