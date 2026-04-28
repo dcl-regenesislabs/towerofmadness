@@ -15,30 +15,36 @@ import { Vector3, Quaternion } from '@dcl/sdk/math'
 
 export type CinematicState = 'idle' | 'playing' | 'skipping'
 
-// Camera path keyframes - adjust these positions based on your tower layout
+// Camera path keyframes - smooth ascent to the top
 const CAMERA_KEYFRAMES = [
   // Start: at the ramp/start area, looking at the tower base
   {
     position: Vector3.create(40, 15, 28),
-    lookAt: Vector3.create(40, 20, 35),
+    lookAt: Vector3.create(40, 25, 35),
+    duration: 1500
+  },
+  // Lower section - begin ascent
+  {
+    position: Vector3.create(41, 30, 32),
+    lookAt: Vector3.create(40, 45, 38),
     duration: 2000
   },
-  // Move up along the ramp, tilt camera up
+  // Mid tower - smooth upward movement
   {
-    position: Vector3.create(40, 25, 32),
-    lookAt: Vector3.create(40, 45, 38),
-    duration: 2500
+    position: Vector3.create(42, 50, 34),
+    lookAt: Vector3.create(40, 65, 38),
+    duration: 2000
   },
-  // Higher up, showing the tower height
+  // Upper section - approaching top
   {
-    position: Vector3.create(42, 45, 35),
-    lookAt: Vector3.create(40, 70, 38),
-    duration: 2500
+    position: Vector3.create(41, 70, 35),
+    lookAt: Vector3.create(40, 80, 38),
+    duration: 1500
   },
-  // Near the top, showing the win zone
+  // Top - showing the win zone
   {
-    position: Vector3.create(38, 75, 36),
-    lookAt: Vector3.create(40, 82, 38),
+    position: Vector3.create(39, 85, 37),
+    lookAt: Vector3.create(40, 88, 38),
     duration: 2000
   }
 ]

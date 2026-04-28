@@ -231,10 +231,9 @@ function syncRoundState() {
       resultMessage = '🎮 New round! Go to TriggerStart to begin'
       resultTimestamp = Date.now()
       
-      // Play cinematic for new tower
-      setTimeout(() => {
-        playCinematic()
-      }, 1000)
+      // Play cinematic for new tower (state is already synced here)
+      console.log('[Cinematic] New round detected, playing cinematic')
+      playCinematic()
     } else if (state.phase === RoundPhase.ENDING) {
       roundWinners = getWinners()
       resultMessage = '🏁 Round Complete!'
@@ -400,12 +399,19 @@ export async function main() {
   setupClient()
   setupCinematicSystem()
 
-  // Play cinematic on first world arrival (after a short delay to let scene load)
-  setTimeout(() => {
-    if (shouldAutoPlayCinematic()) {
-      playCinematic()
-    }
-  }, 1000)
+  // Wait for state sync before playing cinematic on first arrival
+  let hasTriggeredInitialCinematic = false
+  engine.addSystem(
+    () => {
+      if (!hasTriggeredInitialCinematic && isStateSyncronized() && shouldAutoPlayCinematic()) {
+        hasTriggeredInitialCinematic = true
+        console.log('[Cinematic] State synced, playing initial cinematic')
+        playCinematic()
+      }
+    },
+    undefined,
+    'initial-cinematic-trigger'
+  )
 
   // Set up callback for when players finish - update our best time if it's us
   onPlayerFinished((displayName, time, finishOrder) => {
