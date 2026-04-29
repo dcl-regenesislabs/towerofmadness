@@ -31,5 +31,8 @@
     "singleQuote": true,
     "printWidth": 120,
     "trailingComma": "none"
+  },
+  "dependencies": {
+    "ethers": "^6.16.0"
   }
 }

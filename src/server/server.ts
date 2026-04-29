@@ -2,7 +2,8 @@ import { engine, PlayerIdentityData, AvatarBase } from '@dcl/sdk/ecs'
 import { getPlayer } from '@dcl/sdk/players'
 import { GameState } from './gameState'
 import { room } from '../shared/messages'
-import { RoundPhase } from '../shared/schemas'
+import { RoundPhase, TournamentComponent } from '../shared/schemas'
+import { TOURNAMENT_CONFIG } from './tournamentConfig'
 
 const ROUND_END_DISPLAY_TIME = 3 // seconds
 const NEW_ROUND_DELAY = 10 // seconds
@@ -26,13 +27,35 @@ export function server() {
   let lastUpdate = 0
   let roundEndTime = 0
   let breakStartTime = 0
+  // Auto-start deferred: wait ~2s after boot so restoreTournamentState() can complete first
+  let autoStartDelay = (TOURNAMENT_CONFIG.tournamentMode && TOURNAMENT_CONFIG.autoStart) ? 2 : -1
 
   engine.addSystem((dt: number) => {
     lastUpdate += dt
     if (lastUpdate < ROUND_TIMER_CHECK_INTERVAL) return
+    const elapsed = lastUpdate
     lastUpdate = 0
 
+    // Auto-start tournament after boot delay (setTimeout not available in sandbox)
+    if (autoStartDelay > 0) {
+      autoStartDelay -= elapsed
+      if (autoStartDelay <= 0) {
+        autoStartDelay = -1
+        if (!gameState.tournamentActive) {
+          console.log(`[Tournament] Auto-starting: ${TOURNAMENT_CONFIG.durationMinutes}m, prize: ${TOURNAMENT_CONFIG.prizeMANA} MANA`)
+          gameState.startTournament(TOURNAMENT_CONFIG.durationMinutes, TOURNAMENT_CONFIG.prizeMANA)
+        } else {
+          console.log('[Tournament] Skipping auto-start — tournament already active (restored from storage)')
+        }
+      }
+    }
+
     const phase = gameState.getPhase()
+
+    // Tournament expiry check
+    if (TOURNAMENT_CONFIG.tournamentMode && gameState.checkTournamentExpired()) {
+      void gameState.endTournament()
+    }
 
     if (phase === RoundPhase.ACTIVE) {
       if (gameState.checkTimerExpired()) {
@@ -275,6 +298,26 @@ function setupMessageHandlers(gameState: GameState) {
       finishOrder: player.finishOrder,
       speedMultiplier: gameState.getSpeedMultiplier(),
       time: serverTime
+    })
+  })
+
+  room.onMessage('adminStartTournament', (data, context) => {
+    if (!context) return
+    if (!TOURNAMENT_CONFIG.adminWallets.includes(context.from.toLowerCase())) {
+      console.log(`[Tournament] Unauthorized start attempt from ${context.from}`)
+      return
+    }
+    const { durationMinutes, prizeMANA } = data
+    if (!durationMinutes || !prizeMANA) {
+      console.log('[Tournament] Invalid adminStartTournament params:', data)
+      return
+    }
+    gameState.startTournament(durationMinutes, prizeMANA)
+    const t = TournamentComponent.get(gameState.tournamentEntity)
+    room.send('tournamentStarted', {
+      tournamentId: t.tournamentId,
+      endTime: t.endTime,
+      prizeMANA: t.prizeMANA
     })
   })
 }

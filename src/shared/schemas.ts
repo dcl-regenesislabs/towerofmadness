@@ -92,6 +92,23 @@ PointLeaderboardComponent.validateBeforeChange((value) => {
 })
 
 // ============================================
+// TOURNAMENT LEADERBOARD COMPONENT (Server-authoritative)
+// ============================================
+export const TournamentLeaderboardComponent = engine.defineComponent('tower:TournamentLeaderboard', {
+  tournamentId: Schemas.String,
+  players: Schemas.Array(
+    Schemas.Map({
+      address: Schemas.String,
+      displayName: Schemas.String,
+      points: Schemas.Number
+    })
+  )
+})
+TournamentLeaderboardComponent.validateBeforeChange((value) => {
+  return value.senderAddress === AUTH_SERVER_PEER_ID
+})
+
+// ============================================
 // WINNERS COMPONENT (Server-authoritative)
 // ============================================
 export const WinnersComponent = engine.defineComponent('tower:Winners', {
@@ -129,6 +146,36 @@ export const ChunkComponent = engine.defineComponent('tower:Chunk', {})
 ChunkComponent.validateBeforeChange((value) => {
   return value.senderAddress === AUTH_SERVER_PEER_ID
 })
+
+// ============================================
+// TOURNAMENT COMPONENT (Server-authoritative)
+// ============================================
+export const TournamentComponent = engine.defineComponent('tower:Tournament', {
+  tournamentMode: Schemas.Boolean, // master switch — false disables all tournament UI
+  active: Schemas.Boolean,
+  tournamentId: Schemas.String,
+  endTime: Schemas.Int64,         // epoch ms when tournament ends
+  prizeMANA: Schemas.Number,
+  winnerAddress: Schemas.String,  // filled when tournament ends
+  winnerName: Schemas.String,
+  winnerPoints: Schemas.Number,
+  paymentTxHash: Schemas.String   // filled when blockchain confirms
+})
+TournamentComponent.validateBeforeChange((value) => {
+  return value.senderAddress === AUTH_SERVER_PEER_ID
+})
+
+export type TournamentState = {
+  tournamentMode: boolean
+  active: boolean
+  tournamentId: string
+  endTime: number
+  prizeMANA: number
+  winnerAddress: string
+  winnerName: string
+  winnerPoints: number
+  paymentTxHash: string
+}
 
 // ============================================
 // CHUNK END COMPONENT (Empty tag for the ChunkEnd entity)

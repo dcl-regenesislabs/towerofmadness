@@ -13,14 +13,17 @@ import {
   RoundStateComponent,
   LeaderboardComponent,
   PointLeaderboardComponent,
+  TournamentLeaderboardComponent,
   WinnersComponent,
   TowerConfigComponent,
+  TournamentComponent,
   ChunkComponent,
   RoundPhase,
   LeaderboardEntry,
   PointLeaderboardEntry,
   WinnerEntry,
-  TowerConfig
+  TowerConfig,
+  TournamentState
 } from './shared/schemas'
 import { CHUNK_START_ID, getChunkIdFromAssetPath } from './shared/chunks'
 import { getServerTime, isTimeSyncReady, getTimeSyncOffset } from './shared/timeSync'
@@ -250,4 +253,18 @@ export function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60)
   const s = Math.floor(seconds % 60)
   return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+export function getTournament(): TournamentState | null {
+  for (const [entity] of engine.getEntitiesWith(TournamentComponent)) {
+    return TournamentComponent.get(entity) as TournamentState
+  }
+  return null
+}
+
+export function getTournamentLeaderboard(): { address: string; displayName: string; points: number }[] {
+  for (const [entity] of engine.getEntitiesWith(TournamentLeaderboardComponent)) {
+    return TournamentLeaderboardComponent.get(entity).players as { address: string; displayName: string; points: number }[]
+  }
+  return []
 }

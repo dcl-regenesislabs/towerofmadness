@@ -10,6 +10,7 @@ export enum EntityNames {
   CoolBed_glb = "CoolBed.glb",
   LeaderBoard01_glb = "LeaderBoard01.glb",
   LeaderBoard01_glb_2 = "LeaderBoard01.glb_2",
+  LeaderBoard01_glb_3 = "LeaderBoard01.glb_3",
   Podium01_glb = "Podium01.glb",
   TriggerDeath = "TriggerDeath",
   TriggerStart = "TriggerStart",

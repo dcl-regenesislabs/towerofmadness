@@ -25,6 +25,7 @@ import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
 import { setupWorldLeaderboard } from './Leaderboard'
 import { setupWorldPointLeaderboard } from './PointLeaderboard'
+import { setupWorldTournamentLeaderboard } from './TournamentLeaderboard'
 import { server } from './server/server'
 import {
   setupClient,
@@ -40,6 +41,8 @@ import {
   getWeeklyPointLeaderboard,
   getWinners,
   getTowerConfig,
+  getTournament,
+  getTournamentLeaderboard,
   RoundPhase,
   LeaderboardEntry,
   PointLeaderboardEntry,
@@ -444,6 +447,7 @@ export async function main() {
 
   setupWorldLeaderboard(() => leaderboard, () => weeklyLeaderboard)
   setupWorldPointLeaderboard(() => pointLeaderboard, () => weeklyPointLeaderboard)
+  setupWorldTournamentLeaderboard(() => getTournamentLeaderboard(), () => getTournament()?.tournamentMode ?? false)
 
   // ============================================
   // TRIGGER SETUP
