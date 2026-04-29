@@ -217,10 +217,12 @@ function syncRoundState() {
 
   // Detect phase changes
   if (state.phase !== lastPhase) {
+    const previousPhase = lastPhase
     lastPhase = state.phase
     roundPhase = state.phase
 
-    if (state.phase === RoundPhase.ACTIVE && lastPhase !== null) {
+    // Only treat transitions into ACTIVE as a new round after the initial sync.
+    if (state.phase === RoundPhase.ACTIVE && previousPhase !== null) {
       // New round started - reset attempt
       attemptState = AttemptState.NOT_STARTED
       attemptTimer = 0
