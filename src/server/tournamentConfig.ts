@@ -11,7 +11,7 @@
 const TOURNAMENT_MODE = false
 
 // Set to true to skip the actual blockchain tx and only log what would happen
-const DRY_RUN = true
+const DRY_RUN = false
 
 // URL of the prize server (deployed on Render/Railway)
 const PRIZE_SERVER_URL = 'https://prize-server.onrender.com'
