@@ -535,13 +535,14 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
   if (!tournament || !tournament.tournamentMode) return null
 
   const mb = isMobile ? 2.8 : 1
-  const PANEL_WIDTH_ACTIVE = 980 * s  // exact same as TowerProgressBar
+  const ICON_SIZE = 28 * s
+  const TEXT_WIDTH_ACTIVE = 620 * s
+  const PANEL_WIDTH_ACTIVE = TEXT_WIDTH_ACTIVE + ICON_SIZE + 24 * s
   const PANEL_WIDTH_ENDED = isMobile ? screenWidth * 0.85 : 480 * s * mb
   const PANEL_HEIGHT_ACTIVE = 52 * s  // exact same as TowerProgressBar
   const PANEL_HEIGHT_ENDED = 82 * s * mb
   const FONT_SIZE_ACTIVE = 18 * s
   const FONT_SIZE_ENDED = 15 * s * mb
-  const ICON_SIZE = 28 * s
 
   // Tournament still active — show countdown + prize
   if (tournament.active) {
@@ -572,7 +573,7 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
           uiTransform={{
             width: ICON_SIZE,
             height: ICON_SIZE,
-            margin: { left: 10 * s, right: 6 * s },
+            margin: { right: 6 * s },
             flexShrink: 0
           }}
           uiBackground={{
@@ -582,7 +583,7 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
           }}
         />
         <UiEntity
-          uiTransform={{ width: PANEL_WIDTH_ACTIVE - ICON_SIZE - 28 * s, height: '100%', alignItems: 'center', justifyContent: 'center' }}
+          uiTransform={{ height: '100%', alignItems: 'center', justifyContent: 'center' }}
           uiText={{
             value: `TOURNAMENT  |  Prize: ${tournament.prizeType === 'wearable' ? 'Wearable' : `${tournament.prizeMANA} MANA`}  |  Ends in: ${countdown}`,
             fontSize: FONT_SIZE_ACTIVE,

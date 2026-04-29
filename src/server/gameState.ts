@@ -638,12 +638,12 @@ export class GameState {
     roundState.phase = RoundPhase.ENDING
 
     // Calculate podium winners:
-    // - If at least one player finished, rank only finishers by best time.
-    // - If nobody finished, rank all players by max height reached.
+    // - Finishers first (ordered by time), then non-finishers (ordered by max height).
+    // - This ensures the podium always has 3 entries when there are enough players.
     const playerArray = Array.from(this.players.values())
-    const finishers = playerArray.filter((player) => player.isFinished)
-    const podiumCandidates =
-      finishers.length > 0 ? orderByFinishTime(finishers) : orderByHeight(playerArray, true)
+    const finishers = orderByFinishTime(playerArray.filter((p) => p.isFinished))
+    const nonFinishers = orderByHeight(playerArray.filter((p) => !p.isFinished), true)
+    const podiumCandidates = [...finishers, ...nonFinishers]
 
     const top3 = podiumCandidates.slice(0, 3)
     const winners = WinnersComponent.getMutable(this.winnersEntity)

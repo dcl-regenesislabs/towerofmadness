@@ -11,7 +11,7 @@
 const TOURNAMENT_MODE = true
 
 // Set to true to skip the actual prize delivery and only log what would happen
-const DRY_RUN = true
+const DRY_RUN = false
 
 // 'mana'     — sends MANA to the winner's wallet (requires prizeWalletKey in ENV)
 // 'wearable' — distributes a wearable via DCL Rewards API
@@ -21,8 +21,8 @@ const PRIZE_TYPE: 'mana' | 'wearable' = 'wearable'
 const PRIZE_MANA_AMOUNT = 10
 
 // ── Wearable prize config (only used when PRIZE_TYPE = 'wearable') ────────────
-const WEARABLE_CAMPAIGN_ID = '7a7c87db-801a-4427-bf2b-2fab3d518b58'
-const WEARABLE_DISPENSER_KEY = 'eyJpZCI6IjY2NThmOGRiLWZjNGItNDQyMC05NTUzLWYyZDQxODRjZDY3YiIsImNhbXBhaWduX2lkIjoiN2E3Yzg3ZGItODAxYS00NDI3LWJmMmItMmZhYjNkNTE4YjU4In0=.lu0GNQ/5Tjl4QvAvJuFJ5hhjIPfyaeqVcWluMX/3WyY='
+const WEARABLE_CAMPAIGN_ID = 'fbe2c783-f181-4ac9-abb6-f18f1e7cd3ad'
+const WEARABLE_DISPENSER_KEY = 'EKWMg2g6Q8uqt47G6jmmePvix4PxgUrJq7bxjx58060=.Umlk1fZuvkdmPBpLOoWFk7Y9NL13ZrmvPvD6Iu4pvUA='
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -42,7 +42,7 @@ export const TOURNAMENT_CONFIG = {
   autoStart: true,
 
   // Duration of the tournament in minutes
-  durationMinutes: 1,
+  durationMinutes: 7,
 
   // Wallets authorized to send the adminStartTournament message (lowercase)
   adminWallets: ['0x62bd11099260b3861c2da1418566c354e0cdfa65']
