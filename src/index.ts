@@ -402,17 +402,17 @@ export async function main() {
   setupCinematicSystem()
 
   // Wait for state sync before playing cinematic on first arrival
-  let hasTriggeredInitialCinematic = false
+  const initialCinematicSystemName = 'initial-cinematic-trigger'
   engine.addSystem(
     () => {
-      if (!hasTriggeredInitialCinematic && isStateSyncronized() && shouldAutoPlayCinematic()) {
-        hasTriggeredInitialCinematic = true
+      if (isStateSyncronized() && shouldAutoPlayCinematic()) {
         console.log('[Cinematic] State synced, playing initial cinematic')
         playCinematic()
+        engine.removeSystem(initialCinematicSystemName)
       }
     },
     undefined,
-    'initial-cinematic-trigger'
+    initialCinematicSystemName
   )
 
   // Set up callback for when players finish - update our best time if it's us
