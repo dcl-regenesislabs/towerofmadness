@@ -535,12 +535,13 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
   if (!tournament || !tournament.tournamentMode) return null
 
   const mb = isMobile ? 2.8 : 1
-  const PANEL_WIDTH = 480 * s * mb
-  const PANEL_HEIGHT_ACTIVE = 56 * s * mb
+  const PANEL_WIDTH_ACTIVE = 980 * s  // exact same as TowerProgressBar
+  const PANEL_WIDTH_ENDED = isMobile ? screenWidth * 0.85 : 480 * s * mb
+  const PANEL_HEIGHT_ACTIVE = 52 * s  // exact same as TowerProgressBar
   const PANEL_HEIGHT_ENDED = 82 * s * mb
-  const FONT_SIZE = 15 * s * mb
-  const ICON_SIZE = 34 * s * mb
-  const PANEL_LEFT = (screenWidth - PANEL_WIDTH) / 2
+  const FONT_SIZE_ACTIVE = 18 * s
+  const FONT_SIZE_ENDED = 15 * s * mb
+  const ICON_SIZE = 28 * s
 
   // Tournament still active — show countdown + prize
   if (tournament.active) {
@@ -550,18 +551,19 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
     const secs = remainingSecs % 60
     const countdown = `${mins}:${secs.toString().padStart(2, '0')}`
 
+    const panelLeft = (screenWidth - PANEL_WIDTH_ACTIVE) / 2
     return (
       <UiEntity
         uiTransform={{
-          width: PANEL_WIDTH,
+          width: PANEL_WIDTH_ACTIVE,
           height: PANEL_HEIGHT_ACTIVE,
           positionType: 'absolute',
-          position: { top: 190 * s, left: PANEL_LEFT },
+          position: { top: 190 * s, left: panelLeft },
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: 10 * s * mb,
-          borderWidth: 2 * s * mb,
+          borderRadius: 10 * s,
+          borderWidth: 2 * s,
           borderColor: Color4.create(1, 0.84, 0, 1)
         }}
         uiBackground={{ color: Color4.create(0.05, 0.05, 0.18, 0.95) }}
@@ -570,7 +572,7 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
           uiTransform={{
             width: ICON_SIZE,
             height: ICON_SIZE,
-            margin: { left: 10 * s * mb, right: 6 * s * mb },
+            margin: { left: 10 * s, right: 6 * s },
             flexShrink: 0
           }}
           uiBackground={{
@@ -580,10 +582,10 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
           }}
         />
         <UiEntity
-          uiTransform={{ width: PANEL_WIDTH - ICON_SIZE - 28 * s * mb, height: '100%', alignItems: 'center', justifyContent: 'center' }}
+          uiTransform={{ width: PANEL_WIDTH_ACTIVE - ICON_SIZE - 28 * s, height: '100%', alignItems: 'center', justifyContent: 'center' }}
           uiText={{
-            value: `TOURNAMENT  |  Prize: ${tournament.prizeMANA} MANA  |  Ends in: ${countdown}`,
-            fontSize: FONT_SIZE,
+            value: `TOURNAMENT  |  Prize: ${tournament.prizeType === 'wearable' ? 'Wearable' : `${tournament.prizeMANA} MANA`}  |  Ends in: ${countdown}`,
+            fontSize: FONT_SIZE_ACTIVE,
             color: Color4.create(1, 0.84, 0, 1),
             textAlign: 'middle-center',
             font: 'sans-serif'
@@ -596,13 +598,14 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
   // Tournament ended — show winner
   if (!tournament.active && tournament.winnerAddress) {
     const paid = !!tournament.paymentTxHash
+    const panelLeft = (screenWidth - PANEL_WIDTH_ENDED) / 2
     return (
       <UiEntity
         uiTransform={{
-          width: PANEL_WIDTH,
+          width: PANEL_WIDTH_ENDED,
           height: PANEL_HEIGHT_ENDED,
           positionType: 'absolute',
-          position: { top: 190 * s, left: PANEL_LEFT },
+          position: { top: 190 * s, left: panelLeft },
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
@@ -626,64 +629,90 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
           }}
         />
         <UiEntity
-          uiTransform={{ width: PANEL_WIDTH - ICON_SIZE - 28 * s * mb, height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
+          uiTransform={{ width: PANEL_WIDTH_ENDED - ICON_SIZE - 28 * s * mb, height: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
         >
           <UiEntity
             uiTransform={{ width: '100%', height: 30 * s * mb, alignItems: 'center', justifyContent: 'center' }}
             uiText={{
               value: `TOURNAMENT WINNER: ${tournament.winnerName}  (${tournament.winnerPoints} pts)`,
-              fontSize: FONT_SIZE,
+              fontSize: FONT_SIZE_ENDED,
               color: Color4.create(1, 0.84, 0, 1),
               textAlign: 'middle-center',
               font: 'sans-serif'
             }}
           />
-          <UiEntity
-            uiTransform={{ width: '100%', height: 22 * s * mb, alignItems: 'center', justifyContent: 'center' }}
-            uiText={{
-              value: paid ? `${tournament.prizeMANA} MANA sent!` : `Sending ${tournament.prizeMANA} MANA...`,
-              fontSize: (FONT_SIZE - 1 * s * mb),
-              color: paid ? Color4.create(0.4, 0.9, 0.4, 1) : Color4.Yellow(),
-              textAlign: 'middle-center',
-              font: 'sans-serif'
-            }}
-          />
-          <UiEntity
-            uiTransform={{ width: '100%', height: 18 * s * mb, alignItems: 'center', justifyContent: 'center' }}
-            uiText={{
-              value: `To: ${tournament.winnerAddress.substring(0, 6)}...${tournament.winnerAddress.substring(tournament.winnerAddress.length - 4)}`,
-              fontSize: (FONT_SIZE - 2 * s * mb),
-              color: Color4.create(0.7, 0.7, 0.7, 1),
-              textAlign: 'middle-center',
-              font: 'sans-serif'
-            }}
-          />
-          {paid && (
+          {tournament.prizeType === 'wearable' ? (
             <UiEntity
-              uiTransform={{ width: '100%', height: 18 * s * mb, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}
+              uiTransform={{ width: '100%', height: 40 * s * mb, alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}
             >
               <UiEntity
+                uiTransform={{ width: '100%', height: 22 * s * mb, alignItems: 'center', justifyContent: 'center' }}
                 uiText={{
-                  value: `tx: ${tournament.paymentTxHash.substring(0, 10)}...${tournament.paymentTxHash.substring(tournament.paymentTxHash.length - 6)}`,
-                  fontSize: (FONT_SIZE - 2 * s * mb),
-                  color: Color4.create(0.4, 0.7, 1, 1),
+                  value: 'Wearable sent to:',
+                  fontSize: (FONT_SIZE_ENDED - 1 * s * mb),
+                  color: Color4.create(0.4, 0.9, 0.4, 1),
                   textAlign: 'middle-center',
                   font: 'sans-serif'
                 }}
-                uiTransform={{ height: '100%', alignItems: 'center', justifyContent: 'center', margin: { right: 6 * s * mb } }}
               />
               <UiEntity
-                uiTransform={{
-                  width: 18 * s * mb,
-                  height: 18 * s * mb,
+                uiTransform={{ width: '100%', height: 18 * s * mb, alignItems: 'center', justifyContent: 'center' }}
+                uiText={{
+                  value: `${tournament.winnerAddress.substring(0, 6)}...${tournament.winnerAddress.substring(tournament.winnerAddress.length - 4)}`,
+                  fontSize: (FONT_SIZE_ENDED - 2 * s * mb),
+                  color: Color4.create(0.7, 0.7, 0.7, 1),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
                 }}
-                uiBackground={{
-                  color: Color4.White(),
-                  texture: { src: 'assets/images/copy-icon.png' },
-                  textureMode: 'stretch'
-                }}
-                onMouseDown={() => { void copyToClipboard({ text: tournament.paymentTxHash }) }}
               />
+            </UiEntity>
+          ) : (
+            <UiEntity uiTransform={{ width: '100%', flexDirection: 'column', alignItems: 'center' }}>
+              <UiEntity
+                uiTransform={{ width: '100%', height: 22 * s * mb, alignItems: 'center', justifyContent: 'center' }}
+                uiText={{
+                  value: paid ? `${tournament.prizeMANA} MANA sent!` : `Sending ${tournament.prizeMANA} MANA...`,
+                  fontSize: (FONT_SIZE_ENDED - 1 * s * mb),
+                  color: paid ? Color4.create(0.4, 0.9, 0.4, 1) : Color4.Yellow(),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+              <UiEntity
+                uiTransform={{ width: '100%', height: 18 * s * mb, alignItems: 'center', justifyContent: 'center' }}
+                uiText={{
+                  value: `To: ${tournament.winnerAddress.substring(0, 6)}...${tournament.winnerAddress.substring(tournament.winnerAddress.length - 4)}`,
+                  fontSize: (FONT_SIZE_ENDED - 2 * s * mb),
+                  color: Color4.create(0.7, 0.7, 0.7, 1),
+                  textAlign: 'middle-center',
+                  font: 'sans-serif'
+                }}
+              />
+              {paid && (
+                <UiEntity
+                  uiTransform={{ width: '100%', height: 18 * s * mb, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' }}
+                >
+                  <UiEntity
+                    uiTransform={{ height: '100%', alignItems: 'center', justifyContent: 'center', margin: { right: 6 * s * mb } }}
+                    uiText={{
+                      value: `tx: ${tournament.paymentTxHash.substring(0, 10)}...${tournament.paymentTxHash.substring(tournament.paymentTxHash.length - 6)}`,
+                      fontSize: (FONT_SIZE_ENDED - 2 * s * mb),
+                      color: Color4.create(0.4, 0.7, 1, 1),
+                      textAlign: 'middle-center',
+                      font: 'sans-serif'
+                    }}
+                  />
+                  <UiEntity
+                    uiTransform={{ width: 18 * s * mb, height: 18 * s * mb }}
+                    uiBackground={{
+                      color: Color4.White(),
+                      texture: { src: 'assets/images/copy-icon.png' },
+                      textureMode: 'stretch'
+                    }}
+                    onMouseDown={() => { void copyToClipboard({ text: tournament.paymentTxHash }) }}
+                  />
+                </UiEntity>
+              )}
             </UiEntity>
           )}
         </UiEntity>

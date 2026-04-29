@@ -3,7 +3,7 @@ import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { isServer, syncEntity } from '@dcl/sdk/network'
 import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
 import { Storage } from '@dcl/sdk/server'
-import { sendMANA } from './manaTransfer'
+import { sendMANA } from './prizeTransfer'
 import { TOURNAMENT_CONFIG } from './tournamentConfig'
 import {
   RoundStateComponent,
@@ -1120,6 +1120,7 @@ export class GameState {
     t.active = true
     t.tournamentId = this.tournamentId
     t.endTime = this.tournamentEndTime
+    t.prizeType = TOURNAMENT_CONFIG.prizeType
     t.prizeMANA = prizeMANA
     t.winnerAddress = ''
     t.winnerName = ''
@@ -1215,14 +1216,22 @@ export class GameState {
 
   private async transferMANA(address: string, amount: number, tournamentId: string) {
     if (TOURNAMENT_CONFIG.dryRun) {
-      console.log(`[Tournament][DRY RUN] Would send ${amount} MANA to ${address} (tournamentId: ${tournamentId})`)
+      const prizeLabel = TOURNAMENT_CONFIG.prizeType === 'wearable' ? 'wearable' : `${amount} MANA`
+      console.log(`[Tournament][DRY RUN] Would send ${prizeLabel} to ${address} (tournamentId: ${tournamentId})`)
       const t = TournamentComponent.getMutable(this.tournamentEntity)
       t.paymentTxHash = 'dry-run-no-tx'
       return
     }
 
-    console.log(`[Tournament] → Sending ${amount} MANA to ${address} (tournamentId: ${tournamentId})`)
+    if (TOURNAMENT_CONFIG.prizeType === 'wearable') {
+      // Wearable is claimed client-side by the winner using their own wallet signature
+      console.log(`[Tournament] → Wearable prize: winner ${address} will auto-claim client-side`)
+      const t = TournamentComponent.getMutable(this.tournamentEntity)
+      t.paymentTxHash = 'pending-claim'
+      return
+    }
 
+    console.log(`[Tournament] → Sending ${amount} MANA to ${address} (tournamentId: ${tournamentId})`)
     const txHash = await sendMANA(address, amount)
     if (txHash) {
       const t = TournamentComponent.getMutable(this.tournamentEntity)
