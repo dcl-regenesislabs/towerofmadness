@@ -51,6 +51,7 @@ import {
 } from './multiplayer'
 import { requestPlayerSnapshot, setSnapshotHidden } from './snapshots'
 import { TriggerEndComponent } from './shared/schemas'
+import { setupCinematicSystem, playCinematic, shouldAutoPlayCinematic, isCinematicPlaying } from './cinematicCamera'
 
 // ============================================
 // GAME STATE
@@ -219,10 +220,12 @@ function syncRoundState() {
 
   // Detect phase changes
   if (state.phase !== lastPhase) {
+    const previousPhase = lastPhase
     lastPhase = state.phase
     roundPhase = state.phase
 
-    if (state.phase === RoundPhase.ACTIVE && lastPhase !== null) {
+    // Only treat transitions into ACTIVE as a new round after the initial sync.
+    if (state.phase === RoundPhase.ACTIVE && previousPhase !== null) {
       // New round started - reset attempt
       attemptState = AttemptState.NOT_STARTED
       attemptTimer = 0
@@ -232,6 +235,10 @@ function syncRoundState() {
       attemptResult = null
       resultMessage = '🎮 New round! Go to TriggerStart to begin'
       resultTimestamp = Date.now()
+      
+      // Play cinematic for new tower (state is already synced here)
+      console.log('[Cinematic] New round detected, playing cinematic')
+      playCinematic()
     } else if (state.phase === RoundPhase.ENDING) {
       roundWinners = getWinners()
       resultMessage = '🏁 Round Complete!'
@@ -264,6 +271,11 @@ function startAttempt() {
   }
 
   if (Date.now() < suppressStartUntil) {
+    return
+  }
+
+  // Don't allow starting attempt during cinematic
+  if (isCinematicPlaying()) {
     return
   }
 
@@ -390,6 +402,21 @@ export async function main() {
   })
 
   setupClient()
+  setupCinematicSystem()
+
+  // Wait for state sync before playing cinematic on first arrival
+  const initialCinematicSystemName = 'initial-cinematic-trigger'
+  engine.addSystem(
+    () => {
+      if (isStateSyncronized() && shouldAutoPlayCinematic()) {
+        console.log('[Cinematic] State synced, playing initial cinematic')
+        playCinematic()
+        engine.removeSystem(initialCinematicSystemName)
+      }
+    },
+    undefined,
+    initialCinematicSystemName
+  )
 
   // Set up callback for when players finish - update our best time if it's us
   onPlayerFinished((displayName, time, finishOrder) => {
