@@ -105,7 +105,7 @@
   "authoritativeMultiplayer": true,
   "multiplayerId": "towerofmadness",
   "worldConfiguration": {
-    "name": "mendoexit.dcl.eth"
+    "name": "towerofmadness.dcl.eth"
   },
   "logsPermissions": [
     "0xb8c4df381c6c305758f806c3aa71f37aabbcbd92",
