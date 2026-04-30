@@ -51,7 +51,7 @@ import {
   getTowerChunksFromEntities,
   getTournament
 } from "./multiplayer"
-import { openExternalUrl } from '~system/RestrictedActions'
+import { copyToClipboard } from '~system/RestrictedActions'
 import { CHUNK_END_ID, CHUNK_START_ID, MIDDLE_CHUNK_IDS } from "./shared/chunks"
 import { getSnapshots, isSnapshotHidden } from "./snapshots"
 import { OutlinedText, OUTLINE_OFFSETS_16, OUTLINE_OFFSETS_8 } from "./outlinedTextComponent"
@@ -710,7 +710,7 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
                       texture: { src: 'assets/images/copy-icon.png' },
                       textureMode: 'stretch'
                     }}
-                    onMouseDown={() => { void openExternalUrl({ url: `https://polygonscan.com/tx/${tournament.paymentTxHash}` }) }}
+                    onMouseDown={() => { void copyToClipboard({ text: tournament.paymentTxHash }) }}
                   />
                 </UiEntity>
               )}

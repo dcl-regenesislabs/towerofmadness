@@ -176,61 +176,6 @@ npm run build
 npm run deploy
 ```
 
-## Tournament Mode
-
-Tournament Mode allows you to run a timed competition where the winner automatically receives a prize — either **MANA** or a **Wearable** — at the end of the tournament.
-
-### How it works
-
-- The tournament starts automatically when the server boots (configurable)
-- Players accumulate points across normal rounds during the tournament window
-- When the timer expires, the player with the most points wins and receives the prize
-- The tournament state persists in DCL Storage — the server can sleep and wake up without losing track of time
-
-### Setup
-
-All settings are in **`src/server/tournamentConfig.ts`**:
-
-```ts
-const TOURNAMENT_MODE = true        // Enable tournament (false = completely disabled)
-const DRY_RUN = false               // true = log only, no actual prize sent
-const PRIZE_TYPE = 'wearable'       // 'mana' or 'wearable'
-durationMinutes: 60                 // Tournament duration
-```
-
-### Prize: MANA
-
-1. Set `PRIZE_TYPE = 'mana'` in `tournamentConfig.ts`
-2. In the DCL dashboard, add to **Scene → ENV**:
-   - Key: `prizeWalletKey` → Value: the private key of the wallet holding MANA on Polygon
-3. Make sure the wallet has MANA and a small amount of MATIC for gas
-
-### Prize: Wearable
-
-1. Set `PRIZE_TYPE = 'wearable'` in `tournamentConfig.ts`
-2. Create a campaign at [rewards.decentraland.org](https://rewards.decentraland.org) and make sure it's **ACTIVE** with MATIC funded
-3. Edit **`src/shared/wearableConfig.ts`** with your campaign ID and dispenser key:
-
-```ts
-export const WEARABLE_CONFIG = {
-  campaignId: 'your-campaign-uuid',
-  campaignKey: 'your-dispenser-key',
-  ...
-}
-```
-
-The wearable is claimed automatically by the winner's client using their wallet signature — no popups required.
-
-### Resetting the tournament
-
-If you need to force a fresh tournament (e.g. after changing duration), delete the `tournamentState` key from the **Scene** section of the DCL storage dashboard before deploying.
-
-### Fallback winner
-
-If no player scores any points, the prize goes to the fallback address configured in `src/server/gameState.ts`. Update this address before production events.
-
----
-
 ## Configuration
 
 ### Tower Generation
