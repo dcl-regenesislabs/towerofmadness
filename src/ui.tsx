@@ -585,7 +585,7 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
         <UiEntity
           uiTransform={{ height: '100%', alignItems: 'center', justifyContent: 'center' }}
           uiText={{
-            value: `TOURNAMENT  |  Prize: ${tournament.prizeType === 'wearable' ? 'Wearable' : `${tournament.prizeMANA} MANA`}  |  Ends in: ${countdown}`,
+            value: `TOURNAMENT  |  Prize: ${tournament.prizeType === 'wearable' ? 'Mobile Surfer Emote' : `${tournament.prizeMANA} MANA`}  |  Ends in: ${countdown}`,
             fontSize: FONT_SIZE_ACTIVE,
             color: Color4.create(1, 0.84, 0, 1),
             textAlign: 'middle-center',
