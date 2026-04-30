@@ -66,6 +66,11 @@ export const Messages = {
     winnerName: Schemas.String,
     winnerPoints: Schemas.Number,
     prizeMANA: Schemas.Number
+  }),
+
+  // Client -> Server: Winner successfully claimed their wearable
+  wearableClaimedByClient: Schemas.Map({
+    rewardId: Schemas.String
   })
 }
 

@@ -1,25 +1,28 @@
 /**
- * MANA Transfer from DCL Authoritative Server
+ * Prize Transfer from DCL Authoritative Server
  *
- * Sends ERC-20 MANA tokens on Polygon directly from the hammurabi server sandbox.
+ * Supports two prize types:
  *
- * Key insight: the sandbox has no native `fetch`, but DCL's `signedFetch` works.
- * We extend ethers.JsonRpcApiProvider to use `signedFetch` as the HTTP transport,
- * which lets ethers.js sign and broadcast transactions without any external service.
+ * 1. MANA — sends ERC-20 MANA tokens on Polygon using ethers.js + SignedFetchProvider.
+ *    Requires prizeWalletKey set in the DCL dashboard ENV section.
  *
- * Private key is read from the DCL dashboard ENV section (never bundled in code).
+ * 2. Wearable — distributes a wearable via the DCL Rewards API.
+ *    Requires a campaign created at rewards.decentraland.org and a dispenser key.
  *
- * Dependencies: ethers (^6), ~system/SignedFetch, @dcl/sdk/server (EnvVar)
+ * Key insight: the DCL sandbox has no native `fetch`, but `signedFetch` works.
+ * We use it both as the ethers.js HTTP transport (MANA) and for the Rewards API call (wearable).
  */
 
 import { ethers } from 'ethers'
 import { signedFetch } from '~system/SignedFetch'
 import { EnvVar } from '@dcl/sdk/server'
 
+// ─── MANA config ─────────────────────────────────────────────────────────────
 const MANA_CONTRACT = '0xA1c57f48F0Deb89f569dFbE6E2B7f46D33606fD4' // MANA on Polygon PoS
 const POLYGON_RPC_URL = 'https://polygon-bor-rpc.publicnode.com'
 const POLYGON_CHAIN_ID = 137
 const MANA_ABI = ['function transfer(address to, uint256 amount) returns (bool)']
+
 
 // Replaces ethers' default fetch-based transport with signedFetch (available in DCL sandbox)
 class SignedFetchProvider extends ethers.JsonRpcApiProvider {
@@ -49,13 +52,10 @@ class SignedFetchProvider extends ethers.JsonRpcApiProvider {
  *
  * @returns the transaction hash, or null if the transfer failed
  */
-export async function sendMANA(
-  toAddress: string,
-  amount: number
-): Promise<string | null> {
+export async function sendMANA(toAddress: string, amount: number): Promise<string | null> {
   const privateKey = await EnvVar.get('prizeWalletKey')
   if (!privateKey) {
-    console.error('[manaTransfer] No prizeWalletKey found in ENV — set it in the DCL dashboard')
+    console.error('[prizeTransfer] No prizeWalletKey found in ENV — set it in the DCL dashboard')
     return null
   }
 
@@ -65,19 +65,19 @@ export async function sendMANA(
     const contract = new ethers.Contract(MANA_CONTRACT, MANA_ABI, wallet)
     const amountWei = ethers.parseEther(amount.toString())
 
-    console.log(`[manaTransfer] Sending ${amount} MANA to ${toAddress}...`)
+    console.log(`[prizeTransfer] Sending ${amount} MANA to ${toAddress}...`)
     const tx = await (contract.transfer as (to: string, amount: bigint) => Promise<ethers.TransactionResponse>)(
       toAddress,
       amountWei
     )
-    console.log(`[manaTransfer] Tx submitted: ${tx.hash}`)
-
+    console.log(`[prizeTransfer] Tx submitted: ${tx.hash}`)
     await tx.wait()
-    console.log(`[manaTransfer] ✓ Confirmed: ${tx.hash}`)
+    console.log(`[prizeTransfer] ✓ MANA confirmed: ${tx.hash}`)
 
     return tx.hash
   } catch (err) {
-    console.error('[manaTransfer] ✗ Transfer failed:', err)
+    console.error('[prizeTransfer] ✗ sendMANA failed:', err)
     return null
   }
 }
+

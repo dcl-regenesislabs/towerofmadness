@@ -155,6 +155,7 @@ export const TournamentComponent = engine.defineComponent('tower:Tournament', {
   active: Schemas.Boolean,
   tournamentId: Schemas.String,
   endTime: Schemas.Int64,         // epoch ms when tournament ends
+  prizeType: Schemas.String,      // 'mana' | 'wearable'
   prizeMANA: Schemas.Number,
   winnerAddress: Schemas.String,  // filled when tournament ends
   winnerName: Schemas.String,
@@ -170,6 +171,7 @@ export type TournamentState = {
   active: boolean
   tournamentId: string
   endTime: number
+  prizeType: string
   prizeMANA: number
   winnerAddress: string
   winnerName: string

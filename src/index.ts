@@ -51,6 +51,9 @@ import {
 } from './multiplayer'
 import { requestPlayerSnapshot, setSnapshotHidden } from './snapshots'
 import { TriggerEndComponent } from './shared/schemas'
+import { WEARABLE_CONFIG } from './shared/wearableConfig'
+import { signedFetch } from '~system/SignedFetch'
+import { room } from './shared/messages'
 import { setupCinematicSystem, playCinematic, shouldAutoPlayCinematic, isCinematicPlaying } from './cinematicCamera'
 
 // ============================================
@@ -475,6 +478,57 @@ export async function main() {
   setupWorldLeaderboard(() => leaderboard, () => weeklyLeaderboard)
   setupWorldPointLeaderboard(() => pointLeaderboard, () => weeklyPointLeaderboard)
   setupWorldTournamentLeaderboard(() => getTournamentLeaderboard(), () => getTournament()?.tournamentMode ?? false)
+
+  // Auto-claim wearable if local player is the tournament winner
+  let wearableClaimed = false
+  engine.addSystem(() => {
+    if (wearableClaimed) return
+    const tournament = getTournament()
+    if (!tournament || tournament.active) return
+    if (tournament.prizeType !== 'wearable') return
+    if (tournament.paymentTxHash !== 'pending-claim') return
+
+    const localAddress = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase()
+    if (!localAddress) return
+    if (tournament.winnerAddress.toLowerCase() !== localAddress) return
+
+    wearableClaimed = true
+    console.log('[Wearable] Local player is the winner — claiming wearable...')
+
+    void (async () => {
+      try {
+        const url = `${WEARABLE_CONFIG.rewardsApi}/${WEARABLE_CONFIG.campaignId}/rewards`
+        const response = await signedFetch({
+          url,
+          init: {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              campaign_key: WEARABLE_CONFIG.campaignKey,
+              beneficiary: localAddress,
+              catalyst: WEARABLE_CONFIG.catalyst
+            })
+          }
+        })
+
+        console.log(`[Wearable] <- HTTP ${response.status}: ${response.body?.substring(0, 100)}`)
+
+        let data: { ok?: boolean; data?: { token?: string; image?: string }[]; error?: string } = {}
+        try { data = JSON.parse(response.body ?? '{}') } catch { /* plain text response */ }
+
+        if (data.ok && data.data?.[0]) {
+          const rewardId = data.data[0].token ?? 'claimed'
+          console.log(`[Wearable] ✓ Claimed! token: ${rewardId}`)
+          room.send('wearableClaimedByClient', { rewardId })
+        } else {
+          console.error(`[Wearable] ✗ Claim failed: ${data.error ?? response.body}`)
+          wearableClaimed = false // allow retry on actual failure
+        }
+      } catch (err) {
+        console.error('[Wearable] ✗ Claim error:', err)
+      }
+    })()
+  }, undefined, 'wearable-claim-system')
 
   // ============================================
   // TRIGGER SETUP
