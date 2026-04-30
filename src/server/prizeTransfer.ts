@@ -23,8 +23,6 @@ const POLYGON_RPC_URL = 'https://polygon-bor-rpc.publicnode.com'
 const POLYGON_CHAIN_ID = 137
 const MANA_ABI = ['function transfer(address to, uint256 amount) returns (bool)']
 
-// ─── DCL Rewards API ─────────────────────────────────────────────────────────
-const DCL_REWARDS_API = 'https://rewards.decentraland.org/api/campaigns'
 
 // Replaces ethers' default fetch-based transport with signedFetch (available in DCL sandbox)
 class SignedFetchProvider extends ethers.JsonRpcApiProvider {
@@ -83,49 +81,3 @@ export async function sendMANA(toAddress: string, amount: number): Promise<strin
   }
 }
 
-/**
- * Distributes a wearable to a player via the DCL Rewards API.
- * The campaign must be created at rewards.decentraland.org.
- *
- * @returns a reward ID string on success, or null if the request failed
- */
-export async function sendWearable(
-  toAddress: string,
-  campaignId: string,
-  dispenserKey: string
-): Promise<string | null> {
-  try {
-    const url = `${DCL_REWARDS_API}/${campaignId}/rewards`
-    console.log(`[prizeTransfer] Sending wearable to ${toAddress} via campaign ${campaignId}...`)
-
-    const response = await signedFetch({
-      url,
-      init: {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          campaign_key: dispenserKey,
-          beneficiary: toAddress,
-          catalyst: 'https://realm-provider-ea.decentraland.org'
-        })
-      }
-    })
-
-    console.log(`[prizeTransfer] <- HTTP ${response.status}`)
-
-    const data = JSON.parse(response.body ?? '{}') as { ok?: boolean; data?: { id: string }[]; error?: string }
-    console.log(`[prizeTransfer]   response: ${response.body}`)
-
-    if (!response.ok || !data.ok) {
-      console.error(`[prizeTransfer] ✗ Rewards API error: ${data.error ?? 'unknown'}`)
-      return null
-    }
-
-    const rewardId = data.data?.[0]?.id ?? 'sent'
-    console.log(`[prizeTransfer] ✓ Wearable sent! rewardId: ${rewardId}`)
-    return rewardId
-  } catch (err) {
-    console.error('[prizeTransfer] ✗ sendWearable failed:', err)
-    return null
-  }
-}

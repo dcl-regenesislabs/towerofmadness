@@ -320,4 +320,13 @@ function setupMessageHandlers(gameState: GameState) {
       prizeMANA: t.prizeMANA
     })
   })
+
+  room.onMessage('wearableClaimedByClient', (data, context) => {
+    if (!context) return
+    const t = TournamentComponent.getMutable(gameState.tournamentEntity)
+    if (t.winnerAddress.toLowerCase() !== context.from.toLowerCase()) return
+    if (t.paymentTxHash !== 'pending-claim') return
+    t.paymentTxHash = data.rewardId || 'claimed'
+    console.log(`[Tournament] Wearable claim confirmed by client: ${data.rewardId}`)
+  })
 }

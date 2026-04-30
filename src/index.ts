@@ -53,6 +53,7 @@ import { requestPlayerSnapshot, setSnapshotHidden } from './snapshots'
 import { TriggerEndComponent } from './shared/schemas'
 import { WEARABLE_CONFIG } from './shared/wearableConfig'
 import { signedFetch } from '~system/SignedFetch'
+import { room } from './shared/messages'
 import { setupCinematicSystem, playCinematic, shouldAutoPlayCinematic, isCinematicPlaying } from './cinematicCamera'
 
 // ============================================
@@ -516,9 +517,12 @@ export async function main() {
         try { data = JSON.parse(response.body ?? '{}') } catch { /* plain text response */ }
 
         if (data.ok && data.data?.[0]) {
-          console.log(`[Wearable] ✓ Claimed! token: ${data.data[0].token}`)
+          const rewardId = data.data[0].token ?? 'claimed'
+          console.log(`[Wearable] ✓ Claimed! token: ${rewardId}`)
+          room.send('wearableClaimedByClient', { rewardId })
         } else {
           console.error(`[Wearable] ✗ Claim failed: ${data.error ?? response.body}`)
+          wearableClaimed = false // allow retry on actual failure
         }
       } catch (err) {
         console.error('[Wearable] ✗ Claim error:', err)

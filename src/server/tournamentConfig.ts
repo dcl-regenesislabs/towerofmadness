@@ -20,11 +20,8 @@ const PRIZE_TYPE: 'mana' | 'wearable' = 'wearable'
 // ── MANA prize config (only used when PRIZE_TYPE = 'mana') ───────────────────
 const PRIZE_MANA_AMOUNT = 10
 
-// ── Wearable prize config (only used when PRIZE_TYPE = 'wearable') ────────────
-const WEARABLE_CAMPAIGN_ID = 'fbe2c783-f181-4ac9-abb6-f18f1e7cd3ad'
-const WEARABLE_DISPENSER_KEY = 'EKWMg2g6Q8uqt47G6jmmePvix4PxgUrJq7bxjx58060=.Umlk1fZuvkdmPBpLOoWFk7Y9NL13ZrmvPvD6Iu4pvUA='
-
 // ─────────────────────────────────────────────────────────────────────────────
+// Wearable campaign config lives in src/shared/wearableConfig.ts (single source of truth)
 
 export const TOURNAMENT_CONFIG = {
   tournamentMode: TOURNAMENT_MODE,
@@ -33,10 +30,6 @@ export const TOURNAMENT_CONFIG = {
 
   // MANA
   prizeMANA: PRIZE_MANA_AMOUNT,
-
-  // Wearable
-  wearableCampaignId: WEARABLE_CAMPAIGN_ID,
-  wearableDispenserKey: WEARABLE_DISPENSER_KEY,
 
   // Set to true to auto-start a tournament when the server boots
   autoStart: true,

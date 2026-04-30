@@ -8,8 +8,5 @@
     "src/**/*.ts",
     "src/**/*.tsx"
   ],
-  "exclude": [
-    "src/claiming/**"
-  ],
   "extends": "./node_modules/@dcl/sdk/types/tsconfig.ecs7.json"
 }
