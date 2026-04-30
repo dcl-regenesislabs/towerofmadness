@@ -199,6 +199,19 @@ rm *.crdt
 2. Verify `TriggerEnd` position updated: `[Game] Updated TriggerEnd position to height Xm`
 3. Ensure player started attempt first (check for `[Server] Rejected finish: no active attempt`)
 
+## Tournament Mode
+
+The game supports an optional tournament mode with automatic prize delivery (MANA or Wearable). See **`TOURNAMENT.md`** for full documentation.
+
+**Quick reference for agents:**
+
+- All tournament settings: `src/server/tournamentConfig.ts` — edit `TOURNAMENT_MODE`, `DRY_RUN`, `PRIZE_TYPE`, `durationMinutes`
+- Wearable campaign config: `src/shared/wearableConfig.ts` — single source of truth for campaign ID and key
+- Prize transfer logic: `src/server/prizeTransfer.ts` — `sendMANA()` uses ethers.js with a custom `SignedFetchProvider` that wraps `signedFetch` (native `fetch` is NOT available in the sandbox)
+- Wearable claiming is **client-side**: server sets `paymentTxHash = 'pending-claim'`, winner's client auto-calls DCL Rewards API via `signedFetch`, then sends `wearableClaimedByClient` message to server to confirm
+- Tournament state persists in DCL Storage key `tournamentState` — delete it to force a fresh tournament
+- The sandbox has no `process.env`, `fetch`, `AbortController`, `Headers` — use `signedFetch` for HTTP and bundled constants for config
+
 ## Requirements
 
 - Node.js >= 20.0.0
