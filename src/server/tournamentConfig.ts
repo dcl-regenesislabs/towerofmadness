@@ -8,7 +8,7 @@
 // ─── EDIT THESE VALUES ───────────────────────────────────────────────────────
 
 // Master switch — set to false to disable ALL tournament functionality
-const TOURNAMENT_MODE = true
+const TOURNAMENT_MODE = false
 
 // Set to true to skip the actual prize delivery and only log what would happen
 const DRY_RUN = false
