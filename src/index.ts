@@ -809,10 +809,10 @@ function setupBackgroundMusic(audioPath: string) {
   engine.addSystem(
     () => {
       if (backgroundMusicEntity && AudioSource.has(backgroundMusicEntity)) {
-        const audio = AudioSource.getMutable(backgroundMusicEntity)
+        const audio = AudioSource.get(backgroundMusicEntity)
 
         if (!audio.playing) {
-          audio.playing = true
+          AudioSource.getMutable(backgroundMusicEntity).playing = true
           console.log(`[Audio] Retrying background music playback: ${audio.audioClipUrl}`)
         }
 
