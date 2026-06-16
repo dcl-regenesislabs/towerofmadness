@@ -237,7 +237,7 @@ const TowerProgressBar = () => {
           padding: { left: 1 * s, right: 1 * s, top: 2 * s, bottom: 2 * s }
         }}
         uiBackground={{
-          color: Color4.create(0, 0, 0, 0) 
+          color: Color4.create(0, 0, 0, 0)
         }}
       >
         <UiEntity
@@ -256,12 +256,21 @@ const TowerProgressBar = () => {
           {/* Chunk segments */}
           {[...chunkIds].map((chunkId, index) => {
             const color = CHUNK_COLORS[chunkId] || Color4.Gray()
+            const r = (BAR_HEIGHT - 4 * s) / 2
+            const isFirst = index === 0
+            const isLast = index === chunkIds.length - 1
             return (
             <UiEntity
               key={`chunk-${index}`}
               uiTransform={{
                 width: segmentWidth,
-                height: BAR_HEIGHT - 4 * s
+                height: BAR_HEIGHT - 4 * s,
+                borderRadius: isFirst || isLast ? {
+                  topLeft: isFirst ? r : 0,
+                  bottomLeft: isFirst ? r : 0,
+                  topRight: isLast ? r : 0,
+                  bottomRight: isLast ? r : 0,
+                } : 0
               }}
               uiBackground={{
                 color: color
