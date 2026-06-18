@@ -268,9 +268,10 @@ function setupMessageHandlers(gameState: GameState) {
       return
     }
 
-    // Validate: player height must be near the top of tower
-    // Use Math.max(liveKit, maxHeight) so a stale/missing LiveKit snapshot never zeros out a valid climb.
-    // ?? instead of || avoids treating y=0 as falsy.
+    // Validate: player height must be near the top of tower.
+    // Skip the check entirely when height data is unavailable (both LiveKit and maxHeight are 0)
+    // — this happens when LiveKit position data is not ready for this player.
+    // The teleportStrikes and attemptStartTime checks above already cover cheating in that case.
     const liveKitHeight = getPlayer({ userId: player.address })?.position?.y ?? 0
     const currentHeight = Math.max(liveKitHeight, player.maxHeight)
     const towerConfig = gameState.getTowerConfig()
@@ -278,7 +279,7 @@ function setupMessageHandlers(gameState: GameState) {
 
     console.log(`[Server] Finish attempt: height=${currentHeight.toFixed(1)}m, towerHeight=${towerConfig?.totalHeight.toFixed(1)}m, minRequired=${minFinishHeight.toFixed(1)}m`)
 
-    if (currentHeight < minFinishHeight) {
+    if (currentHeight > 0 && currentHeight < minFinishHeight) {
       console.log(`[Server] Rejected finish from ${player.displayName}: height ${currentHeight.toFixed(1)}m < required ${minFinishHeight.toFixed(1)}m`)
       room.send('attemptRejected', {
         address: player.address,
