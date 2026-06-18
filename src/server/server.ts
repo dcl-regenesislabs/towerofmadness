@@ -214,8 +214,7 @@ function setupMessageHandlers(gameState: GameState) {
     if (player.isFinished) return
 
     // Validate: player must be at start area (low height)
-    const liveKitPlayer = getPlayer({ userId: player.address })
-    const currentHeight = liveKitPlayer?.position?.y || 0
+    const currentHeight = getPlayer({ userId: player.address })?.position?.y ?? 0
     const maxStartHeight = 20 // Must be below 20m to start (ground level + tolerance)
 
     if (currentHeight > maxStartHeight) {
@@ -270,8 +269,10 @@ function setupMessageHandlers(gameState: GameState) {
     }
 
     // Validate: player height must be near the top of tower
-    const liveKitPlayer = getPlayer({ userId: player.address })
-    const currentHeight = liveKitPlayer?.position?.y || player.maxHeight
+    // Use Math.max(liveKit, maxHeight) so a stale/missing LiveKit snapshot never zeros out a valid climb.
+    // ?? instead of || avoids treating y=0 as falsy.
+    const liveKitHeight = getPlayer({ userId: player.address })?.position?.y ?? 0
+    const currentHeight = Math.max(liveKitHeight, player.maxHeight)
     const towerConfig = gameState.getTowerConfig()
     const minFinishHeight = towerConfig ? towerConfig.totalHeight - END_TRIGGER_OFFSET : 80
 
