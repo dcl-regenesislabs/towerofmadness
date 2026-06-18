@@ -288,7 +288,7 @@ function startAttempt() {
     return
   }
 
-  console.log('[Game] Attempt started')
+  console.log(`[Game] Attempt started at height=${playerHeight.toFixed(2)}m`)
   attemptState = AttemptState.IN_PROGRESS
   attemptStartTime = Date.now()
   attemptTimer = 0
@@ -313,7 +313,7 @@ function finishAttempt() {
     return
   }
 
-  console.log('[Game] Attempt reached finish trigger, waiting for server validation')
+  console.log(`[Game] Finish trigger reached: currentHeight=${playerHeight.toFixed(2)}m, maxHeight=${playerMaxHeight.toFixed(2)}m`)
   attemptState = AttemptState.VALIDATING
   attemptFinishTime = attemptTimer
   attemptResult = 'PENDING'
