@@ -66,7 +66,11 @@ export function server() {
     } else if (phase === RoundPhase.ENDING) {
       const endingElapsed = (Date.now() - roundEndTime) / 1000
       if (endingElapsed >= ROUND_END_DISPLAY_TIME) {
-        console.log(`[Server] ENDING phase done after ${endingElapsed.toFixed(1)}s, starting BREAK`)
+        // Destroy tower NOW so clients get src='' / visible=false 10 s before the new round.
+        // That gap lets them fully unload the GLTFs and destroy physics bodies, so they
+        // recreate colliders cleanly when the new assets arrive in startNewRound().
+        console.log(`[Server] ENDING phase done after ${endingElapsed.toFixed(1)}s, destroying tower and starting BREAK`)
+        gameState.destroyTowerForTransition()
         gameState.setPhase(RoundPhase.BREAK)
         breakStartTime = Date.now()
       }

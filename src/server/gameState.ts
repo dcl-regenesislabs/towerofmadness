@@ -539,13 +539,21 @@ export class GameState {
   }
 
   // Round management
+
+  // Called by the server at BREAK-phase start (10 s before startNewRound).
+  // Sending src='' / visible=false here, well ahead of the new-round tick, gives clients
+  // enough time to fully unload the old GLTFs and destroy physics bodies before the new
+  // assets arrive — fixing the missing-collider bug on round 2+.
+  destroyTowerForTransition() {
+    this.destroyTower()
+  }
+
   startNewRound() {
     const roundId = `round_${Date.now()}`
 
-    // Destroy old tower
-    this.destroyTower()
+    // destroyTower() was already called at BREAK-phase start; no need to call it again here.
+    // All pool entities are already src='' / visible=false on all clients.
 
-    // Generate random chunks
     const numChunks =
       Math.floor(Math.random() * (MAX_TOWER_MIDDLE_CHUNKS - MIN_TOWER_MIDDLE_CHUNKS + 1)) +
       MIN_TOWER_MIDDLE_CHUNKS
@@ -555,10 +563,8 @@ export class GameState {
 
     console.log(`[Server] New round: ${roundId}, chunks: [${chunkIds.join(' -> ')}]`)
 
-    // Create new tower
     this.createTower(chunkIds)
 
-    // Reset round state
     const now = Date.now()
     this.roundStartTime = now
     this.finisherCount = 0
@@ -572,7 +578,6 @@ export class GameState {
     roundState.remainingAtSpeedChange = BASE_TIMER
     roundState.finisherCount = 0
 
-    // Reset all players
     this.players.forEach((player) => {
       player.maxHeight = 0
       player.bestTime = 0
@@ -584,12 +589,10 @@ export class GameState {
       player.teleportStrikes = 0
     })
 
-    // Clear winners
     const winners = WinnersComponent.getMutable(this.winnersEntity)
     winners.winners = []
 
     this.podiumServer?.clear()
-
   }
 
   incrementFinisherCount(): number {
