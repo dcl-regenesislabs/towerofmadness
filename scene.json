@@ -7,9 +7,9 @@
     "favicon": "favicon_asset",
     "navmapThumbnail": "assets/images/TOM-Thumbnail.png"
   },
-  "owner": "",
+  "owner": "DCLRegenesisLabs",
   "contact": {
-    "name": "SDK",
+    "name": "DCL Regenesis Labs",
     "email": ""
   },
   "main": "bin/index.js",
