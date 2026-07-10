@@ -1444,7 +1444,12 @@ const GameUI = () => {
   const winnersToDisplay = roundWinners
 
   // Show winners display
-  const showWinners = (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && winnersToDisplay.length > 0
+  // Suppressed while still talking to the guide pigeon (see onTeleportToBase in
+  // index.ts) — reappears on its own the moment the tutorial finishes, if the
+  // round is still in ENDING/BREAK by then.
+  const isTutorialActive = tutorialStep !== TutorialStep.INACTIVE && tutorialStep !== TutorialStep.DONE
+  const showWinners =
+    (roundPhase === RoundPhase.ENDING || roundPhase === RoundPhase.BREAK) && winnersToDisplay.length > 0 && !isTutorialActive
   const topWinnerSlots: Array<WinnerEntry | null> = [0, 1, 2].map((index) => winnersToDisplay[index] ?? null)
   const localWinner = winnersToDisplay.find((winner) => winner.address?.toLowerCase() === localPlayerAddress)
   const localPlacementText = localWinner

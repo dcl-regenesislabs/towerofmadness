@@ -34,6 +34,7 @@ import {
   sendPlayerJoined,
   onPlayerFinished,
   onAttemptRejected,
+  onTeleportToBase,
   getRoundState,
   getLeaderboard,
   getWeeklyLeaderboard,
@@ -470,6 +471,22 @@ export async function main() {
     const title = stage === 'finish' ? 'ATTEMPT NOT COUNTED' : 'OOPS TRY AGAIN'
     const message = stage === 'finish' ? `Your attempt did not count. ${reason}` : reason
     rejectAttempt(message, title)
+  })
+
+  // Server broadcasts this to everyone when a round's timer runs out. Skip it
+  // (and the winners UI, see showWinners in ui.tsx) for a player still mid-
+  // conversation with the guide pigeon — the tutorial isn't a real attempt, so
+  // there's nothing to interrupt them for. The tower still changes for everyone;
+  // this only holds off this one player's own teleport/camera cut.
+  onTeleportToBase((pos) => {
+    if (tutorialStep !== TutorialStep.INACTIVE && tutorialStep !== TutorialStep.DONE) {
+      console.log('[Tutorial] Skipping round-end teleport, still talking to the pigeon')
+      return
+    }
+    movePlayerTo({
+      newRelativePosition: pos,
+      cameraTarget: { x: pos.x, y: pos.y + 1, z: pos.z }
+    })
   })
 
   onEnterScene((player) => {
