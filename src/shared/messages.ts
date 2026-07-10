@@ -71,6 +71,16 @@ export const Messages = {
   // Client -> Server: Winner successfully claimed their wearable
   wearableClaimedByClient: Schemas.Map({
     rewardId: Schemas.String
+  }),
+
+  // Client -> Server: Player finished (or skipped) the pigeon tutorial
+  tutorialCompleted: Schemas.Map({}),
+
+  // Server -> All clients: Whether this player has completed the tutorial before
+  // (client filters by own address, same pattern as attemptRejected/teleportWarning)
+  tutorialStatus: Schemas.Map({
+    address: Schemas.String,
+    hasSeenTutorial: Schemas.Boolean
   })
 }
 
