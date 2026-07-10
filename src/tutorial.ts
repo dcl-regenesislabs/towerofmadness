@@ -13,6 +13,7 @@ import {
 } from '@dcl/sdk/ecs'
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { isMobile, getPlatform } from '@dcl/sdk/platform'
+import { movePlayerTo } from '~system/RestrictedActions'
 import { isCinematicPlaying } from './cinematicCamera'
 import { onTutorialStatus, sendTutorialCompleted } from './multiplayer'
 
@@ -52,6 +53,7 @@ export const TUTORIAL_CLIMB_FADE_MS = 1500
 
 const MOVE_THRESHOLD_M = 0.6
 const MOVE_HOLD_MS = 5000
+const JUMP_HOLD_MS = 2500
 const HINT_DELAY_MS = 20000
 const SERVER_STATUS_TIMEOUT_MS = 5000
 const PLATFORM_TIMEOUT_MS = 3000
@@ -78,6 +80,7 @@ let welcomeSkipAllowed = false
 
 let moveBaselinePos: Vector3 | null = null
 let moveConfirmedAt = 0
+let jumpConfirmedAt = 0
 let phaseEnteredAt = 0
 let hintShownForPhase = false
 let tutorialCompletedSent = false
@@ -119,6 +122,20 @@ function spawnPigeon() {
     position: Vector3.Zero(),
     rotation: Quaternion.fromEulerDegrees(0, 180, 0),
     scale: Vector3.One()
+  })
+
+  // Snap the camera to face the pigeon as soon as it spawns — otherwise
+  // players who spawned/ended the cinematic looking the other way might
+  // never notice it standing beside them. Doesn't move the player, just
+  // re-aims the camera; they're free to look away again right after.
+  const pigeonTransform = Transform.get(pigeonEntity)
+  movePlayerTo({
+    newRelativePosition: playerPos,
+    cameraTarget: {
+      x: pigeonTransform.position.x,
+      y: pigeonTransform.position.y + 0.8,
+      z: pigeonTransform.position.z
+    }
   })
 }
 
@@ -247,20 +264,30 @@ function updateTutorialProgress() {
     }
 
     if (moveConfirmedAt > 0 && Date.now() - moveConfirmedAt >= MOVE_HOLD_MS) {
-      setInputMode({ disableWalk: true, disableJog: true, disableRun: true })
+      // Jump/double-jump only for now — gliding stays locked until the
+      // GLIDE_TIP dialog actually appears below.
+      setInputMode({ disableWalk: true, disableJog: true, disableRun: true, disableGliding: true })
+      jumpConfirmedAt = 0
       setStep(TutorialStep.JUMP_INTRO, JUMP_INTRO_TEXT)
       return
     }
 
     maybeShowHint(LEARN_MOVE_HINT, moveConfirmedAt === 0)
   } else if (tutorialStep === TutorialStep.JUMP_INTRO) {
-    if (inputSystem.isTriggered(InputAction.IA_JUMP, PointerEventType.PET_DOWN)) {
+    // Give the player a couple seconds to actually see/feel the jump before
+    // swapping the dialog text out from under them.
+    if (jumpConfirmedAt === 0 && inputSystem.isTriggered(InputAction.IA_JUMP, PointerEventType.PET_DOWN)) {
+      jumpConfirmedAt = Date.now()
+    }
+
+    if (jumpConfirmedAt > 0 && Date.now() - jumpConfirmedAt >= JUMP_HOLD_MS) {
+      setInputMode({ disableWalk: true, disableJog: true, disableRun: true, disableGliding: false })
       setStep(TutorialStep.GLIDE_TIP, GLIDE_TIP_TEXT)
       tutorialShowGotItButton = true
       return
     }
 
-    maybeShowHint(JUMP_HINT, true)
+    maybeShowHint(JUMP_HINT, jumpConfirmedAt === 0)
   } else if (tutorialStep === TutorialStep.CLIMB) {
     if (Date.now() - tutorialStepChangedAt >= TUTORIAL_CLIMB_HOLD_MS + TUTORIAL_CLIMB_FADE_MS) {
       finishTutorial()

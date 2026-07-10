@@ -737,7 +737,9 @@ const PigeonTutorialDialogBubble = ({
   // Sum the sections top-to-bottom instead of the old "generous baseline minus
   // extras" approach — no wasted space for whichever sections aren't showing.
   const bodyTop = avatarDip + 14
-  const bodyHeight = isLandscapeMobile ? 84 : 104
+  // GLIDE_TIP's text is short (2 lines) — the shared 104/84 height was sized for
+  // LEARN_MOVE's longer copy and left a big empty gap above its icon.
+  const bodyHeight = isLandscapeMobile ? (tutorialStep === TutorialStep.GLIDE_TIP ? 56 : 84) : tutorialStep === TutorialStep.GLIDE_TIP ? 64 : 104
   const iconsTop = bodyTop + bodyHeight + 2
   const iconsTotalWidth = hasIcons ? stepIcons.length * iconSize + (stepIcons.length - 1) * iconGap : 0
   const iconsLeft = (bubbleWidth - iconsTotalWidth) / 2
@@ -1008,13 +1010,16 @@ const PigeonClaimDialogBubble = ({
 
   const stepElapsed = (Date.now() - pigeonClaimDialogChangedAt) / 1000
   const dialogText =
-    pigeonClaimDialogStep === PigeonClaimDialogStep.CLAIMED
-      ? 'Congratulations for reaching the top! Your wearable is on its way.'
-      : 'To equip it, open your backpack and select your new wearable.'
+    pigeonClaimDialogStep === PigeonClaimDialogStep.CLAIMING
+      ? 'Claiming your gift...'
+      : pigeonClaimDialogStep === PigeonClaimDialogStep.CLAIMED
+      ? 'Congratulations for reaching the top! Your wearable can take a few minutes to arrive.'
+      : 'Once it arrives, you can equip it from your backpack.'
   const typedText = getCoolBedTypedText(dialogText, stepElapsed)
   const isTyping = typedText.length < dialogText.length
   const showCursor = isTyping && Math.floor(stepElapsed * 4) % 2 === 0
   const visibleDialogText = `${typedText}${showCursor ? '|' : ''}`
+  const isClaiming = pigeonClaimDialogStep === PigeonClaimDialogStep.CLAIMING
 
   const buttonLabel = pigeonClaimDialogStep === PigeonClaimDialogStep.CLAIMED ? 'NEXT' : 'GOT IT'
   const handlePrimaryClick = () => {
@@ -1099,7 +1104,7 @@ const PigeonClaimDialogBubble = ({
           />
         </UiEntity>
 
-        {!isTyping && (
+        {!isTyping && !isClaiming && (
           <UiEntity
             uiTransform={{
               width: bubbleWidth - bodyHorizontalPadding * 2,
