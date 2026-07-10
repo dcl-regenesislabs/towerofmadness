@@ -39,7 +39,8 @@ import {
   roundFinishOrder,
   roundFinishTime,
   coolBedDialogText,
-  coolBedDialogTimestamp
+  coolBedDialogTimestamp,
+  pigeonClaimTimestamp
 } from "./index"
 import {
   RoundPhase,
@@ -773,6 +774,10 @@ const GameUI = () => {
   const timeSinceStartMessage = startMessageTimestamp > 0 ? (Date.now() - startMessageTimestamp) / 1000 : 999
   const showStartMessage = attemptState === AttemptState.IN_PROGRESS && timeSinceStartMessage < 4
 
+  // Pigeon wearable claimed banner (shows for 6s after a successful claim)
+  const timeSinceClaim = pigeonClaimTimestamp > 0 ? (Date.now() - pigeonClaimTimestamp) / 1000 : 999
+  const showClaimed = timeSinceClaim < 6
+
   const winnersToDisplay = roundWinners
 
   // Show winners display
@@ -922,6 +927,35 @@ const GameUI = () => {
       }}
     >
       <CoolBedDialogBubble screenWidth={screenWidth} screenHeight={screenHeight} isMobile={isMobile} />
+
+      {/* WEARABLE CLAIMED - Center banner */}
+      {showClaimed && (
+        <UiEntity
+          uiTransform={{
+            width: 520 * s,
+            height: 120 * s,
+            positionType: 'absolute',
+            position: { top: screenHeight * 0.32, left: (screenWidth - 520 * s) / 2 },
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16 * s,
+            borderRadius: 12 * s,
+            borderWidth: 2 * s,
+            borderColor: Color4.create(0.6, 0.2, 1, 1)
+          }}
+          uiBackground={{ color: Color4.create(0.05, 0.05, 0.08, 0.92) }}
+        >
+          <UiEntity
+            uiTransform={{ width: '100%', height: 44 * s, alignItems: 'center', justifyContent: 'center' }}
+            uiText={{ value: '✓ Claimed!', fontSize: 34 * s, color: Color4.create(0.7, 0.4, 1, 1) }}
+          />
+          <UiEntity
+            uiTransform={{ width: '100%', height: 32 * s, alignItems: 'center', justifyContent: 'center' }}
+            uiText={{ value: 'The wearable will be in your wallet soon!', fontSize: 20 * s, color: Color4.White() }}
+          />
+        </UiEntity>
+      )}
 
       {/* ROUND TIMER - Top Center */}
       <UiEntity

@@ -17,7 +17,7 @@ import {
   InputModifier,
   pointerEventsSystem
 } from '@dcl/sdk/ecs'
-import { Vector3, Color4 } from '@dcl/sdk/math'
+import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { onEnterScene, onLeaveScene } from '@dcl/sdk/players'
 import { movePlayerTo } from '~system/RestrictedActions'
@@ -51,7 +51,7 @@ import {
 } from './multiplayer'
 import { requestPlayerSnapshot, setSnapshotHidden } from './snapshots'
 import { TriggerEndComponent } from './shared/schemas'
-import { WEARABLE_CONFIG } from './shared/wearableConfig'
+import { WEARABLE_CONFIG, PIGEON_WEARABLE_CONFIG } from './shared/wearableConfig'
 import { signedFetch } from '~system/SignedFetch'
 import { room } from './shared/messages'
 import { setupCinematicSystem, playCinematic, shouldAutoPlayCinematic, isCinematicPlaying } from './cinematicCamera'
@@ -111,6 +111,9 @@ export let suppressStartUntil: number = 0
 // While Date.now() < this, the TriggerEnd finish trigger is ignored (used by the
 // teleport-to-top so landing in the win zone doesn't count as a finish attempt).
 export let suppressEndTriggerUntil: number = 0
+// Set to Date.now() when the pigeon wearable is successfully claimed; the UI shows
+// a "Claimed" banner for a few seconds after this timestamp.
+export let pigeonClaimTimestamp: number = 0
 export let finishValidationStartedAt: number = 0
 export let coolBedDialogTimestamp: number = 0
 export const coolBedDialogText = `YO SUP welcome to Tower of madness
@@ -589,7 +592,7 @@ export async function main() {
   const pigeon = engine.addEntity()
   GltfContainer.create(pigeon, { src: 'assets/wearables/PartyPigeon.glb' })
   Transform.create(pigeon, {
-    position: Vector3.create(40, 5, 40), // updated to the tower top by the system below
+    position: Vector3.create(40, 5, 40), // position + rotation updated by the system below
     scale: Vector3.create(1, 1, 1)
   })
 
@@ -602,9 +605,7 @@ export async function main() {
   MeshCollider.setBox(pigeonClick, ColliderLayer.CL_POINTER)
 
   // Claims the pigeon wearable for the local player via the DCL Rewards API.
-  // NOTE: this uses the campaign in shared/wearableConfig.ts — make sure that
-  // campaign is the one that dispenses THIS pigeon, otherwise it hands out the
-  // tournament wearable instead.
+  // Uses PIGEON_WEARABLE_CONFIG (separate from the tournament prize campaign).
   async function claimPigeonWearable() {
     const address = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase()
     if (!address) {
@@ -613,16 +614,16 @@ export async function main() {
     }
     console.log(`[Pigeon] Claiming wearable for ${address}...`)
     try {
-      const url = `${WEARABLE_CONFIG.rewardsApi}/${WEARABLE_CONFIG.campaignId}/rewards`
+      const url = `${PIGEON_WEARABLE_CONFIG.rewardsApi}/${PIGEON_WEARABLE_CONFIG.campaignId}/rewards`
       const response = await signedFetch({
         url,
         init: {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            campaign_key: WEARABLE_CONFIG.campaignKey,
+            campaign_key: PIGEON_WEARABLE_CONFIG.campaignKey,
             beneficiary: address,
-            catalyst: WEARABLE_CONFIG.catalyst
+            catalyst: PIGEON_WEARABLE_CONFIG.catalyst
           })
         }
       })
@@ -630,6 +631,7 @@ export async function main() {
       try { data = JSON.parse(response.body ?? '{}') } catch { /* plain text response */ }
       if (data.ok && data.data?.[0]) {
         console.log(`[Pigeon] ✓ Claimed! token: ${data.data[0].token ?? 'claimed'}`)
+        pigeonClaimTimestamp = Date.now()
       } else {
         console.error(`[Pigeon] ✗ Claim failed: ${data.error ?? response.body}`)
       }
@@ -652,7 +654,7 @@ export async function main() {
     () => { void claimPigeonWearable() }
   )
 
-  // --- TELEPORT TO TOP (disabled) ---------------------------------------------
+  // --- TELEPORT TO TOP (disabled — uncomment to re-enable) --------------------
   // Teleport pillar at the base — press E to jump up to the win zone where the pigeon is.
   // Tall so the cursor can actually aim at it. Move/resize this Transform to reposition it.
   /*
@@ -709,6 +711,7 @@ export async function main() {
     () => {
       const triggerEnd = findTriggerEndEntity()
       if (!triggerEnd || !Transform.has(triggerEnd)) {
+        // winZoneTarget = null // (teleport disabled)
         return
       }
 
@@ -717,8 +720,19 @@ export async function main() {
       // requires height >= endY, which equals center.y). Anchor everything there.
       const floorY = center.y
 
-      // Pigeon stands on the meta platform; click box wraps its body.
-      Transform.getMutable(pigeon).position = Vector3.create(center.x, floorY, center.z)
+      // The win platform alternates 0deg/180deg each round, so a fixed rotation would
+      // face backwards half the time. Instead, aim the pigeon at the tower center
+      // (where the climbing player arrives). Flip FACE_TOWER if it ends up reversed.
+      const FACE_TOWER = true
+      const TOWER_CENTER_X = 40
+      const TOWER_CENTER_Z = 40
+      let yaw = Math.atan2(TOWER_CENTER_X - center.x, TOWER_CENTER_Z - center.z) * (180 / Math.PI)
+      if (!FACE_TOWER) yaw += 180
+
+      // Pigeon stands on the meta platform, facing the climb; click box wraps its body.
+      const pt = Transform.getMutable(pigeon)
+      pt.position = Vector3.create(center.x, floorY, center.z)
+      pt.rotation = Quaternion.fromEulerDegrees(0, yaw, 0)
       Transform.getMutable(pigeonClick).position = Vector3.create(center.x, floorY + 1.1, center.z)
 
       // Teleport destination (disabled):

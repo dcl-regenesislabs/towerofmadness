@@ -9,3 +9,14 @@ export const WEARABLE_CONFIG = {
   rewardsApi: 'https://rewards.decentraland.org/api/campaigns',
   catalyst: 'https://realm-provider-ea.decentraland.org'
 }
+
+/**
+ * Pigeon trophy campaign — the wearable dispensed by clicking the pigeon at the
+ * top of the tower. Kept separate from the tournament prize (WEARABLE_CONFIG).
+ */
+export const PIGEON_WEARABLE_CONFIG = {
+  campaignId: 'b3e8f1c6-1afb-4c32-8c7a-e76e16ad9e69',
+  campaignKey: '3jIRZ1EmTQqmx6gvU6h3L7Po8cYa+0wyjHrnbhatnmk=.5c/KbsblJP7QzEQGYxAneymIzMPzAFFQllqWwVOzZeg=',
+  rewardsApi: 'https://rewards.decentraland.org/api/campaigns',
+  catalyst: 'https://realm-provider-ea.decentraland.org'
+}
