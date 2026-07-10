@@ -26,6 +26,13 @@ import {
   MIN_TOWER_MIDDLE_CHUNKS,
   getChunkAssetPath
 } from '../shared/chunks'
+import {
+  TUTORIAL_CHUNK_HEIGHT,
+  TUTORIAL_MIDDLE_CHUNK_ID,
+  TUTORIAL_TOWER_TOP_Y,
+  TUTORIAL_TOWER_X,
+  TUTORIAL_TOWER_Z
+} from '../shared/tutorialTower'
 import { PodiumAvatarsServer } from './podiumAvatarsServer'
 
 // Helper to protect synced components on an entity
@@ -329,6 +336,8 @@ export class GameState {
       this.towerEntityPool.push(entity)
     }
 
+    this.createTutorialTower()
+
     this.podiumServer = new PodiumAvatarsServer()
 
     console.log('[Server] Game state initialized')
@@ -548,6 +557,36 @@ export class GameState {
     towerConfig.totalHeight = totalHeight
 
     console.log(`[Server] Tower created: ${chunkIds.length} chunks`)
+  }
+
+  // Standalone tutorial tower: ChunkStart + one middle chunk + ChunkEnd, built
+  // once and left alone forever — no pooling, no visibility toggling, no
+  // TriggerEnd/anti-cheat, since it's never scored and never regenerates.
+  private createTutorialTower() {
+    const heights = [0, TUTORIAL_CHUNK_HEIGHT, TUTORIAL_TOWER_TOP_Y]
+    const chunkAssetIds: string[] = [CHUNK_START_ID, TUTORIAL_MIDDLE_CHUNK_ID, CHUNK_END_ID]
+    // createTower() rotates middle chunks by `middleIndex % 2 === 0 ? 180 : 0`
+    // (middleIndex counts only middle chunks, not ChunkStart) and ChunkEnd by
+    // `(middleChunkCount - 1) % 2 === 0 ? 180 : 0`. With exactly one middle
+    // chunk that's 180° for both — they must match or the connector geometry
+    // doesn't line up and the climb is physically blocked. ChunkStart's own
+    // rotation is independent (it's a separate static piece in the real tower);
+    // 180° here is just what this code-built one already used.
+    const rotationsY = [180, 180, 180]
+
+    for (let i = 0; i < chunkAssetIds.length; i++) {
+      const entity = engine.addEntity()
+      Transform.create(entity, {
+        position: Vector3.create(TUTORIAL_TOWER_X, heights[i], TUTORIAL_TOWER_Z),
+        rotation: Quaternion.fromEulerDegrees(0, rotationsY[i], 0),
+        scale: Vector3.One()
+      })
+      GltfContainer.create(entity, { src: getChunkAssetPath(chunkAssetIds[i]) })
+      protectServerEntity(entity, [Transform, GltfContainer])
+      syncEntity(entity, [Transform.componentId, GltfContainer.componentId])
+    }
+
+    console.log(`[Server] Tutorial tower created at (${TUTORIAL_TOWER_X}, ${TUTORIAL_TOWER_Z})`)
   }
 
   // Round management

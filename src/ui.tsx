@@ -39,8 +39,7 @@ import {
   roundFinishOrder,
   roundFinishTime,
   coolBedDialogText,
-  coolBedDialogTimestamp,
-  pigeonClaimTimestamp
+  coolBedDialogTimestamp
 } from "./index"
 import {
   RoundPhase,
@@ -66,8 +65,9 @@ import {
   tutorialShowTryButton,
   tutorialShowGotItButton,
   tutorialShowSkipButton,
-  TUTORIAL_CLIMB_HOLD_MS,
-  TUTORIAL_CLIMB_FADE_MS,
+  TUTORIAL_REWARD_HOLD_MS,
+  TUTORIAL_REWARD_FADE_MS,
+  pigeonClaimTimestamp,
   onTryClicked,
   onGotItClicked,
   onSkipClicked
@@ -647,12 +647,12 @@ const PigeonTutorialDialogBubble = ({
   const showCursor = isTyping && Math.floor(stepElapsed * 4) % 2 === 0
   const visibleDialogText = `${typedText}${showCursor ? '|' : ''}`
 
-  const isClimbStep = tutorialStep === TutorialStep.CLIMB
-  const climbFadeStartSeconds = TUTORIAL_CLIMB_HOLD_MS / 1000
-  const climbFadeDurationSeconds = TUTORIAL_CLIMB_FADE_MS / 1000
+  const isRewardStep = tutorialStep === TutorialStep.REWARD
+  const rewardFadeStartSeconds = TUTORIAL_REWARD_HOLD_MS / 1000
+  const rewardFadeDurationSeconds = TUTORIAL_REWARD_FADE_MS / 1000
   const alpha =
-    isClimbStep && stepElapsed > climbFadeStartSeconds
-      ? Math.max(0, 1 - (stepElapsed - climbFadeStartSeconds) / climbFadeDurationSeconds)
+    isRewardStep && stepElapsed > rewardFadeStartSeconds
+      ? Math.max(0, 1 - (stepElapsed - rewardFadeStartSeconds) / rewardFadeDurationSeconds)
       : 1
 
   const hasHint = tutorialHintText.length > 0
@@ -1164,6 +1164,7 @@ const GameUI = () => {
 
   const isAttemptActive = attemptState === AttemptState.IN_PROGRESS
   const isRoundActive = roundPhase === RoundPhase.ACTIVE
+  const isTutorialActive = tutorialStep !== TutorialStep.INACTIVE && tutorialStep !== TutorialStep.DONE
   const showPlayerHeightUi = false
   const showPersonalBestUi = false
   const showLeaderboardUi = false
@@ -1386,7 +1387,7 @@ const GameUI = () => {
             positionType: 'relative'
           }}
         >
-          {/* Round Timer - BIG */}
+          {/* Round Timer - BIG (or "TUTORIAL MODE" while the pigeon tutorial is active) */}
           <UiEntity
             uiTransform={{
               width: '100%',
@@ -1396,40 +1397,72 @@ const GameUI = () => {
               flexDirection: 'row'
             }}
           >
-            <UiEntity
-              uiTransform={{
-                width: 280 * s,
-                height: 80 * s,
-                alignItems: 'center',
-                justifyContent: 'center',
-                positionType: 'relative'
-              }}
-            >
-              <OutlinedText
-                outlineKeyPrefix="timer-outline"
-                outlineOffsets={OUTLINE_OFFSETS_16}
-                outlineScale={s}
+            {isTutorialActive ? (
+              <UiEntity
                 uiTransform={{
-                  width: '100%',
-                  height: '100%',
-                  positionType: 'absolute',
-                  position: { left: 0, top: 0 },
+                  width: 320 * s,
+                  height: 60 * s,
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  positionType: 'relative'
                 }}
-                uiText={{
-                  value: `${formatTime(roundTimer)}`,
-                  fontSize: 80 * s,
-                  color: roundTimer <= 60
-                    ? Color4.create(0.6, 0.0, 0.15, 1)
-                    : Color4.White(),
-                  textAlign: 'middle-center'
+              >
+                <OutlinedText
+                  outlineKeyPrefix="timer-outline"
+                  outlineOffsets={OUTLINE_OFFSETS_16}
+                  outlineScale={s}
+                  uiTransform={{
+                    width: '100%',
+                    height: '100%',
+                    positionType: 'absolute',
+                    position: { left: 0, top: 0 },
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  uiText={{
+                    value: 'TUTORIAL MODE',
+                    fontSize: 40 * s,
+                    color: Color4.White(),
+                    textAlign: 'middle-center'
+                  }}
+                />
+              </UiEntity>
+            ) : (
+              <UiEntity
+                uiTransform={{
+                  width: 280 * s,
+                  height: 80 * s,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  positionType: 'relative'
                 }}
-              />
-            </UiEntity>
+              >
+                <OutlinedText
+                  outlineKeyPrefix="timer-outline"
+                  outlineOffsets={OUTLINE_OFFSETS_16}
+                  outlineScale={s}
+                  uiTransform={{
+                    width: '100%',
+                    height: '100%',
+                    positionType: 'absolute',
+                    position: { left: 0, top: 0 },
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  uiText={{
+                    value: `${formatTime(roundTimer)}`,
+                    fontSize: 80 * s,
+                    color: roundTimer <= 60
+                      ? Color4.create(0.6, 0.0, 0.15, 1)
+                      : Color4.White(),
+                    textAlign: 'middle-center'
+                  }}
+                />
+              </UiEntity>
+            )}
 
             {/* Speed Multiplier (if active) */}
-            {roundSpeedMultiplier > 1 && (
+            {!isTutorialActive && roundSpeedMultiplier > 1 && (
               <UiEntity
                 uiTransform={{
                   width: 80 * s,
@@ -1449,7 +1482,7 @@ const GameUI = () => {
           </UiEntity>
 
           {/* Round Status */}
-          {!isRoundActive && (
+          {!isTutorialActive && !isRoundActive && (
             <UiEntity
               uiTransform={{
                 width: '100%',
