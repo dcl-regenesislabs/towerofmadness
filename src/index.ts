@@ -55,6 +55,7 @@ import { WEARABLE_CONFIG, PIGEON_WEARABLE_CONFIG } from './shared/wearableConfig
 import { signedFetch } from '~system/SignedFetch'
 import { room } from './shared/messages'
 import { setupCinematicSystem, playCinematic, shouldAutoPlayCinematic, isCinematicPlaying } from './cinematicCamera'
+import { setupTutorial, armPendingIntroTutorial } from './tutorial'
 
 // ============================================
 // GAME STATE
@@ -412,6 +413,7 @@ export async function main() {
 
   setupClient()
   setupCinematicSystem()
+  setupTutorial()
 
   // Wait for state sync before playing cinematic on first arrival
   const initialCinematicSystemName = 'initial-cinematic-trigger'
@@ -420,6 +422,10 @@ export async function main() {
       if (isStateSyncronized() && shouldAutoPlayCinematic()) {
         console.log('[Cinematic] State synced, playing initial cinematic')
         playCinematic()
+        // The pigeon tutorial spawns once this (one-time, intro-only) cinematic ends —
+        // round-transition cinematics call playCinematic() too, but this system only
+        // fires once per client session, so they never re-arm the tutorial.
+        armPendingIntroTutorial()
         engine.removeSystem(initialCinematicSystemName)
       }
     },

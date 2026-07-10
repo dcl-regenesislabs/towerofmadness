@@ -178,6 +178,10 @@ export class GameState {
   private roundStartTime: number = 0
   private finisherCount: number = 0
 
+  // Players who have completed (or skipped) the pigeon tutorial at least once.
+  // In-memory only, resets on server restart — same as allTimeBests.
+  private tutorialSeen = new Set<string>()
+
   // All-time best scores (persisted)
   private allTimeBests = new Map<string, AllTimeBest>()
   private weeklyBests = new Map<string, WeeklyBest>()
@@ -339,6 +343,14 @@ export class GameState {
   // Player management (normalize address to lowercase for consistency)
   getPlayer(address: string): PlayerData | undefined {
     return this.players.get(address.toLowerCase())
+  }
+
+  hasSeenTutorial(address: string): boolean {
+    return this.tutorialSeen.has(address.toLowerCase())
+  }
+
+  markTutorialSeen(address: string) {
+    this.tutorialSeen.add(address.toLowerCase())
   }
 
   setPlayer(address: string, data: PlayerData) {

@@ -45,6 +45,7 @@ export { isServer } from '@dcl/sdk/network'
 // Callback for when any player finishes (includes server-authoritative time)
 let onPlayerFinishedCallback: ((displayName: string, time: number, finishOrder: number) => void) | null = null
 let onAttemptRejectedCallback: ((stage: string, reason: string) => void) | null = null
+let onTutorialStatusCallback: ((hasSeenTutorial: boolean) => void) | null = null
 
 export function setupClient() {
   // Listen for player finished broadcasts
@@ -84,6 +85,17 @@ export function setupClient() {
       onAttemptRejectedCallback(data.stage, data.reason)
     }
   })
+
+  room.onMessage('tutorialStatus', (data) => {
+    const localIdentity = PlayerIdentityData.getOrNull(engine.PlayerEntity)
+    if (!localIdentity?.address) return
+    if (localIdentity.address.toLowerCase() !== data.address.toLowerCase()) return
+
+    console.log(`[Tutorial] Server says hasSeenTutorial=${data.hasSeenTutorial}`)
+    if (onTutorialStatusCallback) {
+      onTutorialStatusCallback(data.hasSeenTutorial)
+    }
+  })
 }
 
 export function onPlayerFinished(callback: (displayName: string, time: number, finishOrder: number) => void) {
@@ -92,6 +104,10 @@ export function onPlayerFinished(callback: (displayName: string, time: number, f
 
 export function onAttemptRejected(callback: (stage: string, reason: string) => void) {
   onAttemptRejectedCallback = callback
+}
+
+export function onTutorialStatus(callback: (hasSeenTutorial: boolean) => void) {
+  onTutorialStatusCallback = callback
 }
 
 
@@ -109,6 +125,10 @@ export function sendPlayerStarted() {
 
 export function sendPlayerFinished() {
   room.send('playerFinished', { time: 0 }) // Time is calculated server-side
+}
+
+export function sendTutorialCompleted() {
+  room.send('tutorialCompleted', {})
 }
 
 // ============================================
