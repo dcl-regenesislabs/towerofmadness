@@ -55,7 +55,7 @@ import { WEARABLE_CONFIG, PIGEON_WEARABLE_CONFIG } from './shared/wearableConfig
 import { signedFetch } from '~system/SignedFetch'
 import { room } from './shared/messages'
 import { setupCinematicSystem, playCinematic, shouldAutoPlayCinematic, isCinematicPlaying } from './cinematicCamera'
-import { setupTutorial, armPendingIntroTutorial } from './tutorial'
+import { setupTutorial, armPendingIntroTutorial, tutorialStep, TutorialStep } from './tutorial'
 
 // ============================================
 // GAME STATE
@@ -112,9 +112,25 @@ export let suppressStartUntil: number = 0
 // While Date.now() < this, the TriggerEnd finish trigger is ignored (used by the
 // teleport-to-top so landing in the win zone doesn't count as a finish attempt).
 export let suppressEndTriggerUntil: number = 0
-// Set to Date.now() when the pigeon wearable is successfully claimed; the UI shows
-// a "Claimed" banner for a few seconds after this timestamp.
-export let pigeonClaimTimestamp: number = 0
+// Pigeon dialog shown right after the wearable claim succeeds — first a
+// congrats message, then a "how to equip it" message after NEXT is pressed.
+export enum PigeonClaimDialogStep {
+  HIDDEN = 'HIDDEN',
+  CLAIMED = 'CLAIMED',
+  EQUIP_INFO = 'EQUIP_INFO'
+}
+export let pigeonClaimDialogStep: PigeonClaimDialogStep = PigeonClaimDialogStep.HIDDEN
+export let pigeonClaimDialogChangedAt: number = 0
+
+export function onPigeonClaimNextClicked() {
+  if (pigeonClaimDialogStep !== PigeonClaimDialogStep.CLAIMED) return
+  pigeonClaimDialogStep = PigeonClaimDialogStep.EQUIP_INFO
+  pigeonClaimDialogChangedAt = Date.now()
+}
+
+export function onPigeonClaimDismissClicked() {
+  pigeonClaimDialogStep = PigeonClaimDialogStep.HIDDEN
+}
 export let finishValidationStartedAt: number = 0
 export let coolBedDialogTimestamp: number = 0
 export const coolBedDialogText = `YO SUP welcome to Tower of madness
@@ -637,7 +653,8 @@ export async function main() {
       try { data = JSON.parse(response.body ?? '{}') } catch { /* plain text response */ }
       if (data.ok && data.data?.[0]) {
         console.log(`[Pigeon] ✓ Claimed! token: ${data.data[0].token ?? 'claimed'}`)
-        pigeonClaimTimestamp = Date.now()
+        pigeonClaimDialogStep = PigeonClaimDialogStep.CLAIMED
+        pigeonClaimDialogChangedAt = Date.now()
       } else {
         console.error(`[Pigeon] ✗ Claim failed: ${data.error ?? response.body}`)
       }
@@ -660,10 +677,10 @@ export async function main() {
     () => { void claimPigeonWearable() }
   )
 
-  // --- TELEPORT TO TOP (disabled — uncomment to re-enable) --------------------
-  // Teleport pillar at the base — press E to jump up to the win zone where the pigeon is.
+  // --- DEBUG TELEPORT TO TOP ---------------------------------------------------
+  // Teleport pillar at the base — press E (shows as a tap button on mobile) to
+  // jump up to the win zone where the pigeon is.
   // Tall so the cursor can actually aim at it. Move/resize this Transform to reposition it.
-  /*
   const teleportPad = engine.addEntity()
   Transform.create(teleportPad, {
     position: Vector3.create(40.38, 12.5, 14.5),
@@ -708,7 +725,6 @@ export async function main() {
       })
     }
   )
-  */
   // ---------------------------------------------------------------------------
 
   // Keep the pigeon (and its click box) glued to the current tower top.
@@ -717,7 +733,7 @@ export async function main() {
     () => {
       const triggerEnd = findTriggerEndEntity()
       if (!triggerEnd || !Transform.has(triggerEnd)) {
-        // winZoneTarget = null // (teleport disabled)
+        winZoneTarget = null
         return
       }
 
@@ -741,8 +757,7 @@ export async function main() {
       pt.rotation = Quaternion.fromEulerDegrees(0, yaw, 0)
       Transform.getMutable(pigeonClick).position = Vector3.create(center.x, floorY + 1.1, center.z)
 
-      // Teleport destination (disabled):
-      // winZoneTarget = Vector3.create(center.x + 2, floorY + 1, center.z)
+      winZoneTarget = Vector3.create(center.x + 2, floorY + 1, center.z)
     },
     undefined,
     'pigeon-teleport-system'
@@ -781,6 +796,7 @@ export async function main() {
         }
       },
       () => {
+        if (tutorialStep !== TutorialStep.INACTIVE && tutorialStep !== TutorialStep.DONE) return
         if (!Animator.has(entity)) return
         const breathClip = Animator.getClipOrNull(entity, 'Breath')
         const talkClip = Animator.getClipOrNull(entity, 'Talk')

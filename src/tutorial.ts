@@ -2,6 +2,8 @@ import {
   engine,
   Transform,
   GltfContainer,
+  Billboard,
+  BillboardMode,
   AvatarBase,
   InputModifier,
   InputAction,
@@ -53,7 +55,7 @@ const MOVE_HOLD_MS = 5000
 const HINT_DELAY_MS = 20000
 const SERVER_STATUS_TIMEOUT_MS = 5000
 const PLATFORM_TIMEOUT_MS = 3000
-const PIGEON_SPAWN_OFFSET_M = 1.8
+const PIGEON_SPAWN_OFFSET_M = 2.6
 
 const LEARN_MOVE_TEXT =
   'Great! Touch the left side of the screen to activate the joystick, and drag the right side to look around.'
@@ -91,8 +93,12 @@ function spawnPigeon() {
   const playerRot = playerTransform?.rotation ?? Quaternion.Identity()
   const right = Vector3.rotate(Vector3.Right(), playerRot)
 
+  // Billboard overwrites this entity's rotation every frame to face the
+  // camera, so the model can't just be spawned with a fixed offset rotation.
+  // Instead it's a plain rig entity, with the .glb parented to it on a child
+  // that carries a static 180° turn — the pigeon's model faces -Z, so without
+  // this the camera would end up looking at the back of its neck.
   pigeonEntity = engine.addEntity()
-  GltfContainer.create(pigeonEntity, { src: 'assets/scene/Models/pigeon.glb' })
   Transform.create(pigeonEntity, {
     position: Vector3.create(
       playerPos.x + right.x * PIGEON_SPAWN_OFFSET_M,
@@ -102,11 +108,23 @@ function spawnPigeon() {
     rotation: playerRot,
     scale: Vector3.One()
   })
+  // Keeps the pigeon facing the player as they move around, rotating only on
+  // the Y axis so it doesn't tilt up/down or lean sideways.
+  Billboard.create(pigeonEntity, { billboardMode: BillboardMode.BM_Y })
+
+  const pigeonModel = engine.addEntity()
+  GltfContainer.create(pigeonModel, { src: 'assets/scene/Models/pigeon.glb' })
+  Transform.create(pigeonModel, {
+    parent: pigeonEntity,
+    position: Vector3.Zero(),
+    rotation: Quaternion.fromEulerDegrees(0, 180, 0),
+    scale: Vector3.One()
+  })
 }
 
 function despawnPigeon() {
   if (!pigeonEntity) return
-  engine.removeEntity(pigeonEntity)
+  engine.removeEntityWithChildren(pigeonEntity)
   pigeonEntity = null
 }
 

@@ -40,7 +40,11 @@ import {
   roundFinishTime,
   coolBedDialogText,
   coolBedDialogTimestamp,
-  pigeonClaimTimestamp
+  PigeonClaimDialogStep,
+  pigeonClaimDialogStep,
+  pigeonClaimDialogChangedAt,
+  onPigeonClaimNextClicked,
+  onPigeonClaimDismissClicked
 } from "./index"
 import {
   RoundPhase,
@@ -559,6 +563,30 @@ const PIGEON_ACCENT_COLOR = Color4.create(0.22, 0.5, 0.78, 1) // Sky blue (disti
 const PIGEON_BUTTON_COLOR = Color4.create(0.22, 0.5, 0.78, 1)
 const PIGEON_SKIP_BUTTON_COLOR = Color4.create(0.4, 0.4, 0.42, 1)
 
+// Tutorial icon textures — mounted once, off-screen and invisible, so the GPU
+// has them cached by the time the tutorial actually shows them. Without this
+// they can flash up blank/white the first time each one appears.
+const TUTORIAL_ICON_PRELOAD_IMAGES = [
+  'assets/images/joystick.png',
+  'assets/images/joystick_enabled.png',
+  'assets/images/jump.png',
+  'assets/images/jump_enabled.png',
+  'assets/images/glide.png',
+  'assets/images/glide_enabled.png'
+]
+
+const TutorialIconPreloader = () => (
+  <UiEntity uiTransform={{ width: 1, height: 1, positionType: 'absolute', position: { top: -1000, left: -1000 } }}>
+    {TUTORIAL_ICON_PRELOAD_IMAGES.map((src) => (
+      <UiEntity
+        key={`preload-${src}`}
+        uiTransform={{ width: 1, height: 1 }}
+        uiBackground={{ texture: { src }, textureMode: 'stretch' }}
+      />
+    ))}
+  </UiEntity>
+)
+
 // Same on-screen control icons used by the mobile HUD — shown next to the
 // dialog for the control that step is teaching.
 function getTutorialStepIcons(step: TutorialStep): string[] {
@@ -584,7 +612,19 @@ const JOYSTICK_ORBIT_DOT_RATIO = 0.62
 // The joystick icon gets a small white dot orbiting its center instead of the
 // plain tap-pulse — simulates a finger dragging around the stick. Other icons
 // (jump/glide, which are one-shot taps) keep alternating icon/icon_enabled.
-function renderTutorialIcon(icon: string, size: number, alpha: number, marginRight: number, key: string) {
+// `animated` is false for the CLIMB step's 3-icon recap row — those just show
+// the plain (non "_enabled") icon with no motion.
+function renderTutorialIcon(icon: string, size: number, alpha: number, marginRight: number, key: string, animated: boolean) {
+  if (!animated) {
+    return (
+      <UiEntity
+        key={key}
+        uiTransform={{ width: size, height: size, margin: { right: marginRight } }}
+        uiBackground={{ color: withAlpha(Color4.White(), alpha), texture: { src: icon }, textureMode: 'stretch' }}
+      />
+    )
+  }
+
   if (icon === JOYSTICK_ICON) {
     const angle = ((Date.now() % JOYSTICK_ORBIT_PERIOD_MS) / JOYSTICK_ORBIT_PERIOD_MS) * Math.PI * 2
     const orbitRadius = size * JOYSTICK_ORBIT_RADIUS_RATIO
@@ -667,8 +707,10 @@ const PigeonTutorialDialogBubble = ({
   const stepIcons = getTutorialStepIcons(tutorialStep)
   const hasIcons = stepIcons.length > 0
   // Bigger icons — a single icon gets to be a real focal point, the 3-icon
-  // recap row on the CLIMB step still needs to fit side by side.
-  const iconSize = stepIcons.length > 1 ? 68 : 92
+  // recap row on the CLIMB step still needs to fit side by side. GLIDE_TIP
+  // gets a smaller focal icon than the other single-icon steps — 92 made
+  // that bubble noticeably taller than the rest.
+  const iconSize = stepIcons.length > 1 ? 68 : tutorialStep === TutorialStep.GLIDE_TIP ? 72 : 92
   const iconGap = 12
   const iconRowHeight = hasIcons ? iconSize + 10 : 0
 
@@ -785,7 +827,8 @@ const PigeonTutorialDialogBubble = ({
                 iconSize,
                 alpha,
                 index < stepIcons.length - 1 ? iconGap : 0,
-                `tutorial-icon-${index}`
+                `tutorial-icon-${index}`,
+                stepIcons.length === 1
               )
             )}
           </UiEntity>
@@ -926,6 +969,223 @@ const PigeonTutorialDialogBubble = ({
 
       <OutlinedText
         outlineKeyPrefix="pigeon-tutorial-name"
+        outlineOffsets={OUTLINE_OFFSETS_8}
+        outlineScale={1}
+        uiTransform={{
+          width: 160,
+          height: 20,
+          positionType: 'absolute',
+          position: { top: avatarProtrusion - 16, left: 14 + avatarSize + 10 },
+          alignItems: 'center',
+          justifyContent: 'flex-start'
+        }}
+        uiText={{
+          value: 'PIGEON GUIDE',
+          fontSize: 13,
+          color: Color4.White(),
+          textAlign: 'middle-left'
+        }}
+      />
+    </UiEntity>
+  )
+}
+
+// Pigeon speech bubble shown right after the wearable claim succeeds — same
+// look as PigeonTutorialDialogBubble, just a two-step congrats -> equip-info
+// flow instead of the onboarding steps, and no icon row/hint line.
+const PigeonClaimDialogBubble = ({
+  screenWidth,
+  screenHeight,
+  isMobile
+}: {
+  screenWidth: number
+  screenHeight: number
+  isMobile: boolean
+}) => {
+  if (pigeonClaimDialogStep === PigeonClaimDialogStep.HIDDEN) return null
+  // Don't stack on top of the onboarding tutorial bubble if it's somehow still active.
+  if (tutorialStep !== TutorialStep.INACTIVE && tutorialStep !== TutorialStep.DONE) return null
+
+  const stepElapsed = (Date.now() - pigeonClaimDialogChangedAt) / 1000
+  const dialogText =
+    pigeonClaimDialogStep === PigeonClaimDialogStep.CLAIMED
+      ? 'Congratulations for reaching the top! Your wearable is on its way.'
+      : 'To equip it, open your backpack and select your new wearable.'
+  const typedText = getCoolBedTypedText(dialogText, stepElapsed)
+  const isTyping = typedText.length < dialogText.length
+  const showCursor = isTyping && Math.floor(stepElapsed * 4) % 2 === 0
+  const visibleDialogText = `${typedText}${showCursor ? '|' : ''}`
+
+  const buttonLabel = pigeonClaimDialogStep === PigeonClaimDialogStep.CLAIMED ? 'NEXT' : 'GOT IT'
+  const handlePrimaryClick = () => {
+    if (pigeonClaimDialogStep === PigeonClaimDialogStep.CLAIMED) onPigeonClaimNextClicked()
+    else onPigeonClaimDismissClicked()
+  }
+
+  const isLandscapeMobile = isMobile && screenWidth > screenHeight
+  const bubbleWidth = isLandscapeMobile
+    ? Math.max(420, Math.min(screenWidth * 0.46, 680))
+    : Math.max(310, Math.min(screenWidth - 28, 430))
+  const bubbleBottom = isLandscapeMobile ? Math.max(28, screenHeight * 0.03) : 14
+  const bubbleLeft = Math.max(10, (screenWidth - bubbleWidth) / 2)
+  const shadowOffset = 10
+  const tailWidth = isLandscapeMobile ? 34 : 40
+  const tailHeight = isLandscapeMobile ? 18 : 22
+  const tailLeft = bubbleWidth / 2 - tailWidth / 2
+  const bodyFontSize = isLandscapeMobile ? 17 : 18
+  const bodyHorizontalPadding = isLandscapeMobile ? 22 : 19
+
+  const avatarSize = isLandscapeMobile ? 76 : 68
+  const avatarProtrusion = Math.round(avatarSize * 0.6)
+  const avatarDip = avatarSize - avatarProtrusion
+
+  const bodyTop = avatarDip + 14
+  const bodyHeight = isLandscapeMobile ? 84 : 104
+  const buttonsTop = bodyTop + bodyHeight + 2
+  const bubbleHeight = buttonsTop + 54 + 16
+
+  return (
+    <UiEntity
+      uiTransform={{
+        width: bubbleWidth + shadowOffset,
+        height: avatarProtrusion + bubbleHeight + tailHeight + shadowOffset,
+        positionType: 'absolute',
+        position: { bottom: bubbleBottom, left: bubbleLeft }
+      }}
+    >
+      <UiEntity
+        uiTransform={{
+          width: bubbleWidth,
+          height: bubbleHeight,
+          positionType: 'absolute',
+          position: { top: avatarProtrusion + shadowOffset, left: shadowOffset },
+          borderRadius: 26
+        }}
+        uiBackground={{ color: Color4.create(0.19, 0.1, 0.06, 0.34) }}
+      />
+
+      <UiEntity
+        uiTransform={{
+          width: bubbleWidth,
+          height: bubbleHeight,
+          positionType: 'absolute',
+          position: { top: avatarProtrusion, left: 0 },
+          borderRadius: 26,
+          borderColor: Color4.create(0.2, 0.12, 0.07, 1),
+          borderWidth: 3,
+          padding: { top: 14, right: 16, bottom: 14, left: 16 }
+        }}
+        uiBackground={{ color: Color4.create(0.97, 0.94, 0.86, 0.98) }}
+      >
+        <UiEntity
+          uiTransform={{
+            width: bubbleWidth - bodyHorizontalPadding * 2,
+            height: bodyHeight,
+            positionType: 'absolute',
+            position: { top: bodyTop, left: bodyHorizontalPadding },
+            alignItems: 'flex-start',
+            justifyContent: 'flex-start'
+          }}
+        >
+          <UiEntity
+            uiTransform={{ width: '100%', height: '100%', alignItems: 'flex-start', justifyContent: 'flex-start' }}
+            uiText={{
+              value: visibleDialogText,
+              fontSize: bodyFontSize,
+              color: Color4.create(0.18, 0.11, 0.06, 1),
+              textAlign: 'top-left',
+              font: 'sans-serif'
+            }}
+          />
+        </UiEntity>
+
+        {!isTyping && (
+          <UiEntity
+            uiTransform={{
+              width: bubbleWidth - bodyHorizontalPadding * 2,
+              height: 44,
+              positionType: 'absolute',
+              position: { top: buttonsTop, left: bodyHorizontalPadding },
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'flex-start'
+            }}
+          >
+            <UiEntity
+              uiTransform={{
+                width: 140,
+                height: 44,
+                borderRadius: 22,
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+              uiBackground={{ color: PIGEON_BUTTON_COLOR }}
+              uiText={{
+                value: buttonLabel,
+                fontSize: 18,
+                color: Color4.White(),
+                textAlign: 'middle-center',
+                font: 'sans-serif'
+              }}
+              onMouseDown={handlePrimaryClick}
+            />
+          </UiEntity>
+        )}
+      </UiEntity>
+
+      <UiEntity
+        uiTransform={{
+          width: tailWidth,
+          height: tailHeight,
+          positionType: 'absolute',
+          position: { top: avatarProtrusion + bubbleHeight - 2 + shadowOffset, left: tailLeft + shadowOffset },
+          borderRadius: 12
+        }}
+        uiBackground={{ color: Color4.create(0.19, 0.1, 0.06, 0.28) }}
+      />
+
+      <UiEntity
+        uiTransform={{
+          width: tailWidth,
+          height: tailHeight,
+          positionType: 'absolute',
+          position: { top: avatarProtrusion + bubbleHeight - 2, left: tailLeft },
+          borderRadius: 12,
+          borderColor: Color4.create(0.2, 0.12, 0.07, 1),
+          borderWidth: 3
+        }}
+        uiBackground={{ color: Color4.create(0.97, 0.94, 0.86, 0.98) }}
+      />
+
+      {/* Avatar badge — pokes above the bubble, portrait-style */}
+      <UiEntity
+        uiTransform={{
+          width: avatarSize + 6,
+          height: avatarSize + 6,
+          positionType: 'absolute',
+          position: { top: 0, left: 14 },
+          borderRadius: (avatarSize + 6) / 2
+        }}
+        uiBackground={{ color: PIGEON_ACCENT_COLOR }}
+      >
+        <UiEntity
+          uiTransform={{
+            width: avatarSize,
+            height: avatarSize,
+            positionType: 'absolute',
+            position: { top: 3, left: 3 },
+            borderRadius: avatarSize / 2
+          }}
+          uiBackground={{
+            color: Color4.White(),
+            texture: { src: 'assets/images/pigeon.png' },
+            textureMode: 'stretch'
+          }}
+        />
+      </UiEntity>
+
+      <OutlinedText
+        outlineKeyPrefix="pigeon-claim-name"
         outlineOffsets={OUTLINE_OFFSETS_8}
         outlineScale={1}
         uiTransform={{
@@ -1181,10 +1441,6 @@ const GameUI = () => {
   const timeSinceStartMessage = startMessageTimestamp > 0 ? (Date.now() - startMessageTimestamp) / 1000 : 999
   const showStartMessage = attemptState === AttemptState.IN_PROGRESS && timeSinceStartMessage < 4
 
-  // Pigeon wearable claimed banner (shows for 6s after a successful claim)
-  const timeSinceClaim = pigeonClaimTimestamp > 0 ? (Date.now() - pigeonClaimTimestamp) / 1000 : 999
-  const showClaimed = timeSinceClaim < 6
-
   const winnersToDisplay = roundWinners
 
   // Show winners display
@@ -1321,6 +1577,7 @@ const GameUI = () => {
             }}
           />
         </UiEntity>
+        <TutorialIconPreloader />
       </UiEntity>
     )
   }
@@ -1333,37 +1590,10 @@ const GameUI = () => {
         positionType: 'absolute'
       }}
     >
+      <TutorialIconPreloader />
       <CoolBedDialogBubble screenWidth={screenWidth} screenHeight={screenHeight} isMobile={isMobile} />
       <PigeonTutorialDialogBubble screenWidth={screenWidth} screenHeight={screenHeight} isMobile={isMobile} />
-
-      {/* WEARABLE CLAIMED - Center banner */}
-      {showClaimed && (
-        <UiEntity
-          uiTransform={{
-            width: 520 * s,
-            height: 120 * s,
-            positionType: 'absolute',
-            position: { top: screenHeight * 0.32, left: (screenWidth - 520 * s) / 2 },
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 16 * s,
-            borderRadius: 12 * s,
-            borderWidth: 2 * s,
-            borderColor: Color4.create(0.6, 0.2, 1, 1)
-          }}
-          uiBackground={{ color: Color4.create(0.05, 0.05, 0.08, 0.92) }}
-        >
-          <UiEntity
-            uiTransform={{ width: '100%', height: 44 * s, alignItems: 'center', justifyContent: 'center' }}
-            uiText={{ value: '✓ Claimed!', fontSize: 34 * s, color: Color4.create(0.7, 0.4, 1, 1) }}
-          />
-          <UiEntity
-            uiTransform={{ width: '100%', height: 32 * s, alignItems: 'center', justifyContent: 'center' }}
-            uiText={{ value: 'The wearable will be in your wallet soon!', fontSize: 20 * s, color: Color4.White() }}
-          />
-        </UiEntity>
-      )}
+      <PigeonClaimDialogBubble screenWidth={screenWidth} screenHeight={screenHeight} isMobile={isMobile} />
 
       {/* ROUND TIMER - Top Center */}
       <UiEntity
