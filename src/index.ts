@@ -18,7 +18,8 @@ import {
 import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { onEnterScene, onLeaveScene } from '@dcl/sdk/players'
-import { movePlayerTo } from '~system/RestrictedActions'
+import { movePlayerTo, changeRealm } from '~system/RestrictedActions'
+import { Portal } from './portal'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
 import { setupWorldLeaderboard } from './Leaderboard'
@@ -672,6 +673,35 @@ export async function main() {
     scale: Vector3.create(1, 1 / PIGEON_HITBOX_HEIGHT, 1)
   })
 
+  // ============================================
+  // WIN-ZONE PORTALS — behind the pigeon, on the win platform
+  // ============================================
+  // Positioned/rotated every round by the same system that places the
+  // pigeon (below), since the win platform's world position changes with
+  // tower height. "Behind the pigeon" = further along the direction the
+  // platform faces away from the tower center (the pigeon faces the climb;
+  // the portals face outward, back toward whoever just arrived).
+  const cozyfarmPortal = new Portal({
+    position: { x: 40, y: 5, z: 40 },
+    size: 1.4,
+    name: 'Cozy Farm',
+    thumbnail: 'assets/images/CozyFarm.png',
+    hoverText: 'Go to Cozy Farm',
+    onActivate: () => {
+      void changeRealm({ realm: 'cozyfarm.dcl.eth', message: 'Jump to cozyfarm.dcl.eth?' })
+    }
+  })
+  const flagtagPortal = new Portal({
+    position: { x: 40, y: 5, z: 40 },
+    size: 1.4,
+    name: 'Flag Tag',
+    thumbnail: 'assets/images/flagtag.png',
+    hoverText: 'Go to Flag Tag',
+    onActivate: () => {
+      void changeRealm({ realm: 'flagtag.dcl.eth', message: 'Jump to flagtag.dcl.eth?' })
+    }
+  })
+
   // Claims the pigeon wearable for the local player via the DCL Rewards API.
   // Uses PIGEON_WEARABLE_CONFIG (separate from the tournament prize campaign).
   async function claimPigeonWearable() {
@@ -797,11 +827,40 @@ export async function main() {
       pct.position = Vector3.create(center.x, floorY + PIGEON_HITBOX_HEIGHT / 2, center.z)
       pct.rotation = Quaternion.fromEulerDegrees(0, yaw, 0)
 
+      // Portals sit further out than the pigeon, along the same axis, facing
+      // the same way (toward the tower/approaching player) — so a player who
+      // just climbed up sees the pigeon first, with the two portals behind it.
+      const yawRad = yaw * (Math.PI / 180)
+      const faceDir = Vector3.create(Math.sin(yawRad), 0, Math.cos(yawRad))
+      const perpDir = Vector3.create(faceDir.z, 0, -faceDir.x)
+      const PORTAL_DISTANCE_BEHIND = 6
+      const PORTAL_SIDE_OFFSET = 3
+      const portalBase = Vector3.create(
+        center.x - faceDir.x * PORTAL_DISTANCE_BEHIND,
+        floorY,
+        center.z - faceDir.z * PORTAL_DISTANCE_BEHIND
+      )
+      const portalYaw = yaw + 180
+      cozyfarmPortal.update(
+        {
+          x: portalBase.x + perpDir.x * PORTAL_SIDE_OFFSET,
+          y: portalBase.y,
+          z: portalBase.z + perpDir.z * PORTAL_SIDE_OFFSET
+        },
+        { x: 0, y: portalYaw, z: 0 }
+      )
+      flagtagPortal.update(
+        {
+          x: portalBase.x - perpDir.x * PORTAL_SIDE_OFFSET,
+          y: portalBase.y,
+          z: portalBase.z - perpDir.z * PORTAL_SIDE_OFFSET
+        },
+        { x: 0, y: portalYaw, z: 0 }
+      )
+
       // Debug teleport-to-win-zone target — disabled above, kept commented
       // together so it's obvious both halves go back in as a pair.
       // const PIGEON_TELEPORT_DISTANCE_M = 4.5
-      // const yawRad = yaw * (Math.PI / 180)
-      // const faceDir = Vector3.create(Math.sin(yawRad), 0, Math.cos(yawRad))
       // winZoneTarget = Vector3.create(
       //   center.x + faceDir.x * PIGEON_TELEPORT_DISTANCE_M,
       //   floorY + 1,
