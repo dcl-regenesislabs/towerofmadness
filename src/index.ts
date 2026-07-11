@@ -13,9 +13,7 @@ import {
   MeshCollider,
   InputAction,
   InputModifier,
-  pointerEventsSystem,
-  inputSystem,
-  PointerEventType
+  pointerEventsSystem
 } from '@dcl/sdk/ecs'
 import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
@@ -762,39 +760,41 @@ export async function main() {
     () => { void claimPigeonWearable() }
   )
 
-  // --- DEBUG TELEPORT TO TOP -----------------------------------------------------
-  // Press "1" (IA_ACTION_3) anywhere to jump up to the win zone where the
-  // pigeon is. Keyboard-only, no entity/pointer involved.
-  let winZoneTarget: Vector3 | null = null
-
-  function teleportToWinZone() {
-    if (!winZoneTarget) {
-      console.log('[Teleport] No win zone yet (tower not ready)')
-      return
-    }
-    // Landing in the win zone would otherwise fire the finish trigger and bounce
-    // the player back to base. Suppress it briefly so the teleport sticks.
-    suppressEndTriggerUntil = Date.now() + 3000
-    const pigeonPos = getWorldPosition(pigeon)
-    movePlayerTo({
-      newRelativePosition: winZoneTarget,
-      cameraTarget: {
-        x: pigeonPos.x,
-        y: pigeonPos.y + 1.2,
-        z: pigeonPos.z
-      }
-    })
-  }
-
-  engine.addSystem(
-    () => {
-      if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) {
-        teleportToWinZone()
-      }
-    },
-    undefined,
-    'debug-teleport-key-system'
-  )
+  // --- DEBUG TELEPORT TO TOP (disabled) -----------------------------------------
+  // Was: press "1" (IA_ACTION_3) anywhere to jump up to the win zone where the
+  // pigeon is, keyboard-only, no entity/pointer involved. Commented out rather
+  // than deleted so it's easy to bring back for testing.
+  //
+  // let winZoneTarget: Vector3 | null = null
+  //
+  // function teleportToWinZone() {
+  //   if (!winZoneTarget) {
+  //     console.log('[Teleport] No win zone yet (tower not ready)')
+  //     return
+  //   }
+  //   // Landing in the win zone would otherwise fire the finish trigger and bounce
+  //   // the player back to base. Suppress it briefly so the teleport sticks.
+  //   suppressEndTriggerUntil = Date.now() + 3000
+  //   const pigeonPos = getWorldPosition(pigeon)
+  //   movePlayerTo({
+  //     newRelativePosition: winZoneTarget,
+  //     cameraTarget: {
+  //       x: pigeonPos.x,
+  //       y: pigeonPos.y + 1.2,
+  //       z: pigeonPos.z
+  //     }
+  //   })
+  // }
+  //
+  // engine.addSystem(
+  //   () => {
+  //     if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) {
+  //       teleportToWinZone()
+  //     }
+  //   },
+  //   undefined,
+  //   'debug-teleport-key-system'
+  // )
   // ---------------------------------------------------------------------------
 
   // Keep the pigeon (and its click box) glued to the current tower top.
@@ -803,7 +803,6 @@ export async function main() {
     () => {
       const triggerEnd = findTriggerEndEntity()
       if (!triggerEnd || !Transform.has(triggerEnd)) {
-        winZoneTarget = null
         return
       }
 
@@ -859,14 +858,14 @@ export async function main() {
         { x: 0, y: portalYaw, z: 0 }
       )
 
-      // Debug teleport-to-win-zone target — lands the player just in front of
-      // the pigeon (reuses the yaw/faceDir already computed for the portals above).
-      const PIGEON_TELEPORT_DISTANCE_M = 4.5
-      winZoneTarget = Vector3.create(
-        center.x + faceDir.x * PIGEON_TELEPORT_DISTANCE_M,
-        floorY + 1,
-        center.z + faceDir.z * PIGEON_TELEPORT_DISTANCE_M
-      )
+      // Debug teleport-to-win-zone target — disabled above, kept commented
+      // together so it's obvious both halves go back in as a pair.
+      // const PIGEON_TELEPORT_DISTANCE_M = 4.5
+      // winZoneTarget = Vector3.create(
+      //   center.x + faceDir.x * PIGEON_TELEPORT_DISTANCE_M,
+      //   floorY + 1,
+      //   center.z + faceDir.z * PIGEON_TELEPORT_DISTANCE_M
+      // )
     },
     undefined,
     'pigeon-teleport-system'
