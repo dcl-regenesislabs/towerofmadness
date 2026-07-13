@@ -814,6 +814,7 @@ export async function main() {
   // setVisible(false) above) and only get revealed here, once we actually
   // know where the real win-zone is — otherwise they'd flash at their
   // placeholder position near the tower base for a moment on scene load.
+  let winZoneRevealed = false
   engine.addSystem(
     () => {
       const triggerEnd = findTriggerEndEntity()
@@ -821,9 +822,12 @@ export async function main() {
         return
       }
 
-      VisibilityComponent.getMutable(pigeon).visible = true
-      cozyfarmPortal.setVisible(true)
-      flagtagPortal.setVisible(true)
+      if (!winZoneRevealed) {
+        winZoneRevealed = true
+        VisibilityComponent.getMutable(pigeon).visible = true
+        cozyfarmPortal.setVisible(true)
+        flagtagPortal.setVisible(true)
+      }
 
       const center = getWorldPosition(triggerEnd)
       // The meta platform sits at the TriggerEnd center height (server finish check
