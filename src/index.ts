@@ -761,8 +761,8 @@ export async function main() {
   )
 
   // --- DEBUG TELEPORT TO TOP (disabled — uncomment + re-add inputSystem/PointerEventType imports to re-enable) ---
-  // Press "1" (IA_ACTION_3) anywhere to jump up to the win zone where the pigeon
-  // is — keyboard-only, no entity/pointer involved. Commented out for release.
+  // Press "2" (IA_ACTION_4) anywhere to jump up to the win zone (chunk end) where
+  // the pigeon is — keyboard-only, no entity/pointer involved. Commented out for release.
   //
   // let winZoneTarget: Vector3 | null = null
   //
@@ -787,7 +787,7 @@ export async function main() {
   //
   // engine.addSystem(
   //   () => {
-  //     if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) {
+  //     if (inputSystem.isTriggered(InputAction.IA_ACTION_4, PointerEventType.PET_DOWN)) {
   //       teleportToWinZone()
   //     }
   //   },
