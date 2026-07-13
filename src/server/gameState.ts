@@ -42,8 +42,7 @@ function protectServerEntity(entity: Entity, components: ComponentWithValidation
 }
 
 // Constants
-// DEBUG: shortened from 420 (7 minutes) to 35s for faster round-to-round testing. Revert before release.
-const BASE_TIMER = 35
+const BASE_TIMER = 420 // 7 minutes
 const CHUNK_HEIGHT = 10.821
 const TOWER_X = 40
 const TOWER_Z = 40
