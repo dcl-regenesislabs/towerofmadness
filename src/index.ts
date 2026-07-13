@@ -13,6 +13,8 @@ import {
   MeshCollider,
   InputAction,
   InputModifier,
+  inputSystem,
+  PointerEventType,
   pointerEventsSystem
 } from '@dcl/sdk/ecs'
 import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
@@ -760,41 +762,39 @@ export async function main() {
     () => { void claimPigeonWearable() }
   )
 
-  // --- DEBUG TELEPORT TO TOP (disabled) -----------------------------------------
-  // Was: press "1" (IA_ACTION_3) anywhere to jump up to the win zone where the
-  // pigeon is, keyboard-only, no entity/pointer involved. Commented out rather
-  // than deleted so it's easy to bring back for testing.
-  //
-  // let winZoneTarget: Vector3 | null = null
-  //
-  // function teleportToWinZone() {
-  //   if (!winZoneTarget) {
-  //     console.log('[Teleport] No win zone yet (tower not ready)')
-  //     return
-  //   }
-  //   // Landing in the win zone would otherwise fire the finish trigger and bounce
-  //   // the player back to base. Suppress it briefly so the teleport sticks.
-  //   suppressEndTriggerUntil = Date.now() + 3000
-  //   const pigeonPos = getWorldPosition(pigeon)
-  //   movePlayerTo({
-  //     newRelativePosition: winZoneTarget,
-  //     cameraTarget: {
-  //       x: pigeonPos.x,
-  //       y: pigeonPos.y + 1.2,
-  //       z: pigeonPos.z
-  //     }
-  //   })
-  // }
-  //
-  // engine.addSystem(
-  //   () => {
-  //     if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) {
-  //       teleportToWinZone()
-  //     }
-  //   },
-  //   undefined,
-  //   'debug-teleport-key-system'
-  // )
+  // --- TELEPORT TO TOP --------------------------------------------------------
+  // Press "1" (IA_ACTION_3) anywhere to jump up to the win zone where the pigeon
+  // is — keyboard-only, no entity/pointer involved.
+  let winZoneTarget: Vector3 | null = null
+
+  function teleportToWinZone() {
+    if (!winZoneTarget) {
+      console.log('[Teleport] No win zone yet (tower not ready)')
+      return
+    }
+    // Landing in the win zone would otherwise fire the finish trigger and bounce
+    // the player back to base. Suppress it briefly so the teleport sticks.
+    suppressEndTriggerUntil = Date.now() + 3000
+    const pigeonPos = getWorldPosition(pigeon)
+    movePlayerTo({
+      newRelativePosition: winZoneTarget,
+      cameraTarget: {
+        x: pigeonPos.x,
+        y: pigeonPos.y + 1.2,
+        z: pigeonPos.z
+      }
+    })
+  }
+
+  engine.addSystem(
+    () => {
+      if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) {
+        teleportToWinZone()
+      }
+    },
+    undefined,
+    'debug-teleport-key-system'
+  )
   // ---------------------------------------------------------------------------
 
   // Keep the pigeon (and its click box) glued to the current tower top.
@@ -820,27 +820,36 @@ export async function main() {
       let yaw = Math.atan2(TOWER_CENTER_X - center.x, TOWER_CENTER_Z - center.z) * (180 / Math.PI)
       if (!FACE_TOWER) yaw += 180
 
-      // Pigeon stands on the meta platform, facing the climb; the pigeon
-      // model (a child of pigeonClick) rides along automatically, and its
-      // own Y offset/scale cancel out this parent's height offset/stretch.
-      const pct = Transform.getMutable(pigeonClick)
-      pct.position = Vector3.create(center.x, floorY + PIGEON_HITBOX_HEIGHT / 2, center.z)
-      pct.rotation = Quaternion.fromEulerDegrees(0, yaw, 0)
-
-      // Portals sit further out than the pigeon, along the same axis, facing
-      // the same way (toward the tower/approaching player) — so a player who
-      // just climbed up sees the pigeon first, with the two portals behind it.
+      // faceDir points toward the tower center (the side the climbing player
+      // arrives from); perpDir is the sideways axis along the platform.
       const yawRad = yaw * (Math.PI / 180)
       const faceDir = Vector3.create(Math.sin(yawRad), 0, Math.cos(yawRad))
       const perpDir = Vector3.create(faceDir.z, 0, -faceDir.x)
-      const PORTAL_DISTANCE_BEHIND = 6
-      const PORTAL_SIDE_OFFSET = 3
-      const portalBase = Vector3.create(
-        center.x - faceDir.x * PORTAL_DISTANCE_BEHIND,
-        floorY,
-        center.z - faceDir.z * PORTAL_DISTANCE_BEHIND
+
+      // Pigeon/claim sits IN FRONT of the portals — pushed toward the tower (the
+      // arriving side) so the player reads the claim first, with the portals
+      // behind it. The pigeon model (a child of pigeonClick) rides along, and
+      // its own Y offset/scale cancel out this parent's height offset/stretch.
+      const PIGEON_FORWARD_OFFSET = 3 // toward the tower/player, in front of the portals
+      const pct = Transform.getMutable(pigeonClick)
+      pct.position = Vector3.create(
+        center.x + faceDir.x * PIGEON_FORWARD_OFFSET,
+        floorY + PIGEON_HITBOX_HEIGHT / 2,
+        center.z + faceDir.z * PIGEON_FORWARD_OFFSET
       )
-      const portalYaw = yaw + 180
+      pct.rotation = Quaternion.fromEulerDegrees(0, yaw, 0)
+
+      // Portals flank the win-zone center (behind the pigeon, still inside scene
+      // bounds — the platform is at the very edge of the scene, so we can't push
+      // them further out), facing the arriving player.
+      const PORTAL_FORWARD_OFFSET = 0 // at the win-zone center, behind the pigeon
+      const PORTAL_SIDE_OFFSET = 4.5 // one portal to each side of the pigeon
+      const portalBase = Vector3.create(
+        center.x + faceDir.x * PORTAL_FORWARD_OFFSET,
+        floorY,
+        center.z + faceDir.z * PORTAL_FORWARD_OFFSET
+      )
+      const portalYaw = yaw + 180 // portal front faces the arriving player
       cozyfarmPortal.update(
         {
           x: portalBase.x + perpDir.x * PORTAL_SIDE_OFFSET,
@@ -858,14 +867,13 @@ export async function main() {
         { x: 0, y: portalYaw, z: 0 }
       )
 
-      // Debug teleport-to-win-zone target — disabled above, kept commented
-      // together so it's obvious both halves go back in as a pair.
-      // const PIGEON_TELEPORT_DISTANCE_M = 4.5
-      // winZoneTarget = Vector3.create(
-      //   center.x + faceDir.x * PIGEON_TELEPORT_DISTANCE_M,
-      //   floorY + 1,
-      //   center.z + faceDir.z * PIGEON_TELEPORT_DISTANCE_M
-      // )
+      // Teleport-to-win-zone target — where the player lands when pressing "1".
+      const PIGEON_TELEPORT_DISTANCE_M = 4.5
+      winZoneTarget = Vector3.create(
+        center.x + faceDir.x * PIGEON_TELEPORT_DISTANCE_M,
+        floorY + 1,
+        center.z + faceDir.z * PIGEON_TELEPORT_DISTANCE_M
+      )
     },
     undefined,
     'pigeon-teleport-system'
