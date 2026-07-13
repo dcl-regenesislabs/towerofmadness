@@ -13,8 +13,6 @@ import {
   MeshCollider,
   InputAction,
   InputModifier,
-  inputSystem,
-  PointerEventType,
   pointerEventsSystem
 } from '@dcl/sdk/ecs'
 import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
@@ -762,39 +760,40 @@ export async function main() {
     () => { void claimPigeonWearable() }
   )
 
-  // --- TELEPORT TO TOP --------------------------------------------------------
+  // --- DEBUG TELEPORT TO TOP (disabled — uncomment + re-add inputSystem/PointerEventType imports to re-enable) ---
   // Press "1" (IA_ACTION_3) anywhere to jump up to the win zone where the pigeon
-  // is — keyboard-only, no entity/pointer involved.
-  let winZoneTarget: Vector3 | null = null
-
-  function teleportToWinZone() {
-    if (!winZoneTarget) {
-      console.log('[Teleport] No win zone yet (tower not ready)')
-      return
-    }
-    // Landing in the win zone would otherwise fire the finish trigger and bounce
-    // the player back to base. Suppress it briefly so the teleport sticks.
-    suppressEndTriggerUntil = Date.now() + 3000
-    const pigeonPos = getWorldPosition(pigeon)
-    movePlayerTo({
-      newRelativePosition: winZoneTarget,
-      cameraTarget: {
-        x: pigeonPos.x,
-        y: pigeonPos.y + 1.2,
-        z: pigeonPos.z
-      }
-    })
-  }
-
-  engine.addSystem(
-    () => {
-      if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) {
-        teleportToWinZone()
-      }
-    },
-    undefined,
-    'debug-teleport-key-system'
-  )
+  // is — keyboard-only, no entity/pointer involved. Commented out for release.
+  //
+  // let winZoneTarget: Vector3 | null = null
+  //
+  // function teleportToWinZone() {
+  //   if (!winZoneTarget) {
+  //     console.log('[Teleport] No win zone yet (tower not ready)')
+  //     return
+  //   }
+  //   // Landing in the win zone would otherwise fire the finish trigger and bounce
+  //   // the player back to base. Suppress it briefly so the teleport sticks.
+  //   suppressEndTriggerUntil = Date.now() + 3000
+  //   const pigeonPos = getWorldPosition(pigeon)
+  //   movePlayerTo({
+  //     newRelativePosition: winZoneTarget,
+  //     cameraTarget: {
+  //       x: pigeonPos.x,
+  //       y: pigeonPos.y + 1.2,
+  //       z: pigeonPos.z
+  //     }
+  //   })
+  // }
+  //
+  // engine.addSystem(
+  //   () => {
+  //     if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) {
+  //       teleportToWinZone()
+  //     }
+  //   },
+  //   undefined,
+  //   'debug-teleport-key-system'
+  // )
   // ---------------------------------------------------------------------------
 
   // Keep the pigeon (and its click box) glued to the current tower top.
@@ -867,13 +866,13 @@ export async function main() {
         { x: 0, y: portalYaw, z: 0 }
       )
 
-      // Teleport-to-win-zone target — where the player lands when pressing "1".
-      const PIGEON_TELEPORT_DISTANCE_M = 4.5
-      winZoneTarget = Vector3.create(
-        center.x + faceDir.x * PIGEON_TELEPORT_DISTANCE_M,
-        floorY + 1,
-        center.z + faceDir.z * PIGEON_TELEPORT_DISTANCE_M
-      )
+      // Debug teleport target (disabled — re-enable with the teleport block above):
+      // const PIGEON_TELEPORT_DISTANCE_M = 4.5
+      // winZoneTarget = Vector3.create(
+      //   center.x + faceDir.x * PIGEON_TELEPORT_DISTANCE_M,
+      //   floorY + 1,
+      //   center.z + faceDir.z * PIGEON_TELEPORT_DISTANCE_M
+      // )
     },
     undefined,
     'pigeon-teleport-system'
