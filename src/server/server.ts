@@ -184,22 +184,33 @@ function setupMessageHandlers(gameState: GameState) {
       // Just update their display name in case it changed
       existingPlayer.displayName = displayName
       gameState.setPlayer(context.from, existingPlayer)
-      return
+    } else {
+      console.log(`[Server] Player joined: ${displayName}`)
+      gameState.setPlayer(context.from, {
+        address: context.from,
+        displayName: displayName,
+        maxHeight: 0,
+        bestTime: 0,
+        isFinished: false,
+        finishOrder: 0,
+        attemptStartTime: 0,
+        lastHeight: 0,
+        lastHeightTime: 0,
+        teleportStrikes: 0
+      })
     }
 
-    console.log(`[Server] Player joined: ${displayName}`)
-    gameState.setPlayer(context.from, {
+    room.send('tutorialStatus', {
       address: context.from,
-      displayName: displayName,
-      maxHeight: 0,
-      bestTime: 0,
-      isFinished: false,
-      finishOrder: 0,
-      attemptStartTime: 0,
-      lastHeight: 0,
-      lastHeightTime: 0,
-      teleportStrikes: 0
+      hasSeenTutorial: gameState.hasSeenTutorial(context.from)
     })
+  })
+
+  // Player finished (or skipped) the pigeon tutorial
+  room.onMessage('tutorialCompleted', (_data, context) => {
+    if (!context) return
+    gameState.markTutorialSeen(context.from)
+    console.log(`[Server] Tutorial completed by ${context.from}`)
   })
 
   // Player started attempt (entered start trigger)

@@ -11,17 +11,16 @@ import {
   GltfContainer,
   VisibilityComponent,
   MeshCollider,
-  MeshRenderer,
-  Material,
   InputAction,
   InputModifier,
   SkyboxTime,
   pointerEventsSystem
 } from '@dcl/sdk/ecs'
-import { Vector3 } from '@dcl/sdk/math'
+import { Vector3, Color4, Quaternion } from '@dcl/sdk/math'
 import { isServer, isStateSyncronized } from '@dcl/sdk/network'
 import { onEnterScene, onLeaveScene } from '@dcl/sdk/players'
-import { movePlayerTo } from '~system/RestrictedActions'
+import { movePlayerTo, changeRealm } from '~system/RestrictedActions'
+import { Portal } from './portal'
 import { EntityNames } from '../assets/scene/entity-names'
 import { setupUi } from './ui'
 import { setupWorldLeaderboard } from './Leaderboard'
@@ -35,6 +34,7 @@ import {
   sendPlayerJoined,
   onPlayerFinished,
   onAttemptRejected,
+  onTeleportToBase,
   getRoundState,
   getLeaderboard,
   getWeeklyLeaderboard,
@@ -52,10 +52,11 @@ import {
 } from './multiplayer'
 import { requestPlayerSnapshot, setSnapshotHidden } from './snapshots'
 import { TriggerEndComponent } from './shared/schemas'
-import { WEARABLE_CONFIG } from './shared/wearableConfig'
+import { WEARABLE_CONFIG, PIGEON_WEARABLE_CONFIG } from './shared/wearableConfig'
 import { signedFetch } from '~system/SignedFetch'
 import { room } from './shared/messages'
 import { setupCinematicSystem, playCinematic, shouldAutoPlayCinematic, isCinematicPlaying } from './cinematicCamera'
+import { setupTutorial, armPendingIntroTutorial, tutorialStep, TutorialStep } from './tutorial'
 
 // ============================================
 // GAME STATE
@@ -109,6 +110,29 @@ export let resultMessage: string = ''
 export let resultTimestamp: number = 0
 export let startMessageTimestamp: number = 0
 export let suppressStartUntil: number = 0
+// While Date.now() < this, the TriggerEnd finish trigger is ignored (used by the
+// teleport-to-top so landing in the win zone doesn't count as a finish attempt).
+export let suppressEndTriggerUntil: number = 0
+// Pigeon dialog shown right after the wearable claim succeeds — first a
+// congrats message, then a "how to equip it" message after NEXT is pressed.
+export enum PigeonClaimDialogStep {
+  HIDDEN = 'HIDDEN',
+  CLAIMING = 'CLAIMING',
+  CLAIMED = 'CLAIMED',
+  EQUIP_INFO = 'EQUIP_INFO'
+}
+export let pigeonClaimDialogStep: PigeonClaimDialogStep = PigeonClaimDialogStep.HIDDEN
+export let pigeonClaimDialogChangedAt: number = 0
+
+export function onPigeonClaimNextClicked() {
+  if (pigeonClaimDialogStep !== PigeonClaimDialogStep.CLAIMED) return
+  pigeonClaimDialogStep = PigeonClaimDialogStep.EQUIP_INFO
+  pigeonClaimDialogChangedAt = Date.now()
+}
+
+export function onPigeonClaimDismissClicked() {
+  pigeonClaimDialogStep = PigeonClaimDialogStep.HIDDEN
+}
 export let finishValidationStartedAt: number = 0
 export let coolBedDialogTimestamp: number = 0
 export const coolBedDialogText = `YO SUP welcome to Tower of madness
@@ -411,14 +435,24 @@ export async function main() {
 
   setupClient()
   setupCinematicSystem()
+  setupTutorial()
 
-  // Wait for state sync before playing cinematic on first arrival
+  // Wait for state sync AND a confirmed tower (not just the CRDT dump, which
+  // can land a frame or two before the round/tower data is actually usable)
+  // before starting the first-arrival onboarding sequence — otherwise the
+  // tutorial/cinematic can kick in while chunks are still popping into place.
+  // Mobile players go tutorial -> cinematic (tutorial.ts arms the cinematic
+  // itself once the pigeon tutorial finishes); desktop players never see the
+  // tutorial, so this system plays the intro cinematic for them directly.
   const initialCinematicSystemName = 'initial-cinematic-trigger'
   engine.addSystem(
     () => {
-      if (isStateSyncronized() && shouldAutoPlayCinematic()) {
-        console.log('[Cinematic] State synced, playing initial cinematic')
-        playCinematic()
+      if (isStateSyncronized() && towerConfig !== null && shouldAutoPlayCinematic()) {
+        console.log('[Cinematic] State synced, starting onboarding sequence')
+        // This system only fires once per client session, so it never re-arms
+        // the tutorial on later rounds (round-transition cinematics call
+        // playCinematic() directly, see below).
+        armPendingIntroTutorial()
         engine.removeSystem(initialCinematicSystemName)
       }
     },
@@ -447,6 +481,22 @@ export async function main() {
     const title = stage === 'finish' ? 'ATTEMPT NOT COUNTED' : 'OOPS TRY AGAIN'
     const message = stage === 'finish' ? `Your attempt did not count. ${reason}` : reason
     rejectAttempt(message, title)
+  })
+
+  // Server broadcasts this to everyone when a round's timer runs out. Skip it
+  // (and the winners UI, see showWinners in ui.tsx) for a player still mid-
+  // conversation with the guide pigeon — the tutorial isn't a real attempt, so
+  // there's nothing to interrupt them for. The tower still changes for everyone;
+  // this only holds off this one player's own teleport/camera cut.
+  onTeleportToBase((pos) => {
+    if (tutorialStep !== TutorialStep.INACTIVE && tutorialStep !== TutorialStep.DONE) {
+      console.log('[Tutorial] Skipping round-end teleport, still talking to the pigeon')
+      return
+    }
+    movePlayerTo({
+      newRelativePosition: pos,
+      cameraTarget: { x: pos.x, y: pos.y + 1, z: pos.z }
+    })
   })
 
   onEnterScene((player) => {
@@ -583,6 +633,289 @@ export async function main() {
   }
 
   // ============================================
+  // PIGEON TROPHY (win zone) + TELEPORT TO TOP
+  // ============================================
+
+  // Same structure as the dispenser built in world-cup-prediction-game's
+  // Creator Hub: a parent entity carrying the cylinder MeshCollider
+  // (physics + pointer), and the glTF model as its CHILD, with the model's
+  // own visible mesh also flagged as a pointer collider. That's what makes
+  // the hover highlight trace the pigeon's real silhouette instead of the
+  // (invisible) cylinder's — the highlight follows whatever geometry the
+  // raycast actually hits, and visibleMeshesCollisionMask makes that the
+  // rendered mesh itself.
+  //
+  // pigeonClick is the parent — position + rotation updated by the system
+  // below, the pigeon model rides along as its child.
+  //
+  // Collider is sized from PartyPigeon.glb's real bounding box (measured via
+  // its glTF scene graph): ~2.2m diameter (radiusBottom/radiusTop below),
+  // ~4.9m tall (scale.y). A MeshCollider primitive is always centered on its
+  // own entity's Transform, so pigeonClick sits 2.45m (half the height)
+  // above the platform floor to center the cylinder on the model — and the
+  // pigeon child compensates with an inverse offset/scale on Y so it still
+  // renders at floor level, at its normal (unscaled) size, despite hanging
+  // off a parent that's shifted up and stretched.
+  const PIGEON_HITBOX_HEIGHT = 4.9
+  const PIGEON_HITBOX_RADIUS = 1.1
+  const pigeonClick = engine.addEntity()
+  Transform.create(pigeonClick, {
+    position: Vector3.create(40, 5, 40),
+    scale: Vector3.create(1, PIGEON_HITBOX_HEIGHT, 1)
+  })
+  MeshCollider.setCylinder(pigeonClick, PIGEON_HITBOX_RADIUS, PIGEON_HITBOX_RADIUS, [
+    ColliderLayer.CL_PHYSICS,
+    ColliderLayer.CL_POINTER
+  ])
+
+  // Pigeon skin — hidden until the win-zone system below places it at the
+  // real tower-top position; otherwise it (and the portals) briefly render
+  // at this placeholder spot near the tower base before popping up top.
+  // Its own visible mesh doubles as the precise pointer collider
+  // (visibleMeshesCollisionMask); any invisible collider meshes baked into
+  // the GLB act as physics + pointer too.
+  const pigeon = engine.addEntity()
+  GltfContainer.create(pigeon, {
+    src: 'assets/wearables/PartyPigeon.glb',
+    visibleMeshesCollisionMask: ColliderLayer.CL_POINTER,
+    invisibleMeshesCollisionMask: ColliderLayer.CL_PHYSICS | ColliderLayer.CL_POINTER
+  })
+  Transform.create(pigeon, {
+    parent: pigeonClick,
+    position: Vector3.create(0, -0.5, 0),
+    scale: Vector3.create(1, 1 / PIGEON_HITBOX_HEIGHT, 1)
+  })
+  VisibilityComponent.create(pigeon, { visible: false })
+
+  // ============================================
+  // WIN-ZONE PORTALS — behind the pigeon, on the win platform
+  // ============================================
+  // Positioned/rotated every round by the same system that places the
+  // pigeon (below), since the win platform's world position changes with
+  // tower height. "Behind the pigeon" = further along the direction the
+  // platform faces away from the tower center (the pigeon faces the climb;
+  // the portals face outward, back toward whoever just arrived).
+  const cozyfarmPortal = new Portal({
+    position: { x: 40, y: 5, z: 40 },
+    size: 1.4,
+    name: 'Cozy Farm',
+    thumbnail: 'assets/images/CozyFarm.png',
+    hoverText: 'Go to Cozy Farm',
+    onActivate: () => {
+      void changeRealm({ realm: 'cozyfarm.dcl.eth', message: 'Jump to cozyfarm.dcl.eth?' })
+    }
+  })
+  const flagtagPortal = new Portal({
+    position: { x: 40, y: 5, z: 40 },
+    size: 1.4,
+    name: 'Flag Tag',
+    thumbnail: 'assets/images/flagtag.png',
+    hoverText: 'Go to Flag Tag',
+    onActivate: () => {
+      void changeRealm({ realm: 'flagtag.dcl.eth', message: 'Jump to flagtag.dcl.eth?' })
+    }
+  })
+  // Hidden until the win-zone system below repositions them — same reasoning
+  // as the pigeon's VisibilityComponent above.
+  cozyfarmPortal.setVisible(false)
+  flagtagPortal.setVisible(false)
+
+  // Set to false to block the wearable claim (e.g. campaign paused / not live yet).
+  // The pigeon still shows, but clicking it does nothing. Flip to true to re-enable.
+  const WEARABLE_CLAIM_ENABLED = false
+
+  // Claims the pigeon wearable for the local player via the DCL Rewards API.
+  // Uses PIGEON_WEARABLE_CONFIG (separate from the tournament prize campaign).
+  async function claimPigeonWearable() {
+    if (!WEARABLE_CLAIM_ENABLED) {
+      console.log('[Pigeon] Wearable claim is currently disabled')
+      return
+    }
+    if (pigeonClaimDialogStep !== PigeonClaimDialogStep.HIDDEN) return // already claiming/claimed
+    const address = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase()
+    if (!address) {
+      console.log('[Pigeon] Cannot claim — no local player address')
+      return
+    }
+    // Open the dialog immediately so the click has instant feedback — the
+    // network round-trip to the Rewards API below can take a couple seconds.
+    pigeonClaimDialogStep = PigeonClaimDialogStep.CLAIMING
+    pigeonClaimDialogChangedAt = Date.now()
+    console.log(`[Pigeon] Claiming wearable for ${address}...`)
+    try {
+      const url = `${PIGEON_WEARABLE_CONFIG.rewardsApi}/${PIGEON_WEARABLE_CONFIG.campaignId}/rewards`
+      const response = await signedFetch({
+        url,
+        init: {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            campaign_key: PIGEON_WEARABLE_CONFIG.campaignKey,
+            beneficiary: address,
+            catalyst: PIGEON_WEARABLE_CONFIG.catalyst
+          })
+        }
+      })
+      let data: { ok?: boolean; data?: { token?: string }[]; error?: string } = {}
+      try { data = JSON.parse(response.body ?? '{}') } catch { /* plain text response */ }
+      if (data.ok && data.data?.[0]) {
+        console.log(`[Pigeon] ✓ Claimed! token: ${data.data[0].token ?? 'claimed'}`)
+        pigeonClaimDialogStep = PigeonClaimDialogStep.CLAIMED
+        pigeonClaimDialogChangedAt = Date.now()
+      } else {
+        console.error(`[Pigeon] ✗ Claim failed: ${data.error ?? response.body}`)
+        pigeonClaimDialogStep = PigeonClaimDialogStep.HIDDEN
+      }
+    } catch (err) {
+      console.error('[Pigeon] ✗ Claim error:', err)
+      pigeonClaimDialogStep = PigeonClaimDialogStep.HIDDEN
+    }
+  }
+
+  pointerEventsSystem.onPointerDown(
+    {
+      entity: pigeonClick,
+      opts: {
+        button: InputAction.IA_POINTER, // left click
+        hoverText: WEARABLE_CLAIM_ENABLED ? 'Claim' : 'Claim will be available soon',
+        showFeedback: true,
+        showHighlight: true,
+        maxDistance: 8
+      }
+    },
+    () => { void claimPigeonWearable() }
+  )
+
+  // --- DEBUG TELEPORT TO TOP (disabled — uncomment + re-add inputSystem/PointerEventType imports to re-enable) ---
+  // Press "2" (IA_ACTION_4) anywhere to jump up to the win zone (chunk end) where
+  // the pigeon is — keyboard-only, no entity/pointer involved. Commented out for release.
+  //
+  // let winZoneTarget: Vector3 | null = null
+  //
+  // function teleportToWinZone() {
+  //   if (!winZoneTarget) {
+  //     console.log('[Teleport] No win zone yet (tower not ready)')
+  //     return
+  //   }
+  //   // Landing in the win zone would otherwise fire the finish trigger and bounce
+  //   // the player back to base. Suppress it briefly so the teleport sticks.
+  //   suppressEndTriggerUntil = Date.now() + 3000
+  //   const pigeonPos = getWorldPosition(pigeon)
+  //   movePlayerTo({
+  //     newRelativePosition: winZoneTarget,
+  //     cameraTarget: {
+  //       x: pigeonPos.x,
+  //       y: pigeonPos.y + 1.2,
+  //       z: pigeonPos.z
+  //     }
+  //   })
+  // }
+  //
+  // engine.addSystem(
+  //   () => {
+  //     if (inputSystem.isTriggered(InputAction.IA_ACTION_4, PointerEventType.PET_DOWN)) {
+  //       teleportToWinZone()
+  //     }
+  //   },
+  //   undefined,
+  //   'debug-teleport-key-system'
+  // )
+  // ---------------------------------------------------------------------------
+
+  // Keep the pigeon (and its click box) glued to the current tower top.
+  // Both the pigeon and the portals start hidden (see VisibilityComponent /
+  // setVisible(false) above) and only get revealed here, once we actually
+  // know where the real win-zone is — otherwise they'd flash at their
+  // placeholder position near the tower base for a moment on scene load.
+  let winZoneRevealed = false
+  engine.addSystem(
+    () => {
+      const triggerEnd = findTriggerEndEntity()
+      if (!triggerEnd || !Transform.has(triggerEnd)) {
+        return
+      }
+
+      if (!winZoneRevealed) {
+        winZoneRevealed = true
+        VisibilityComponent.getMutable(pigeon).visible = true
+        cozyfarmPortal.setVisible(true)
+        flagtagPortal.setVisible(true)
+      }
+
+      const center = getWorldPosition(triggerEnd)
+      // The meta platform sits at the TriggerEnd center height (server finish check
+      // requires height >= endY, which equals center.y). Anchor everything there.
+      const floorY = center.y
+
+      // The win platform alternates 0deg/180deg each round, so a fixed rotation would
+      // face backwards half the time. Instead, aim the pigeon at the tower center
+      // (where the climbing player arrives). Flip FACE_TOWER if it ends up reversed.
+      const FACE_TOWER = true
+      const TOWER_CENTER_X = 40
+      const TOWER_CENTER_Z = 40
+      let yaw = Math.atan2(TOWER_CENTER_X - center.x, TOWER_CENTER_Z - center.z) * (180 / Math.PI)
+      if (!FACE_TOWER) yaw += 180
+
+      // faceDir points toward the tower center (the side the climbing player
+      // arrives from); perpDir is the sideways axis along the platform.
+      const yawRad = yaw * (Math.PI / 180)
+      const faceDir = Vector3.create(Math.sin(yawRad), 0, Math.cos(yawRad))
+      const perpDir = Vector3.create(faceDir.z, 0, -faceDir.x)
+
+      // Pigeon/claim sits IN FRONT of the portals — pushed toward the tower (the
+      // arriving side) so the player reads the claim first, with the portals
+      // behind it. The pigeon model (a child of pigeonClick) rides along, and
+      // its own Y offset/scale cancel out this parent's height offset/stretch.
+      const PIGEON_FORWARD_OFFSET = 3 // toward the tower/player, in front of the portals
+      const pct = Transform.getMutable(pigeonClick)
+      pct.position = Vector3.create(
+        center.x + faceDir.x * PIGEON_FORWARD_OFFSET,
+        floorY + PIGEON_HITBOX_HEIGHT / 2,
+        center.z + faceDir.z * PIGEON_FORWARD_OFFSET
+      )
+      pct.rotation = Quaternion.fromEulerDegrees(0, yaw, 0)
+
+      // Portals flank the win-zone center (behind the pigeon, still inside scene
+      // bounds — the platform is at the very edge of the scene, so we can't push
+      // them further out), facing the arriving player.
+      const PORTAL_FORWARD_OFFSET = 0 // at the win-zone center, behind the pigeon
+      const PORTAL_SIDE_OFFSET = 4.5 // one portal to each side of the pigeon
+      const portalBase = Vector3.create(
+        center.x + faceDir.x * PORTAL_FORWARD_OFFSET,
+        floorY,
+        center.z + faceDir.z * PORTAL_FORWARD_OFFSET
+      )
+      const portalYaw = yaw + 180 // portal front faces the arriving player
+      cozyfarmPortal.update(
+        {
+          x: portalBase.x + perpDir.x * PORTAL_SIDE_OFFSET,
+          y: portalBase.y,
+          z: portalBase.z + perpDir.z * PORTAL_SIDE_OFFSET
+        },
+        { x: 0, y: portalYaw, z: 0 }
+      )
+      flagtagPortal.update(
+        {
+          x: portalBase.x - perpDir.x * PORTAL_SIDE_OFFSET,
+          y: portalBase.y,
+          z: portalBase.z - perpDir.z * PORTAL_SIDE_OFFSET
+        },
+        { x: 0, y: portalYaw, z: 0 }
+      )
+
+      // Debug teleport target (disabled — re-enable with the teleport block above):
+      // const PIGEON_TELEPORT_DISTANCE_M = 4.5
+      // winZoneTarget = Vector3.create(
+      //   center.x + faceDir.x * PIGEON_TELEPORT_DISTANCE_M,
+      //   floorY + 1,
+      //   center.z + faceDir.z * PIGEON_TELEPORT_DISTANCE_M
+      // )
+    },
+    undefined,
+    'pigeon-teleport-system'
+  )
+
+  // ============================================
   // COOLBED CHARACTER: CLICK TO TALK (2x speed) + SMOOTH BLEND (Breath loop set in Creator Hub)
   // ============================================
 
@@ -615,6 +948,7 @@ export async function main() {
         }
       },
       () => {
+        if (tutorialStep !== TutorialStep.INACTIVE && tutorialStep !== TutorialStep.DONE) return
         if (!Animator.has(entity)) return
         const breathClip = Animator.getClipOrNull(entity, 'Breath')
         const talkClip = Animator.getClipOrNull(entity, 'Talk')
@@ -738,8 +1072,11 @@ export async function main() {
         const inside = isInsideBox(playerPos, pos, t.scale)
 
         if (inside && !triggerEndWasInside) {
+          // Mark as inside regardless, but skip the finish when suppressed (teleport landing).
           triggerEndWasInside = true
-          finishAttempt()
+          if (Date.now() >= suppressEndTriggerUntil) {
+            finishAttempt()
+          }
         } else if (!inside && triggerEndWasInside) {
           triggerEndWasInside = false
         }
