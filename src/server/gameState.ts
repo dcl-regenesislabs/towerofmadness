@@ -58,6 +58,7 @@ const POINTS_WEEKLY_LEADERBOARD_KEY = 'weeklyPointLeaderboard'
 const POINTS_WEEKLY_LEADERBOARD_SIZE = 10
 const TOURNAMENT_STATE_KEY = 'tournamentState'
 const TOURNAMENT_LEADERBOARD_KEY = 'tournamentLeaderboard'
+const TUTORIAL_SEEN_KEY = 'tutorialSeen'
 
 function getWeekStartKeyUTC(now: number = Date.now()): string {
   const d = new Date(now)
@@ -179,7 +180,8 @@ export class GameState {
   private finisherCount: number = 0
 
   // Players who have completed (or skipped) the pigeon tutorial at least once.
-  // In-memory only, resets on server restart — same as allTimeBests.
+  // Persisted to Storage (see loadTutorialSeen/persistTutorialSeen) — same
+  // pattern as allTimeBests, so it survives server restarts.
   private tutorialSeen = new Set<string>()
 
   // All-time best scores (persisted)
@@ -338,6 +340,7 @@ export class GameState {
     void this.loadGlobalPointLeaderboard()
     void this.loadWeeklyPointLeaderboard()
     void this.restoreTournamentState()
+    void this.loadTutorialSeen()
   }
 
   // Player management (normalize address to lowercase for consistency)
@@ -351,6 +354,36 @@ export class GameState {
 
   markTutorialSeen(address: string) {
     this.tutorialSeen.add(address.toLowerCase())
+    void this.persistTutorialSeen()
+  }
+
+  private async loadTutorialSeen() {
+    if (!isServer()) return
+
+    try {
+      const stored = await Storage.get<string>(TUTORIAL_SEEN_KEY)
+      if (!stored) return
+
+      const addresses = JSON.parse(stored) as string[]
+      for (const address of addresses) {
+        if (!address) continue
+        this.tutorialSeen.add(address.toLowerCase())
+      }
+
+      console.log(`[Server][Storage] Loaded tutorialSeen: ${addresses.length} players`)
+    } catch (error) {
+      console.error('[Server][Storage] Failed to load tutorialSeen:', error)
+    }
+  }
+
+  private async persistTutorialSeen() {
+    if (!isServer()) return
+
+    try {
+      await Storage.set(TUTORIAL_SEEN_KEY, JSON.stringify(Array.from(this.tutorialSeen)))
+    } catch (error) {
+      console.error('[Server][Storage] Failed to save tutorialSeen:', error)
+    }
   }
 
   setPlayer(address: string, data: PlayerData) {
