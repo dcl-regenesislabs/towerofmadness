@@ -13,6 +13,7 @@ import {
   TextShape,
   Transform,
   Tween,
+  VisibilityComponent,
   pointerEventsSystem
 } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
@@ -419,6 +420,13 @@ export class Portal {
   updateInfo(name?: string, thumbnail?: string) {
     this.options = { ...this.options, name: name ?? this.options.name, thumbnail: thumbnail ?? this.options.thumbnail }
     this.applyInfo()
+  }
+
+  // Hides/shows the whole portal. Used to keep it out of sight at its
+  // placeholder constructor position until the caller has repositioned it
+  // to the real (tower-height-dependent) win-zone spot via update().
+  setVisible(visible: boolean) {
+    VisibilityComponent.createOrReplace(this.root, { visible })
   }
 
   private applyTransform() {
