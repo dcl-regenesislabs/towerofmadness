@@ -14,7 +14,7 @@ import {
 import { Vector3, Quaternion } from '@dcl/sdk/math'
 import { isMobile, getPlatform } from '@dcl/sdk/platform'
 import { movePlayerTo } from '~system/RestrictedActions'
-import { isCinematicPlaying } from './cinematicCamera'
+import { playCinematic } from './cinematicCamera'
 import { onTutorialStatus, sendTutorialCompleted } from './multiplayer'
 
 // ============================================
@@ -22,10 +22,13 @@ import { onTutorialStatus, sendTutorialCompleted } from './multiplayer'
 // ============================================
 // Mobile-only. Mandatory on a player's first-ever visit (server has never seen
 // their wallet complete/skip it), skippable on every visit after that. Spawns
-// right after the one-time intro cinematic (not the per-round replay cinematic)
-// and walks the player through movement -> jump/double-jump -> glide, gating
-// their avatar controls with InputModifier along the way. Desktop players never
-// see it — isMobile() comes from the explorer, not just screen size.
+// right on arrival, BEFORE the one-time intro cinematic (not the per-round
+// replay cinematic) — the tutorial itself triggers that cinematic once it
+// finishes (see finishTutorial()) — and walks the player through movement ->
+// jump/double-jump -> glide, gating their avatar controls with InputModifier
+// along the way. Desktop players never see it — isMobile() comes from the
+// explorer, not just screen size — so this module plays the intro cinematic
+// for them directly instead (see updateIntroSpawnWaiting()).
 
 export enum TutorialStep {
   INACTIVE = 'INACTIVE',
@@ -183,6 +186,10 @@ function finishTutorial() {
     tutorialCompletedSent = true
     sendTutorialCompleted()
   }
+
+  // The tutorial now runs before the intro cinematic — trigger it here,
+  // whether the player finished the full flow or hit SKIP on the WELCOME step.
+  playCinematic()
 }
 
 function maybeShowHint(text: string, condition: boolean) {
@@ -218,7 +225,9 @@ export function onSkipClicked() {
   finishTutorial()
 }
 
-// Called once, right when the one-time intro cinematic starts playing.
+// Called once, right when the client's state first syncs on arrival — before
+// the one-time intro cinematic, which now plays after this tutorial finishes
+// (see finishTutorial()) or immediately for desktop players (see below).
 export function armPendingIntroTutorial() {
   pendingIntroSpawn = true
 }
@@ -229,19 +238,21 @@ export function armPendingIntroTutorial() {
 
 function updateIntroSpawnWaiting() {
   if (!pendingIntroSpawn) return
-  if (isCinematicPlaying()) return
 
   // Mobile-only feature — desktop/web players skip it entirely and are never
   // marked as having seen it, so it still triggers if they later join on mobile.
   // getPlatform() resolves asynchronously on scene load; give it a short grace
-  // window here in case it hasn't landed yet by the time the cinematic ends.
+  // window here in case it hasn't landed yet.
   if (getPlatform() === null) {
     if (platformWaitStartedAt === 0) platformWaitStartedAt = Date.now()
     if (Date.now() - platformWaitStartedAt < PLATFORM_TIMEOUT_MS) return
   }
 
   if (!isMobile()) {
+    // No tutorial for desktop — go straight to the intro cinematic, same as
+    // before this module ever gets involved.
     pendingIntroSpawn = false
+    playCinematic()
     return
   }
 

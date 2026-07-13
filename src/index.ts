@@ -432,16 +432,21 @@ export async function main() {
   setupCinematicSystem()
   setupTutorial()
 
-  // Wait for state sync before playing cinematic on first arrival
+  // Wait for state sync AND a confirmed tower (not just the CRDT dump, which
+  // can land a frame or two before the round/tower data is actually usable)
+  // before starting the first-arrival onboarding sequence — otherwise the
+  // tutorial/cinematic can kick in while chunks are still popping into place.
+  // Mobile players go tutorial -> cinematic (tutorial.ts arms the cinematic
+  // itself once the pigeon tutorial finishes); desktop players never see the
+  // tutorial, so this system plays the intro cinematic for them directly.
   const initialCinematicSystemName = 'initial-cinematic-trigger'
   engine.addSystem(
     () => {
-      if (isStateSyncronized() && shouldAutoPlayCinematic()) {
-        console.log('[Cinematic] State synced, playing initial cinematic')
-        playCinematic()
-        // The pigeon tutorial spawns once this (one-time, intro-only) cinematic ends —
-        // round-transition cinematics call playCinematic() too, but this system only
-        // fires once per client session, so they never re-arm the tutorial.
+      if (isStateSyncronized() && towerConfig !== null && shouldAutoPlayCinematic()) {
+        console.log('[Cinematic] State synced, starting onboarding sequence')
+        // This system only fires once per client session, so it never re-arms
+        // the tutorial on later rounds (round-transition cinematics call
+        // playCinematic() directly, see below).
         armPendingIntroTutorial()
         engine.removeSystem(initialCinematicSystemName)
       }
@@ -658,9 +663,12 @@ export async function main() {
     ColliderLayer.CL_POINTER
   ])
 
-  // Pigeon skin — always visible. Its own visible mesh doubles as the
-  // precise pointer collider (visibleMeshesCollisionMask); any invisible
-  // collider meshes baked into the GLB act as physics + pointer too.
+  // Pigeon skin — hidden until the win-zone system below places it at the
+  // real tower-top position; otherwise it (and the portals) briefly render
+  // at this placeholder spot near the tower base before popping up top.
+  // Its own visible mesh doubles as the precise pointer collider
+  // (visibleMeshesCollisionMask); any invisible collider meshes baked into
+  // the GLB act as physics + pointer too.
   const pigeon = engine.addEntity()
   GltfContainer.create(pigeon, {
     src: 'assets/wearables/PartyPigeon.glb',
@@ -672,6 +680,7 @@ export async function main() {
     position: Vector3.create(0, -0.5, 0),
     scale: Vector3.create(1, 1 / PIGEON_HITBOX_HEIGHT, 1)
   })
+  VisibilityComponent.create(pigeon, { visible: false })
 
   // ============================================
   // WIN-ZONE PORTALS — behind the pigeon, on the win platform
@@ -701,6 +710,10 @@ export async function main() {
       void changeRealm({ realm: 'flagtag.dcl.eth', message: 'Jump to flagtag.dcl.eth?' })
     }
   })
+  // Hidden until the win-zone system below repositions them — same reasoning
+  // as the pigeon's VisibilityComponent above.
+  cozyfarmPortal.setVisible(false)
+  flagtagPortal.setVisible(false)
 
   // Claims the pigeon wearable for the local player via the DCL Rewards API.
   // Uses PIGEON_WEARABLE_CONFIG (separate from the tournament prize campaign).
@@ -797,13 +810,20 @@ export async function main() {
   // ---------------------------------------------------------------------------
 
   // Keep the pigeon (and its click box) glued to the current tower top.
-  // Pigeon stays visible regardless.
+  // Both the pigeon and the portals start hidden (see VisibilityComponent /
+  // setVisible(false) above) and only get revealed here, once we actually
+  // know where the real win-zone is — otherwise they'd flash at their
+  // placeholder position near the tower base for a moment on scene load.
   engine.addSystem(
     () => {
       const triggerEnd = findTriggerEndEntity()
       if (!triggerEnd || !Transform.has(triggerEnd)) {
         return
       }
+
+      VisibilityComponent.getMutable(pigeon).visible = true
+      cozyfarmPortal.setVisible(true)
+      flagtagPortal.setVisible(true)
 
       const center = getWorldPosition(triggerEnd)
       // The meta platform sits at the TriggerEnd center height (server finish check
