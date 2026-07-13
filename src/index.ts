@@ -720,9 +720,17 @@ export async function main() {
   cozyfarmPortal.setVisible(false)
   flagtagPortal.setVisible(false)
 
+  // Set to false to block the wearable claim (e.g. campaign paused / not live yet).
+  // The pigeon still shows, but clicking it does nothing. Flip to true to re-enable.
+  const WEARABLE_CLAIM_ENABLED = false
+
   // Claims the pigeon wearable for the local player via the DCL Rewards API.
   // Uses PIGEON_WEARABLE_CONFIG (separate from the tournament prize campaign).
   async function claimPigeonWearable() {
+    if (!WEARABLE_CLAIM_ENABLED) {
+      console.log('[Pigeon] Wearable claim is currently disabled')
+      return
+    }
     if (pigeonClaimDialogStep !== PigeonClaimDialogStep.HIDDEN) return // already claiming/claimed
     const address = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase()
     if (!address) {
@@ -769,7 +777,7 @@ export async function main() {
       entity: pigeonClick,
       opts: {
         button: InputAction.IA_POINTER, // left click
-        hoverText: 'Claim',
+        hoverText: WEARABLE_CLAIM_ENABLED ? 'Claim' : 'Claim will be available soon',
         showFeedback: true,
         showHighlight: true,
         maxDistance: 8
