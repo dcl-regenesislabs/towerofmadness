@@ -1014,7 +1014,7 @@ const PigeonClaimDialogBubble = ({
       ? 'Claiming your gift...'
       : pigeonClaimDialogStep === PigeonClaimDialogStep.CLAIMED
       ? 'Congratulations for reaching the top! Your wearable can take a few minutes to arrive.'
-      : 'Once it arrives, you can equip it from your backpack.'
+      : 'Once it arrives, you can equip it from your backpack.\nNow you are ready to continue your adventure! Check out the doors and head to the next experience.'
   const typedText = getCoolBedTypedText(dialogText, stepElapsed)
   const isTyping = typedText.length < dialogText.length
   const showCursor = isTyping && Math.floor(stepElapsed * 4) % 2 === 0
@@ -1045,7 +1045,10 @@ const PigeonClaimDialogBubble = ({
   const avatarDip = avatarSize - avatarProtrusion
 
   const bodyTop = avatarDip + 14
-  const bodyHeight = isLandscapeMobile ? 84 : 104
+  // EQUIP_INFO has two sentences (with an explicit line break) so it needs more
+  // vertical room than the shorter CLAIMING/CLAIMED texts.
+  const isEquipInfoStep = pigeonClaimDialogStep === PigeonClaimDialogStep.EQUIP_INFO
+  const bodyHeight = isEquipInfoStep ? (isLandscapeMobile ? 140 : 170) : isLandscapeMobile ? 84 : 104
   const buttonsTop = bodyTop + bodyHeight + 2
   const bubbleHeight = buttonsTop + 54 + 16
 
