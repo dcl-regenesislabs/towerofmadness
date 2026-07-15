@@ -7,6 +7,8 @@ import { TOURNAMENT_CONFIG } from './tournamentConfig'
 
 const ROUND_END_DISPLAY_TIME = 3 // seconds
 const NEW_ROUND_DELAY = 10 // seconds
+const BOOT_TOWER_DELAY = 3 // seconds — shorter than NEW_ROUND_DELAY: this only needs to
+// cover a resync settling, not the "give players a breather" purpose the between-round gap serves.
 const MAX_UP_SPEED = 12 // m/s allowed upward speed before considering teleport
 const HEIGHT_TOLERANCE = 0.5 // m of extra leeway per sample
 const HARD_MAX_DELTA = 20 // m allowed upward jump regardless of sample time
@@ -19,14 +21,26 @@ export function server() {
 
   const gameState = GameState.getInstance()
   gameState.init()
-  gameState.startNewRound()
+
+  // Force every tower chunk hidden/reset before building the first tower —
+  // same idea as the ENDING->BREAK transition between rounds, but shorter.
+  // This matters if the server process restarted (redeploy/crash) while a
+  // client was still connected: that client may still be rendering tower
+  // entities from the previous server generation, which this fresh process
+  // has no way to reference or delete directly. Explicitly re-broadcasting
+  // "hidden" here — then waiting a beat before actually building the tower —
+  // gives any such stale client's resync time to settle first, so it can
+  // never render an old tower overlapping a new one.
+  gameState.destroyTowerForTransition()
+  gameState.setPhase(RoundPhase.BREAK)
+  let bootBreak = true
 
   setupMessageHandlers(gameState)
 
   // Timer system
   let lastUpdate = 0
   let roundEndTime = 0
-  let breakStartTime = 0
+  let breakStartTime = Date.now()
   // Auto-start deferred: wait ~2s after boot so restoreTournamentState() can complete first
   let autoStartDelay = (TOURNAMENT_CONFIG.tournamentMode && TOURNAMENT_CONFIG.autoStart) ? 2 : -1
 
@@ -72,11 +86,14 @@ export function server() {
         console.log(`[Server] ENDING phase done after ${endingElapsed.toFixed(1)}s, destroying tower and starting BREAK`)
         gameState.destroyTowerForTransition()
         gameState.setPhase(RoundPhase.BREAK)
+        bootBreak = false
         breakStartTime = Date.now()
       }
     } else if (phase === RoundPhase.BREAK) {
       const breakElapsed = (Date.now() - breakStartTime) / 1000
-      if (breakElapsed >= NEW_ROUND_DELAY) {
+      const delay = bootBreak ? BOOT_TOWER_DELAY : NEW_ROUND_DELAY
+      if (breakElapsed >= delay) {
+        bootBreak = false
         console.log(`[Server] BREAK phase done after ${breakElapsed.toFixed(1)}s, starting new round`)
         gameState.startNewRound()
       }
