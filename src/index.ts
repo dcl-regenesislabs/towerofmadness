@@ -658,9 +658,14 @@ export async function main() {
   // off a parent that's shifted up and stretched.
   const PIGEON_HITBOX_HEIGHT = 4.9
   const PIGEON_HITBOX_RADIUS = 1.1
+  // Placeholder position is deliberately far below the map (not near the
+  // tower base) — this collider has no VisibilityComponent to hide it like
+  // the pigeon model does, so until the win-zone system below gives it a
+  // real position, it must not sit somewhere a player could actually reach
+  // and click it (see the towerConfig guard in pigeon-teleport-system).
   const pigeonClick = engine.addEntity()
   Transform.create(pigeonClick, {
-    position: Vector3.create(40, 5, 40),
+    position: Vector3.create(40, -100, 40),
     scale: Vector3.create(1, PIGEON_HITBOX_HEIGHT, 1)
   })
   MeshCollider.setCylinder(pigeonClick, PIGEON_HITBOX_RADIUS, PIGEON_HITBOX_RADIUS, [
@@ -827,11 +832,20 @@ export async function main() {
   // setVisible(false) above) and only get revealed here, once we actually
   // know where the real win-zone is — otherwise they'd flash at their
   // placeholder position near the tower base for a moment on scene load.
+  //
+  // triggerEnd EXISTING isn't enough to trust its position: it's a single
+  // persistent entity created once at server boot with a placeholder
+  // Transform (~ground level, right by ChunkStart's ramp) and only gets its
+  // real height from createTower() — which the server now deliberately
+  // delays a few seconds on boot (see BOOT_TOWER_DELAY in server.ts) to let
+  // stale/reconnecting clients resync. Without the towerConfig check below,
+  // that gap was exactly reproducing the reported bug: the claim hitbox
+  // ("Claim will be available soon") sitting down at the tower base.
   let winZoneRevealed = false
   engine.addSystem(
     () => {
       const triggerEnd = findTriggerEndEntity()
-      if (!triggerEnd || !Transform.has(triggerEnd)) {
+      if (!triggerEnd || !Transform.has(triggerEnd) || !towerConfig || towerConfig.chunkIds.length === 0) {
         return
       }
 
