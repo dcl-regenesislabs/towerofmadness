@@ -727,7 +727,7 @@ export async function main() {
 
   // Set to false to block the wearable claim (e.g. campaign paused / not live yet).
   // The pigeon still shows, but clicking it does nothing. Flip to true to re-enable.
-  const WEARABLE_CLAIM_ENABLED = false
+  const WEARABLE_CLAIM_ENABLED = true
 
   // Claims the pigeon wearable for the local player via the DCL Rewards API.
   // Uses PIGEON_WEARABLE_CONFIG (separate from the tournament prize campaign).
