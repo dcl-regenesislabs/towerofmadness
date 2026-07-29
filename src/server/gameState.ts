@@ -1,4 +1,13 @@
-import { engine, Entity, Transform, GltfContainer, VisibilityComponent, MeshRenderer, Material } from '@dcl/sdk/ecs'
+import {
+  engine,
+  Entity,
+  Transform,
+  GltfContainer,
+  VisibilityComponent,
+  MeshRenderer,
+  Material,
+  ColliderLayer
+} from '@dcl/sdk/ecs'
 import { Vector3, Quaternion, Color4 } from '@dcl/sdk/math'
 import { isServer, syncEntity } from '@dcl/sdk/network'
 import { AUTH_SERVER_PEER_ID } from '@dcl/sdk/network/message-bus-sync'
@@ -169,9 +178,8 @@ export class GameState {
   public triggerEndEntity!: Entity
   public tournamentEntity!: Entity
 
-  // Tower entities (synced to clients)
+  // Tower entities (synced to clients) — created fresh each round, destroyed at round end
   private towerEntities: Entity[] = []
-  private towerEntityPool: Entity[] = []
   private podiumServer: PodiumAvatarsServer | null = null
 
   // Server-only state
@@ -309,27 +317,6 @@ export class GameState {
       VisibilityComponent.componentId,
       TriggerEndComponent.componentId
     ])
-
-    // Create entity pool for tower chunks (max middle chunks + 1 for ChunkEnd)
-    for (let i = 0; i < MAX_TOWER_MIDDLE_CHUNKS + 1; i++) {
-      const entity = engine.addEntity()
-      Transform.create(entity, {
-        position: Vector3.create(TOWER_X, 0, TOWER_Z),
-        scale: Vector3.One()
-      })
-      GltfContainer.create(entity, { src: '' })
-      VisibilityComponent.create(entity, { visible: false })
-      ChunkComponent.create(entity, {})
-      protectServerEntity(entity, [Transform, GltfContainer, VisibilityComponent, ChunkComponent, ChunkEndComponent])
-      syncEntity(entity, [
-        Transform.componentId,
-        GltfContainer.componentId,
-        VisibilityComponent.componentId,
-        ChunkComponent.componentId,
-        ChunkEndComponent.componentId
-      ])
-      this.towerEntityPool.push(entity)
-    }
 
     this.podiumServer = new PodiumAvatarsServer()
 
@@ -504,59 +491,84 @@ export class GameState {
   }
 
   // Tower management
+
+  // Fully destroys this round's chunk entities (rather than mutating/hiding reused ones).
+  // engine.removeEntity emits an unambiguous DELETE_ENTITY CRDT message, telling every client
+  // to tear down that entity's GLTF + physics body entirely — no reliance on clients correctly
+  // unloading an old asset before a new one is assigned to the same entity id (the source of the
+  // intermittent missing-collider bug the src-reset/delay tricks below were previously papering over).
+  // At boot, this.towerEntities is still empty, so this is a no-op by design — nothing to remove yet.
   private destroyTower() {
-    for (const entity of this.towerEntityPool) {
-      // Reset src to empty string so CRDT always emits a delta when createTower assigns a new src.
-      // Without this, if the same chunk asset is reused across rounds the CRDT sees no change and
-      // some clients skip reloading the GLTF, losing colliders on those chunks.
-      GltfContainer.getMutable(entity).src = ''
-      VisibilityComponent.getMutable(entity).visible = false
+    for (const entity of this.towerEntities) {
+      engine.removeEntity(entity)
     }
     this.towerEntities = []
-    console.log('[Server] Tower hidden')
+    console.log('[Server] Tower destroyed')
   }
 
   private createTower(chunkIds: string[]) {
     this.towerEntities = []
 
-    // Configure middle chunks from pool
+    // Create middle chunks fresh, each with its final src/visibility set at creation time.
     for (let i = 0; i < chunkIds.length; i++) {
-      const entity = this.towerEntityPool[i]
+      const entity = engine.addEntity()
       const yPosition = CHUNK_HEIGHT * (i + 1)
       const rotationY = i % 2 === 0 ? 180 : 0
 
-      const transform = Transform.getMutable(entity)
-      transform.position = Vector3.create(TOWER_X, yPosition, TOWER_Z)
-      transform.rotation = Quaternion.fromEulerDegrees(0, rotationY, 0)
-      transform.scale = Vector3.One()
-
-      GltfContainer.getMutable(entity).src = getChunkAssetPath(chunkIds[i])
-      VisibilityComponent.getMutable(entity).visible = true
+      Transform.create(entity, {
+        position: Vector3.create(TOWER_X, yPosition, TOWER_Z),
+        rotation: Quaternion.fromEulerDegrees(0, rotationY, 0),
+        scale: Vector3.One()
+      })
+      GltfContainer.create(entity, {
+        src: getChunkAssetPath(chunkIds[i]),
+        // Visible mesh doubles as a physics collider fallback, in case the invisible
+        // "_collider" mesh baked into the chunk GLB ever fails to load client-side.
+        visibleMeshesCollisionMask: ColliderLayer.CL_PHYSICS
+      })
+      VisibilityComponent.create(entity, { visible: true })
+      ChunkComponent.create(entity, {})
+      protectServerEntity(entity, [Transform, GltfContainer, VisibilityComponent, ChunkComponent])
+      syncEntity(entity, [
+        Transform.componentId,
+        GltfContainer.componentId,
+        VisibilityComponent.componentId,
+        ChunkComponent.componentId
+      ])
 
       this.towerEntities.push(entity)
     }
 
-    // Configure ChunkEnd from pool
-    const endEntity = this.towerEntityPool[chunkIds.length]
+    // Create ChunkEnd fresh, same pattern, plus the ChunkEnd tag.
+    const endEntity = engine.addEntity()
     const endY = CHUNK_HEIGHT * (chunkIds.length + 1)
     const endRotationY = (chunkIds.length - 1) % 2 === 0 ? 180 : 0
 
-    const endTransform = Transform.getMutable(endEntity)
-    endTransform.position = Vector3.create(TOWER_X, endY, TOWER_Z)
-    endTransform.rotation = Quaternion.fromEulerDegrees(0, endRotationY, 0)
-    endTransform.scale = Vector3.One()
-
-    GltfContainer.getMutable(endEntity).src = getChunkAssetPath(CHUNK_END_ID)
-    VisibilityComponent.getMutable(endEntity).visible = true
-    // Ensure only the current end entity has the ChunkEnd tag
-    for (const entity of this.towerEntityPool) {
-      if (ChunkEndComponent.has(entity)) ChunkEndComponent.deleteFrom(entity)
-    }
+    Transform.create(endEntity, {
+      position: Vector3.create(TOWER_X, endY, TOWER_Z),
+      rotation: Quaternion.fromEulerDegrees(0, endRotationY, 0),
+      scale: Vector3.One()
+    })
+    GltfContainer.create(endEntity, {
+      src: getChunkAssetPath(CHUNK_END_ID),
+      visibleMeshesCollisionMask: ColliderLayer.CL_PHYSICS
+    })
+    VisibilityComponent.create(endEntity, { visible: true })
+    ChunkComponent.create(endEntity, {})
     ChunkEndComponent.create(endEntity, {})
+    protectServerEntity(endEntity, [Transform, GltfContainer, VisibilityComponent, ChunkComponent, ChunkEndComponent])
+    syncEntity(endEntity, [
+      Transform.componentId,
+      GltfContainer.componentId,
+      VisibilityComponent.componentId,
+      ChunkComponent.componentId,
+      ChunkEndComponent.componentId
+    ])
 
     this.towerEntities.push(endEntity)
 
     // Position TriggerEnd in world space (parent is not synced to clients)
+    const endTransform = Transform.get(endEntity)
     const triggerTransform = Transform.getMutable(this.triggerEndEntity)
     triggerTransform.parent = undefined
     const rotatedOffset = Vector3.rotate(TRIGGER_END_OFFSET, endTransform.rotation)
@@ -567,11 +579,6 @@ export class GameState {
     )
     triggerTransform.scale = TRIGGER_END_SCALE
     console.log(`[Server] TriggerEnd positioned at y=${triggerTransform.position.y.toFixed(2)}`)
-
-    // Hide unused pool entities (if fewer chunks this round)
-    for (let i = chunkIds.length + 1; i < this.towerEntityPool.length; i++) {
-      VisibilityComponent.getMutable(this.towerEntityPool[i]).visible = false
-    }
 
     // Update tower config for UI (include ChunkStart at the beginning)
     const allChunks = [CHUNK_START_ID, ...chunkIds, CHUNK_END_ID]
@@ -585,10 +592,9 @@ export class GameState {
 
   // Round management
 
-  // Called by the server at BREAK-phase start (10 s before startNewRound).
-  // Sending src='' / visible=false here, well ahead of the new-round tick, gives clients
-  // enough time to fully unload the old GLTFs and destroy physics bodies before the new
-  // assets arrive — fixing the missing-collider bug on round 2+.
+  // Called by the server at BREAK-phase start (10 s before startNewRound), and once at boot.
+  // Destroys this round's chunk entities outright (see destroyTower) rather than hiding them,
+  // so the next createTower() call always creates brand-new entities instead of reusing old ones.
   destroyTowerForTransition() {
     this.destroyTower()
   }
@@ -596,8 +602,8 @@ export class GameState {
   startNewRound() {
     const roundId = `round_${Date.now()}`
 
-    // destroyTower() was already called at BREAK-phase start; no need to call it again here.
-    // All pool entities are already src='' / visible=false on all clients.
+    // destroyTower() was already called at BREAK-phase start; the previous round's chunk
+    // entities are already deleted on all clients.
 
     const numChunks =
       Math.floor(Math.random() * (MAX_TOWER_MIDDLE_CHUNKS - MIN_TOWER_MIDDLE_CHUNKS + 1)) +
