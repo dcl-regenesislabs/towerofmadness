@@ -88,7 +88,8 @@
   ],
   "requiredPermissions": [
     "ALLOW_TO_TRIGGER_AVATAR_EMOTE",
-    "ALLOW_TO_MOVE_PLAYER_INSIDE_SCENE"
+    "ALLOW_TO_MOVE_PLAYER_INSIDE_SCENE",
+    "USE_FETCH"
   ],
   "featureToggles": {
     "voiceChat": "enabled",
@@ -105,7 +106,7 @@
   "authoritativeMultiplayer": true,
   "multiplayerId": "towerofmadness",
   "worldConfiguration": {
-    "name": "yiffer.dcl.eth"
+    "name": "towerofmadness.dcl.eth"
   },
   "logsPermissions": [
     "0xb8c4df381c6c305758f806c3aa71f37aabbcbd92",
