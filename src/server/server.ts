@@ -4,9 +4,12 @@ import { GameState } from './gameState'
 import { room } from '../shared/messages'
 import { RoundPhase, TournamentComponent } from '../shared/schemas'
 import { TOURNAMENT_CONFIG } from './tournamentConfig'
+import { trackEvent } from '../shared/analytics'
 
 const ROUND_END_DISPLAY_TIME = 3 // seconds
 const NEW_ROUND_DELAY = 10 // seconds
+const BOOT_TOWER_DELAY = 3 // seconds — shorter than NEW_ROUND_DELAY: this only needs to
+// cover a resync settling, not the "give players a breather" purpose the between-round gap serves.
 const MAX_UP_SPEED = 12 // m/s allowed upward speed before considering teleport
 const HEIGHT_TOLERANCE = 0.5 // m of extra leeway per sample
 const HARD_MAX_DELTA = 20 // m allowed upward jump regardless of sample time
@@ -14,19 +17,37 @@ const TELEPORT_BASE = { x: 45, y: 2.5, z: 59 }
 const END_TRIGGER_OFFSET = 11
 const ROUND_TIMER_CHECK_INTERVAL = 0.25 // seconds
 
+// Analytics: guard `session started` against double-firing on reconnects /
+// repeated playerJoin messages. A genuine new session (scene re-entry) is
+// minutes apart, so a short window only collapses rapid duplicates.
+const SESSION_DEDUP_MS = 30_000
+const lastSessionStartedAt = new Map<string, number>()
+
 export function server() {
   console.log('[Server] Tower of Madness starting...')
 
   const gameState = GameState.getInstance()
   gameState.init()
-  gameState.startNewRound()
+
+  // Force every tower chunk hidden/reset before building the first tower —
+  // same idea as the ENDING->BREAK transition between rounds, but shorter.
+  // This matters if the server process restarted (redeploy/crash) while a
+  // client was still connected: that client may still be rendering tower
+  // entities from the previous server generation, which this fresh process
+  // has no way to reference or delete directly. Explicitly re-broadcasting
+  // "hidden" here — then waiting a beat before actually building the tower —
+  // gives any such stale client's resync time to settle first, so it can
+  // never render an old tower overlapping a new one.
+  gameState.destroyTowerForTransition()
+  gameState.setPhase(RoundPhase.BREAK)
+  let bootBreak = true
 
   setupMessageHandlers(gameState)
 
   // Timer system
   let lastUpdate = 0
   let roundEndTime = 0
-  let breakStartTime = 0
+  let breakStartTime = Date.now()
   // Auto-start deferred: wait ~2s after boot so restoreTournamentState() can complete first
   let autoStartDelay = (TOURNAMENT_CONFIG.tournamentMode && TOURNAMENT_CONFIG.autoStart) ? 2 : -1
 
@@ -72,11 +93,14 @@ export function server() {
         console.log(`[Server] ENDING phase done after ${endingElapsed.toFixed(1)}s, destroying tower and starting BREAK`)
         gameState.destroyTowerForTransition()
         gameState.setPhase(RoundPhase.BREAK)
+        bootBreak = false
         breakStartTime = Date.now()
       }
     } else if (phase === RoundPhase.BREAK) {
       const breakElapsed = (Date.now() - breakStartTime) / 1000
-      if (breakElapsed >= NEW_ROUND_DELAY) {
+      const delay = bootBreak ? BOOT_TOWER_DELAY : NEW_ROUND_DELAY
+      if (breakElapsed >= delay) {
+        bootBreak = false
         console.log(`[Server] BREAK phase done after ${breakElapsed.toFixed(1)}s, starting new round`)
         gameState.startNewRound()
       }
@@ -184,22 +208,44 @@ function setupMessageHandlers(gameState: GameState) {
       // Just update their display name in case it changed
       existingPlayer.displayName = displayName
       gameState.setPlayer(context.from, existingPlayer)
-      return
+    } else {
+      console.log(`[Server] Player joined: ${displayName}`)
+      gameState.setPlayer(context.from, {
+        address: context.from,
+        displayName: displayName,
+        maxHeight: 0,
+        bestTime: 0,
+        isFinished: false,
+        finishOrder: 0,
+        attemptStartTime: 0,
+        lastHeight: 0,
+        lastHeightTime: 0,
+        teleportStrikes: 0
+      })
     }
 
-    console.log(`[Server] Player joined: ${displayName}`)
-    gameState.setPlayer(context.from, {
+    room.send('tutorialStatus', {
       address: context.from,
-      displayName: displayName,
-      maxHeight: 0,
-      bestTime: 0,
-      isFinished: false,
-      finishOrder: 0,
-      attemptStartTime: 0,
-      lastHeight: 0,
-      lastHeightTime: 0,
-      teleportStrikes: 0
+      hasSeenTutorial: gameState.hasSeenTutorial(context.from)
     })
+
+    // Analytics — one `session started` per scene entry (unlocks D1/D7/D30
+    // retention, keyed by wallet). Deduped against rapid repeat joins.
+    const now = Date.now()
+    const lastStart = lastSessionStartedAt.get(context.from) ?? 0
+    if (now - lastStart > SESSION_DEDUP_MS) {
+      lastSessionStartedAt.set(context.from, now)
+      trackEvent('session started', context.from, {
+        is_new_user: !gameState.hasSeenTutorial(context.from)
+      })
+    }
+  })
+
+  // Player finished (or skipped) the pigeon tutorial
+  room.onMessage('tutorialCompleted', (_data, context) => {
+    if (!context) return
+    gameState.markTutorialSeen(context.from)
+    console.log(`[Server] Tutorial completed by ${context.from}`)
   })
 
   // Player started attempt (entered start trigger)

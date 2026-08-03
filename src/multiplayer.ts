@@ -7,7 +7,6 @@
  */
 
 import { engine, Transform, PlayerIdentityData, AvatarBase, VisibilityComponent, GltfContainer } from '@dcl/sdk/ecs'
-import { movePlayerTo } from '~system/RestrictedActions'
 import { room } from './shared/messages'
 import {
   RoundStateComponent,
@@ -45,6 +44,8 @@ export { isServer } from '@dcl/sdk/network'
 // Callback for when any player finishes (includes server-authoritative time)
 let onPlayerFinishedCallback: ((displayName: string, time: number, finishOrder: number) => void) | null = null
 let onAttemptRejectedCallback: ((stage: string, reason: string) => void) | null = null
+let onTutorialStatusCallback: ((hasSeenTutorial: boolean) => void) | null = null
+let onTeleportToBaseCallback: ((pos: { x: number; y: number; z: number }) => void) | null = null
 
 export function setupClient() {
   // Listen for player finished broadcasts
@@ -68,10 +69,9 @@ export function setupClient() {
   })
 
   room.onMessage('teleportToBase', (data) => {
-    movePlayerTo({
-      newRelativePosition: { x: data.x, y: data.y, z: data.z },
-      cameraTarget: { x: data.x, y: data.y + 1, z: data.z }
-    })
+    if (onTeleportToBaseCallback) {
+      onTeleportToBaseCallback({ x: data.x, y: data.y, z: data.z })
+    }
   })
 
   room.onMessage('attemptRejected', (data) => {
@@ -84,6 +84,17 @@ export function setupClient() {
       onAttemptRejectedCallback(data.stage, data.reason)
     }
   })
+
+  room.onMessage('tutorialStatus', (data) => {
+    const localIdentity = PlayerIdentityData.getOrNull(engine.PlayerEntity)
+    if (!localIdentity?.address) return
+    if (localIdentity.address.toLowerCase() !== data.address.toLowerCase()) return
+
+    console.log(`[Tutorial] Server says hasSeenTutorial=${data.hasSeenTutorial}`)
+    if (onTutorialStatusCallback) {
+      onTutorialStatusCallback(data.hasSeenTutorial)
+    }
+  })
 }
 
 export function onPlayerFinished(callback: (displayName: string, time: number, finishOrder: number) => void) {
@@ -92,6 +103,14 @@ export function onPlayerFinished(callback: (displayName: string, time: number, f
 
 export function onAttemptRejected(callback: (stage: string, reason: string) => void) {
   onAttemptRejectedCallback = callback
+}
+
+export function onTutorialStatus(callback: (hasSeenTutorial: boolean) => void) {
+  onTutorialStatusCallback = callback
+}
+
+export function onTeleportToBase(callback: (pos: { x: number; y: number; z: number }) => void) {
+  onTeleportToBaseCallback = callback
 }
 
 
@@ -109,6 +128,10 @@ export function sendPlayerStarted() {
 
 export function sendPlayerFinished() {
   room.send('playerFinished', { time: 0 }) // Time is calculated server-side
+}
+
+export function sendTutorialCompleted() {
+  room.send('tutorialCompleted', {})
 }
 
 // ============================================
