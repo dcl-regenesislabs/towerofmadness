@@ -664,7 +664,7 @@ export async function main() {
   // tower base) — this collider has no VisibilityComponent to hide it like
   // the pigeon model does, so until the win-zone system below gives it a
   // real position, it must not sit somewhere a player could actually reach
-  // and click it (see the towerConfig guard in pigeon-teleport-system).
+  // and click it (see the towerConfig guard in pigeon-teleport-system)
   const pigeonClick = engine.addEntity()
   Transform.create(pigeonClick, {
     position: Vector3.create(40, -100, 40),
