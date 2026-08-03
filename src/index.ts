@@ -57,12 +57,13 @@ import { signedFetch } from '~system/SignedFetch'
 import { room } from './shared/messages'
 import { setupCinematicSystem, playCinematic, shouldAutoPlayCinematic, isCinematicPlaying } from './cinematicCamera'
 import { setupTutorial, armPendingIntroTutorial, tutorialStep, TutorialStep } from './tutorial'
+import { setupChunkPreload } from './chunkPreload'
 
 // ============================================
 // GAME STATE
 // ============================================
 import { initTimeSync } from './shared/timeSync'
-;(globalThis as any).DEBUG_NETWORK_MESSAGES = true
+;(globalThis as any).DEBUG_NETWORK_MESSAGES = false
 
 // Player tracking
 export let playerHeight = 0
@@ -436,6 +437,7 @@ export async function main() {
   setupClient()
   setupCinematicSystem()
   setupTutorial()
+  setupChunkPreload() // warm the chunk asset cache so renewals never cold-load (fixes fall-through)
 
   // Wait for state sync AND a confirmed tower (not just the CRDT dump, which
   // can land a frame or two before the round/tower data is actually usable)

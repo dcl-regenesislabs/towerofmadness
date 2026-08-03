@@ -5,6 +5,7 @@ import {
   Billboard,
   BillboardMode,
   AvatarBase,
+  PlayerIdentityData,
   InputModifier,
   InputAction,
   PointerEventType,
@@ -16,6 +17,7 @@ import { isMobile, getPlatform } from '@dcl/sdk/platform'
 import { movePlayerTo } from '~system/RestrictedActions'
 import { playCinematic } from './cinematicCamera'
 import { onTutorialStatus, sendTutorialCompleted } from './multiplayer'
+import { trackEvent } from './shared/analytics'
 
 // ============================================
 // PIGEON TUTORIAL — guided onboarding
@@ -148,6 +150,18 @@ function despawnPigeon() {
   pigeonEntity = null
 }
 
+// Funnel order for the tutorial — lets PostHog show where players drop off
+// (churn). Index climbs 1..6; DONE = reached the end.
+const TUTORIAL_STEP_INDEX: Record<TutorialStep, number> = {
+  [TutorialStep.INACTIVE]: 0,
+  [TutorialStep.WELCOME]: 1,
+  [TutorialStep.LEARN_MOVE]: 2,
+  [TutorialStep.JUMP_INTRO]: 3,
+  [TutorialStep.GLIDE_TIP]: 4,
+  [TutorialStep.CLIMB]: 5,
+  [TutorialStep.DONE]: 6
+}
+
 function setStep(step: TutorialStep, text: string) {
   tutorialStep = step
   tutorialDialogText = text
@@ -158,6 +172,17 @@ function setStep(step: TutorialStep, text: string) {
   tutorialShowTryButton = false
   tutorialShowGotItButton = false
   tutorialShowSkipButton = false
+
+  // Analytics — one event per tutorial step reached, so PostHog can build a
+  // funnel and show the churn point. INACTIVE isn't a real step.
+  if (step !== TutorialStep.INACTIVE) {
+    const wallet = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address ?? ''
+    trackEvent('tutorial step reached', wallet, {
+      step,
+      step_index: TUTORIAL_STEP_INDEX[step],
+      is_mobile: isMobile()
+    })
+  }
 }
 
 function beginTutorial(allowSkip: boolean) {
@@ -171,7 +196,11 @@ function beginTutorial(allowSkip: boolean) {
   tutorialShowSkipButton = allowSkip
 }
 
-function finishTutorial() {
+function finishTutorial(skipped: boolean = false) {
+  // Capture where the player was BEFORE we overwrite the step to DONE — that's
+  // the churn point for a skip.
+  const fromStep = tutorialStep
+
   setInputMode({ disableDoubleJump: false, disableGliding: false })
   despawnPigeon()
 
@@ -185,6 +214,16 @@ function finishTutorial() {
   if (!tutorialCompletedSent) {
     tutorialCompletedSent = true
     sendTutorialCompleted()
+
+    // Analytics — terminal outcome, fired exactly once. skip vs complete are
+    // distinct signals that the step funnel can't recover (both paths land here
+    // and DONE is set directly, not via setStep).
+    const wallet = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address ?? ''
+    trackEvent(skipped ? 'tutorial skipped' : 'tutorial completed', wallet, {
+      from_step: fromStep,
+      from_step_index: TUTORIAL_STEP_INDEX[fromStep],
+      is_mobile: isMobile()
+    })
   }
 
   // The tutorial now runs before the intro cinematic — trigger it here,
@@ -222,7 +261,7 @@ export function onGotItClicked() {
 export function onSkipClicked() {
   if (tutorialStep !== TutorialStep.WELCOME) return
   if (!welcomeSkipAllowed) return
-  finishTutorial()
+  finishTutorial(true)
 }
 
 // Called once, right when the client's state first syncs on arrival — before
