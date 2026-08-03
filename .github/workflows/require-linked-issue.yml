@@ -1,0 +1,82 @@
+name: Require linked issue
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+      - ready_for_review
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  require-linked-issue:
+    name: Linked issue
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate linked issue
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const query = `
+              query($owner: String!, $repo: String!, $number: Int!) {
+                repository(owner: $owner, name: $repo) {
+                  defaultBranchRef {
+                    name
+                  }
+                  pullRequest(number: $number) {
+                    baseRefName
+                    closingIssuesReferences(first: 10) {
+                      totalCount
+                      nodes {
+                        number
+                        url
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            const result = await github.graphql(query, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              number: context.payload.pull_request.number,
+            });
+
+            const repository = result.repository;
+            const pullRequest = repository?.pullRequest;
+            const linkedIssues = pullRequest?.closingIssuesReferences?.nodes ?? [];
+
+            if (linkedIssues.length > 0) {
+              core.info(
+                `PR has ${linkedIssues.length} linked issue(s): ${linkedIssues
+                  .map((issue) => `#${issue.number}`)
+                  .join(", ")}`
+              );
+              return;
+            }
+
+            const defaultBranch = repository?.defaultBranchRef?.name;
+            const baseBranch = pullRequest?.baseRefName;
+            const usesNonDefaultBase =
+              defaultBranch && baseBranch && defaultBranch !== baseBranch;
+
+            const message = [
+              "This pull request must be linked to at least one issue.",
+              "Add a closing keyword to the PR description, for example: Closes #123.",
+              "You can also link an issue from the PR sidebar under Development.",
+              usesNonDefaultBase
+                ? `This PR targets ${baseBranch} instead of the default branch ${defaultBranch}, so closing keywords may not create the link. In that case, use the manual link in the sidebar.`
+                : null,
+            ]
+              .filter(Boolean)
+              .join("\n");
+
+            core.setFailed(message);
