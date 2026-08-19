@@ -2,20 +2,11 @@ import ReactEcs, { UiEntity, ReactEcsRenderer } from "@dcl/sdk/react-ecs"
 import { Color4 } from "@dcl/sdk/math"
 import { engine, UiCanvasInformation, PlayerIdentityData } from "@dcl/sdk/ecs"
 
-// UI Scaling based on screen resolution (reference: 1920x1080)
+// Scaling is handled by the renderer's virtual resolution, so no extra factor is applied here
 function getScaleUIFactor(): number {
-  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
-  if (!uiCanvasInfo) return 1
-
-  return Math.min(uiCanvasInfo.width / 1920, uiCanvasInfo.height / 1080)
+  return 1
 }
 
-function isMobileScreen(): boolean {
-  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
-  if (!uiCanvasInfo) return false
-
-  return Math.min(uiCanvasInfo.width, uiCanvasInfo.height) <= 800
-}
 import {
   playerHeight,
   playerMaxHeight,
@@ -76,9 +67,10 @@ import {
   onGotItClicked,
   onSkipClicked
 } from "./tutorial"
+import { isMobile as isMobileFn } from "@dcl/sdk/platform"
 
 export function setupUi() {
-  ReactEcsRenderer.setUiRenderer(GameUI)
+  ReactEcsRenderer.setUiRenderer(GameUI, { virtualHeight: 0, virtualWidth: 0 })
 }
 
 // Chunk colors for tower progress bar
@@ -239,9 +231,9 @@ const TowerProgressBar = () => {
     <UiEntity
       uiTransform={{
         width: BAR_WIDTH,
-        height: BAR_HEIGHT, 
+        height: BAR_HEIGHT,
         positionType: 'absolute',
-        position: { top: 130 * s, left: (screenWidth - BAR_WIDTH) / 2 },
+        position: { top: isMobileFn() ? 0 : 130 * s, left: (screenWidth - BAR_WIDTH) / 2 + (isMobileFn() ? 80 : 0) },
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start'
@@ -249,7 +241,7 @@ const TowerProgressBar = () => {
     >
       {/* Tower bar */}
       <UiEntity
-        uiTransform={{ 
+        uiTransform={{
           width: BAR_WIDTH,
           height: BAR_HEIGHT,
           flexDirection: 'row',
@@ -1411,7 +1403,7 @@ const TournamentPanel = ({ screenWidth, s, isMobile }: { screenWidth: number; s:
 
 const GameUI = () => {
   const s = getScaleUIFactor()
-  const isMobile = isMobileScreen()
+  const isMobile = isMobileFn()
   const mobileBoostScale = s * (isMobile ? 3 : 1)
   const startMessageScale = isMobile ? 3 : 1
   const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
@@ -1614,7 +1606,7 @@ const GameUI = () => {
           width: '100%',
           height: 100 * s,
           positionType: 'absolute',
-          position: { top: 15 * s, left: 0 },
+          position: { top: (isMobile ? 35 : 15 * s), left: 0 },
           alignItems: 'center',
           justifyContent: 'center'
         }}
@@ -2582,7 +2574,7 @@ const GameUI = () => {
       >
         <UiEntity
           uiTransform={{
-            width: '100%', 
+            width: '100%',
             height: '100%',
             alignItems: 'center',
             justifyContent: 'center'
