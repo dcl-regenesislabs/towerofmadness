@@ -1,10 +1,48 @@
 import ReactEcs, { UiEntity, ReactEcsRenderer } from "@dcl/sdk/react-ecs"
 import { Color4 } from "@dcl/sdk/math"
 import { engine, UiCanvasInformation, PlayerIdentityData } from "@dcl/sdk/ecs"
+import { isMobile as isMobileFn } from "@dcl/sdk/platform"
 
-// Scaling is handled by the renderer's virtual resolution, so no extra factor is applied here
+let uiRendererSyncRegistered = false
+let lastAppliedUiRendererConfig: { virtualWidth: number; virtualHeight: number; screenInset: "none" } | null = null
+
+function getUiCanvasInfo() {
+  return UiCanvasInformation.getOrNull(engine.RootEntity)
+}
+
+function getUiRendererConfig() {
+  const isMobile = isMobileFn()
+  const virtualWidth = isMobile ? 1600 : 1920
+  const virtualHeight = isMobile ? 720 : 1080
+
+  return {
+    virtualWidth,
+    virtualHeight,
+    screenInset: "none" as const
+  }
+}
+
+function getUiLayoutSize() {
+  const canvasInfo = getUiCanvasInfo()
+  const config = getUiRendererConfig()
+  if (canvasInfo && config.virtualWidth > 0 && config.virtualHeight > 0) {
+    const scale = Math.min(canvasInfo.width / config.virtualWidth, canvasInfo.height / config.virtualHeight)
+    if (scale > 0) {
+      return {
+        width: canvasInfo.width / scale,
+        height: canvasInfo.height / scale
+      }
+    }
+  }
+
+  if (canvasInfo) return { width: canvasInfo.width, height: canvasInfo.height }
+
+  return { width: config.virtualWidth || 1920, height: config.virtualHeight || 1080 }
+}
+
 function getScaleUIFactor(): number {
-  return 1
+  const { virtualWidth } = getUiRendererConfig()
+  return Math.min(1, Math.max(0.1, virtualWidth / 1920))
 }
 
 import {
@@ -67,10 +105,33 @@ import {
   onGotItClicked,
   onSkipClicked
 } from "./tutorial"
-import { isMobile as isMobileFn } from "@dcl/sdk/platform"
 
 export function setupUi() {
-  ReactEcsRenderer.setUiRenderer(GameUI, { virtualHeight: 0, virtualWidth: 0 })
+  if (!uiRendererSyncRegistered) {
+    uiRendererSyncRegistered = true
+    engine.addSystem(syncUiRendererSystem)
+  }
+  applyUiRenderer(true)
+}
+
+function applyUiRenderer(force: boolean = false): void {
+  const config = getUiRendererConfig()
+  if (
+    !force &&
+    lastAppliedUiRendererConfig &&
+    lastAppliedUiRendererConfig.virtualWidth === config.virtualWidth &&
+    lastAppliedUiRendererConfig.virtualHeight === config.virtualHeight &&
+    lastAppliedUiRendererConfig.screenInset === config.screenInset
+  ) {
+    return
+  }
+
+  ReactEcsRenderer.setUiRenderer(GameUI, config)
+  lastAppliedUiRendererConfig = config
+}
+
+function syncUiRendererSystem(): void {
+  applyUiRenderer()
 }
 
 // Chunk colors for tower progress bar
@@ -174,8 +235,7 @@ let _lastReorderLogMs = 0
 // Tower Progress Bar Component
 const TowerProgressBar = () => {
   const s = getScaleUIFactor()
-  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
-  const screenWidth = uiCanvasInfo?.width ?? 1920 * s
+  const { width: screenWidth } = getUiLayoutSize()
   const snapshots = getSnapshots()
   const snapshotByWallet = new Map(
     snapshots
@@ -233,7 +293,7 @@ const TowerProgressBar = () => {
         width: BAR_WIDTH,
         height: BAR_HEIGHT,
         positionType: 'absolute',
-        position: { top: isMobileFn() ? 0 : 130 * s, left: (screenWidth - BAR_WIDTH) / 2 + (isMobileFn() ? 80 : 0) },
+        position: { top: 130 * s, left: (screenWidth - BAR_WIDTH) / 2 },
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start'
@@ -1406,9 +1466,7 @@ const GameUI = () => {
   const isMobile = isMobileFn()
   const mobileBoostScale = s * (isMobile ? 3 : 1)
   const startMessageScale = isMobile ? 3 : 1
-  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
-  const screenWidth = uiCanvasInfo?.width ?? 1920 * s
-  const screenHeight = uiCanvasInfo?.height ?? 1080 * s
+  const { width: screenWidth, height: screenHeight } = getUiLayoutSize()
   const localPlayerAddress = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
   const playerInfoWidth = 260 * s
   const startMessageWidth = 260 * s
@@ -1606,7 +1664,7 @@ const GameUI = () => {
           width: '100%',
           height: 100 * s,
           positionType: 'absolute',
-          position: { top: (isMobile ? 35 : 15 * s), left: 0 },
+          position: { top: 15 * s, left: 0 },
           alignItems: 'center',
           justifyContent: 'center'
         }}

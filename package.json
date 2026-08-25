@@ -19,8 +19,8 @@
   "devDependencies": {
     "@dcl/asset-packs": "latest",
     "@dcl/hammurabi-server": "^1.0.0-21726116521.commit-148f55a",
-    "@dcl/js-runtime": "7.26.1-32160793830.commit-0b97733",
-    "@dcl/sdk": "^7.26.1-32160793830.commit-0b97733"
+    "@dcl/js-runtime": "https://sdk-team-cdn.decentraland.org/@dcl/js-sdk-toolchain/branch/feat/bevy-headless-server/@dcl/js-runtime/dcl-js-runtime-7.26.1-32272684883.commit-03948db.tgz",
+    "@dcl/sdk": "https://sdk-team-cdn.decentraland.org/@dcl/js-sdk-toolchain/branch/feat/bevy-headless-server/dcl-sdk-7.26.1-32272684883.commit-03948db.tgz"
   },
   "engines": {
     "node": ">=20.0.0",
