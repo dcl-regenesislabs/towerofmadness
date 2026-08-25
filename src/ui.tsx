@@ -1,10 +1,44 @@
 import ReactEcs, { UiEntity, ReactEcsRenderer } from "@dcl/sdk/react-ecs"
 import { Color4 } from "@dcl/sdk/math"
 import { engine, UiCanvasInformation, PlayerIdentityData } from "@dcl/sdk/ecs"
+import { isMobile as isMobileFn } from "@dcl/sdk/platform"
 
-// Scaling is handled by the renderer's virtual resolution, so no extra factor is applied here
+let uiRendererSyncRegistered = false
+let lastAppliedUiRendererSignature = ""
+
+function getUiCanvasInfo() {
+  return UiCanvasInformation.getOrNull(engine.RootEntity)
+}
+
+function getUiRendererConfig() {
+  const isMobile = isMobileFn()
+  const virtualWidth = isMobile ? 1600 : 1920
+  const virtualHeightBase = isMobile ? 720 : 1080
+
+  return {
+    virtualWidth,
+    // Keep the mobile virtual size off exact 16:9 so the SDK does not override it back to 1600x720.
+    virtualHeight: isMobile ? virtualHeightBase + 1 : virtualHeightBase,
+    screenInset: "none" as const
+  }
+}
+
+function getUiLayoutSize() {
+  const config = getUiRendererConfig()
+  if (config.virtualWidth > 0 && config.virtualHeight > 0) {
+    return { width: config.virtualWidth, height: config.virtualHeight }
+  }
+
+  const canvasInfo = getUiCanvasInfo()
+  return {
+    width: canvasInfo?.width ?? 1920,
+    height: canvasInfo?.height ?? 1080
+  }
+}
+
 function getScaleUIFactor(): number {
-  return 1
+  const { width } = getUiLayoutSize()
+  return Math.min(1, Math.max(0.1, width / 1920))
 }
 
 import {
@@ -67,10 +101,26 @@ import {
   onGotItClicked,
   onSkipClicked
 } from "./tutorial"
-import { isMobile as isMobileFn } from "@dcl/sdk/platform"
 
 export function setupUi() {
-  ReactEcsRenderer.setUiRenderer(GameUI, { virtualHeight: 0, virtualWidth: 0 })
+  if (!uiRendererSyncRegistered) {
+    uiRendererSyncRegistered = true
+    engine.addSystem(syncUiRendererSystem)
+  }
+  applyUiRenderer(true)
+}
+
+function applyUiRenderer(force: boolean = false): void {
+  const config = getUiRendererConfig()
+  const signature = `${isMobileFn()}:${config.virtualWidth}x${config.virtualHeight}:${config.screenInset}`
+  if (!force && signature === lastAppliedUiRendererSignature) return
+
+  ReactEcsRenderer.setUiRenderer(GameUI, config)
+  lastAppliedUiRendererSignature = signature
+}
+
+function syncUiRendererSystem(): void {
+  applyUiRenderer()
 }
 
 // Chunk colors for tower progress bar
@@ -174,8 +224,7 @@ let _lastReorderLogMs = 0
 // Tower Progress Bar Component
 const TowerProgressBar = () => {
   const s = getScaleUIFactor()
-  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
-  const screenWidth = uiCanvasInfo?.width ?? 1920 * s
+  const { width: screenWidth } = getUiLayoutSize()
   const snapshots = getSnapshots()
   const snapshotByWallet = new Map(
     snapshots
@@ -233,7 +282,7 @@ const TowerProgressBar = () => {
         width: BAR_WIDTH,
         height: BAR_HEIGHT,
         positionType: 'absolute',
-        position: { top: isMobileFn() ? 0 : 130 * s, left: (screenWidth - BAR_WIDTH) / 2 + (isMobileFn() ? 80 : 0) },
+        position: { top: 130 * s, left: (screenWidth - BAR_WIDTH) / 2 },
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'flex-start'
@@ -1406,9 +1455,7 @@ const GameUI = () => {
   const isMobile = isMobileFn()
   const mobileBoostScale = s * (isMobile ? 3 : 1)
   const startMessageScale = isMobile ? 3 : 1
-  const uiCanvasInfo = UiCanvasInformation.getOrNull(engine.RootEntity)
-  const screenWidth = uiCanvasInfo?.width ?? 1920 * s
-  const screenHeight = uiCanvasInfo?.height ?? 1080 * s
+  const { width: screenWidth, height: screenHeight } = getUiLayoutSize()
   const localPlayerAddress = PlayerIdentityData.getOrNull(engine.PlayerEntity)?.address?.toLowerCase() ?? ''
   const playerInfoWidth = 260 * s
   const startMessageWidth = 260 * s
@@ -1606,7 +1653,7 @@ const GameUI = () => {
           width: '100%',
           height: 100 * s,
           positionType: 'absolute',
-          position: { top: (isMobile ? 35 : 15 * s), left: 0 },
+          position: { top: 15 * s, left: 0 },
           alignItems: 'center',
           justifyContent: 'center'
         }}
