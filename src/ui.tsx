@@ -4,7 +4,7 @@ import { engine, UiCanvasInformation, PlayerIdentityData } from "@dcl/sdk/ecs"
 import { isMobile as isMobileFn } from "@dcl/sdk/platform"
 
 let uiRendererSyncRegistered = false
-let lastAppliedUiRendererSignature = ""
+let lastAppliedUiRendererConfig: { virtualWidth: number; virtualHeight: number; screenInset: "none" } | null = null
 
 function getUiCanvasInfo() {
   return UiCanvasInformation.getOrNull(engine.RootEntity)
@@ -13,32 +13,36 @@ function getUiCanvasInfo() {
 function getUiRendererConfig() {
   const isMobile = isMobileFn()
   const virtualWidth = isMobile ? 1600 : 1920
-  const virtualHeightBase = isMobile ? 720 : 1080
+  const virtualHeight = isMobile ? 720 : 1080
 
   return {
     virtualWidth,
-    // Keep the mobile virtual size off exact 16:9 so the SDK does not override it back to 1600x720.
-    virtualHeight: isMobile ? virtualHeightBase + 1 : virtualHeightBase,
+    virtualHeight,
     screenInset: "none" as const
   }
 }
 
 function getUiLayoutSize() {
+  const canvasInfo = getUiCanvasInfo()
   const config = getUiRendererConfig()
-  if (config.virtualWidth > 0 && config.virtualHeight > 0) {
-    return { width: config.virtualWidth, height: config.virtualHeight }
+  if (canvasInfo && config.virtualWidth > 0 && config.virtualHeight > 0) {
+    const scale = Math.min(canvasInfo.width / config.virtualWidth, canvasInfo.height / config.virtualHeight)
+    if (scale > 0) {
+      return {
+        width: canvasInfo.width / scale,
+        height: canvasInfo.height / scale
+      }
+    }
   }
 
-  const canvasInfo = getUiCanvasInfo()
-  return {
-    width: canvasInfo?.width ?? 1920,
-    height: canvasInfo?.height ?? 1080
-  }
+  if (canvasInfo) return { width: canvasInfo.width, height: canvasInfo.height }
+
+  return { width: config.virtualWidth || 1920, height: config.virtualHeight || 1080 }
 }
 
 function getScaleUIFactor(): number {
-  const { width } = getUiLayoutSize()
-  return Math.min(1, Math.max(0.1, width / 1920))
+  const { virtualWidth } = getUiRendererConfig()
+  return Math.min(1, Math.max(0.1, virtualWidth / 1920))
 }
 
 import {
@@ -112,11 +116,18 @@ export function setupUi() {
 
 function applyUiRenderer(force: boolean = false): void {
   const config = getUiRendererConfig()
-  const signature = `${isMobileFn()}:${config.virtualWidth}x${config.virtualHeight}:${config.screenInset}`
-  if (!force && signature === lastAppliedUiRendererSignature) return
+  if (
+    !force &&
+    lastAppliedUiRendererConfig &&
+    lastAppliedUiRendererConfig.virtualWidth === config.virtualWidth &&
+    lastAppliedUiRendererConfig.virtualHeight === config.virtualHeight &&
+    lastAppliedUiRendererConfig.screenInset === config.screenInset
+  ) {
+    return
+  }
 
   ReactEcsRenderer.setUiRenderer(GameUI, config)
-  lastAppliedUiRendererSignature = signature
+  lastAppliedUiRendererConfig = config
 }
 
 function syncUiRendererSystem(): void {
